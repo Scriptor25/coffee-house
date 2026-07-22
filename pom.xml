@@ -51,11 +51,5 @@
             <artifactId>coffee-rest</artifactId>
             <version>1.0.0</version>
         </dependency>
-
-        <dependency>
-            <groupId>org.bytedeco</groupId>
-            <artifactId>ffmpeg</artifactId>
-            <version>8.0.1-1.5.13</version>
-        </dependency>
     </dependencies>
 </project>
