@@ -1,6 +1,7 @@
 package dev.scriptor.rest
 
 import dev.scriptor.context.SessionContext
+import dev.scriptor.model.Cookie
 import dev.scriptor.model.Media
 import dev.scriptor.model.getMedia
 import dev.scriptor.server.annotation.*
@@ -12,6 +13,7 @@ import java.sql.Connection
 import java.util.logging.Logger
 import kotlin.io.path.extension
 import kotlin.time.Clock.System.now
+import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 @Endpoint("/media")
@@ -58,9 +60,11 @@ class MediaRest {
     }
 
     @Resource("/[id]")
+    @OptIn(ExperimentalUuidApi::class)
     fun getMediaById(
         @PathParameter("id") id: Uuid,
         @QueryParameter("session") sessionId: Uuid?,
+        @Header("cookie") cookie: Cookie?,
         @Header("range") range: String?,
     ): HTTPResult<*> {
         val media = getMediaById(id) ?: return HTTPResultUnit(404, "Not Found")
@@ -82,7 +86,8 @@ class MediaRest {
 
             begin = segment[0].toLong()
             end =
-                if (segment.size == 2) segment[1].toLong()
+                if (segment.size == 2)
+                    segment[1].toLong()
                 else null
         }
 
@@ -91,8 +96,21 @@ class MediaRest {
         val chunk: Long
         val sequence: Long
 
-        val session = if (sessionId != null) sessions[sessionId] else null
-        if (session != null && session.next == begin && now.minus(session.access).inWholeSeconds < 30L) {
+        val sid: Uuid
+        if (sessionId != null)
+            sid = sessionId
+        else if (cookie != null && "x-session-id" in cookie) {
+            val id = cookie["x-session-id"]!!
+            sid = Uuid.parseHexDash(id)
+        } else {
+            sid = Uuid.generateV7()
+        }
+
+        val session = sessions[sid] ?: sessions.create(sid)
+
+        log.info("session ${session.id}")
+
+        if (session.next == begin && now.minus(session.access).inWholeSeconds < 30L) {
             val metric = maxOf(0L, minOf(7L, session.sequence)) + 1L
 
             chunk = metric * 1024L * 1024L
@@ -108,23 +126,23 @@ class MediaRest {
             total - begin,
         )
 
-        if (session != null) {
-            session.access = now
-            session.sequence = sequence
-            session.next = begin + count
-        }
+        session.access = now
+        session.sequence = sequence
+        session.next = begin + count
 
         val limit = begin + count - 1
 
         val headers: MutableMap<String, String> = HashMap()
-        headers["Accept-Ranges"] = "bytes"
-        headers["Content-Type"] = when (media.path.extension) {
+        headers["accept-ranges"] = "bytes"
+        headers["content-type"] = when (media.path.extension) {
             "mp4" -> "video/mp4"
             "mkv" -> "video/x-matroska"
             else -> "*/*"
         }
-        headers["Content-Length"] = count.toString()
-        headers["Content-Range"] = "bytes $begin-$limit/$total"
+        headers["content-length"] = count.toString()
+        headers["content-range"] = "bytes $begin-$limit/$total"
+
+        headers["set-cookie"] = "x-session-id=${session.id}"
 
         return HTTPResultChannel(
             206,

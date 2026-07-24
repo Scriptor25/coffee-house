@@ -12,14 +12,19 @@ import java.net.URI
 import java.nio.file.Path
 import java.sql.Connection
 import java.util.logging.Logger
+import kotlin.io.path.Path
 import kotlin.io.path.name
 import kotlin.io.readBytes
+import kotlin.time.Clock.System.now
 import kotlin.use
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 @Endpoint("/")
 class DashboardRest {
+
+    @Inject("data")
+    lateinit var data: String
 
     @Inject("log")
     lateinit var log: Logger
@@ -38,7 +43,7 @@ class DashboardRest {
     @OptIn(ExperimentalUuidApi::class)
     fun getDashboard(@PathParameter("slug") slug: Array<String>, @Header("cookie") cookie: Cookie?): HTTPResult<*> {
 
-        val slug = Path.of("/", *slug)
+        val slug = Path("/", *slug)
 
         val session: Session
         if (cookie != null && "x-session-id" in cookie) {
@@ -52,6 +57,8 @@ class DashboardRest {
             session = sessions.create(uid)
         }
 
+        session.access = now()
+
         val items = connection.prepareStatement("select * from media").use { statement ->
             statement.executeQuery().use {
                 val list = mutableListOf<Media>()
@@ -64,8 +71,7 @@ class DashboardRest {
 
         val document: String
         if (items.isNotEmpty()) {
-            val base = commonBasePath(items)
-            val tree = buildTree(items, base)
+            val tree = buildTree(items, Path(data))
 
             var node: DirectoryNode? = tree
             for (segment in slug) {

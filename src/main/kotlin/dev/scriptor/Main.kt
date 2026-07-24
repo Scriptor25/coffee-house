@@ -46,9 +46,12 @@ fun main() {
 
     val server = scan(log, hostname, port, "dev.scriptor")
 
+    server.inject("data", data)
     server.inject("log", log)
     server.inject("connection", connection)
     server.inject("sessions", sessions)
+
+    server.registerTask("session-timeout", 60L * 60_000L) { sessions.timeout() }
 
     connection.prepareStatement(
         """
