@@ -1,5 +1,6 @@
 package dev.scriptor
 
+import dev.scriptor.context.SessionContext
 import dev.scriptor.server.scan
 import java.io.File
 import java.sql.DriverManager
@@ -29,10 +30,13 @@ fun main() {
 
     val connection = DriverManager.getConnection("jdbc:sqlite:index.db")
 
+    val sessions = SessionContext()
+
     val server = scan(log, "0.0.0.0", 8080, "dev.scriptor")
 
     server.inject("log", log)
     server.inject("connection", connection)
+    server.inject("sessions", sessions)
 
     connection.prepareStatement(
         """
@@ -42,10 +46,10 @@ fun main() {
             modified timestamp not null
         )
         """.trimIndent()
-    ).use { it.execute() }
+    ).use { statement -> statement.execute() }
 
     val extensions = arrayOf("mkv", "mp4")
-    val walk = File("/home/felix/Videos").walkTopDown()
+    val walk = File("/home/felix/remote").walkTopDown()
 
     val modified = Timestamp(System.currentTimeMillis())
 
@@ -57,37 +61,28 @@ fun main() {
         do update
         set modified = excluded.modified
         """.trimIndent()
-    ).use {
+    ).use { statement ->
         for (file in walk) {
             if (file.extension !in extensions) continue
 
             val id = Uuid.generateV7()
 
-            it.setString(1, id.toHexDashString())
-            it.setString(2, file.absolutePath)
-            it.setTimestamp(3, modified)
+            statement.setString(1, id.toHexDashString())
+            statement.setString(2, file.absolutePath)
+            statement.setTimestamp(3, modified)
 
-            it.addBatch()
+            statement.addBatch()
         }
 
-        it.executeLargeBatch()
+        statement.executeLargeBatch()
     }
 
-    connection.prepareStatement(
-        """
-        delete from media
-        where not modified = ?
-        """.trimIndent()
-    ).use {
-        it.setTimestamp(1, modified)
-        it.executeUpdate()
+    connection.prepareStatement("delete from media where not modified = ?").use { statement ->
+        statement.setTimestamp(1, modified)
+        statement.executeUpdate()
     }
 
-    connection.prepareStatement(
-        """
-        select id, path from media
-        """.trimIndent()
-    ).use { statement ->
+    connection.prepareStatement("select id, path from media").use { statement ->
         statement.executeQuery().use {
             while (it.next()) {
                 val id = it.getString(1)

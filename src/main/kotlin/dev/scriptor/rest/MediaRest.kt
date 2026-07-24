@@ -1,16 +1,17 @@
 package dev.scriptor.rest
 
-import dev.scriptor.model.MediaModel
+import dev.scriptor.context.SessionContext
+import dev.scriptor.model.Media
+import dev.scriptor.model.getMedia
 import dev.scriptor.server.annotation.*
 import dev.scriptor.server.http.result.HTTPResult
 import dev.scriptor.server.http.result.HTTPResultChannel
-import dev.scriptor.server.http.result.HTTPResultVoid
+import dev.scriptor.server.http.result.HTTPResultUnit
 import java.nio.channels.FileChannel
-import java.nio.file.Path
 import java.sql.Connection
 import java.util.logging.Logger
+import kotlin.io.path.extension
 import kotlin.time.Clock.System.now
-import kotlin.time.toKotlinInstant
 import kotlin.uuid.Uuid
 
 @Endpoint("/media")
@@ -22,32 +23,31 @@ class MediaRest {
     @Inject("connection")
     lateinit var connection: Connection
 
-    data class Session(
-        val time: Long,
-        val sequence: Long,
-        val next: Long,
-    )
+    @Inject("sessions")
+    lateinit var sessions: SessionContext
 
-    val sessions: MutableMap<String, Session> = HashMap()
-    val cache: MutableMap<Uuid, MediaModel> = HashMap()
+    val cache: MutableMap<Uuid, Media> = HashMap()
 
-    fun getMediaById(id: Uuid): MediaModel? {
+    @Resource("/list", result = "application/json")
+    fun getMediaList(): Array<Media> {
+        return connection.prepareStatement("select * from media").use { statement ->
+            statement.executeQuery().use {
+                val list = mutableListOf<Media>()
+                while (it.next()) {
+                    list += it.getMedia()
+                }
+                list.toTypedArray()
+            }
+        }
+    }
+
+    fun getMediaById(id: Uuid): Media? {
         if (id in cache) return cache[id]
-        val value = connection.prepareStatement(
-            """
-            select id, path, modified from media
-            where id = ?
-            limit 1
-            """.trimIndent()
-        ).use { statement ->
+        val value = connection.prepareStatement("select * from media where id = ? limit 1").use { statement ->
             statement.setString(1, id.toHexDashString())
             statement.executeQuery().use {
                 if (it.next())
-                    MediaModel(
-                        Uuid.parseHexDash(it.getString("id")),
-                        Path.of(it.getString("path")),
-                        it.getTimestamp("modified").toInstant().toKotlinInstant(),
-                    )
+                    it.getMedia()
                 else null
             }
         }
@@ -60,13 +60,12 @@ class MediaRest {
     @Resource("/[id]")
     fun getMediaById(
         @PathParameter("id") id: Uuid,
-        @QueryParameter("session") key: String?,
-        @Header("Range") range: String?,
+        @QueryParameter("session") sessionId: Uuid?,
+        @Header("range") range: String?,
     ): HTTPResult<*> {
-        val media = getMediaById(id) ?: return HTTPResultVoid(404, "Not Found")
+        val media = getMediaById(id) ?: return HTTPResultUnit(404, "Not Found")
 
         val channel = FileChannel.open(media.path)
-
         val total = channel.size()
 
         val begin: Long
@@ -87,25 +86,20 @@ class MediaRest {
                 else null
         }
 
-        val now = now().toEpochMilliseconds()
+        val now = now()
 
         val chunk: Long
-        val seq: Long
-        if (key == null || key !in sessions) {
-            chunk = 1024L * 1024L
-            seq = 0L
+        val sequence: Long
+
+        val session = if (sessionId != null) sessions[sessionId] else null
+        if (session != null && session.next == begin && now.minus(session.access).inWholeSeconds < 30L) {
+            val metric = maxOf(0L, minOf(7L, session.sequence)) + 1L
+
+            chunk = metric * 1024L * 1024L
+            sequence = session.sequence + 1L
         } else {
-            val (time, sequence, next) = sessions[key]!!
-
-            if (next != begin || (now - time) > 30_000L) {
-                chunk = 1024L * 1024L
-                seq = 0L
-            } else {
-                val metric = maxOf(0L, minOf(7L, sequence)) + 1L
-
-                chunk = metric * 1024L * 1024L
-                seq = sequence + 1L
-            }
+            chunk = 1024L * 1024L
+            sequence = 0L
         }
 
         val count = minOf(
@@ -114,15 +108,21 @@ class MediaRest {
             total - begin,
         )
 
-        val limit = begin + count - 1
-
-        if (key != null) {
-            sessions[key] = Session(now, seq, begin + count)
+        if (session != null) {
+            session.access = now
+            session.sequence = sequence
+            session.next = begin + count
         }
+
+        val limit = begin + count - 1
 
         val headers: MutableMap<String, String> = HashMap()
         headers["Accept-Ranges"] = "bytes"
-        headers["Content-Type"] = "video/x-matroska"
+        headers["Content-Type"] = when (media.path.extension) {
+            "mp4" -> "video/mp4"
+            "mkv" -> "video/x-matroska"
+            else -> "*/*"
+        }
         headers["Content-Length"] = count.toString()
         headers["Content-Range"] = "bytes $begin-$limit/$total"
 
