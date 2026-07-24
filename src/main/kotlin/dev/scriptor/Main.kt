@@ -2,15 +2,27 @@ package dev.scriptor
 
 import dev.scriptor.context.SessionContext
 import dev.scriptor.server.scan
-import java.io.File
+import java.lang.System.getenv
 import java.sql.DriverManager
 import java.sql.Timestamp
 import java.util.logging.*
+import kotlin.io.path.Path
+import kotlin.io.path.absolutePathString
+import kotlin.io.path.extension
+import kotlin.io.path.walk
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
+fun getenv(name: String, default: String): String {
+    return getenv(name) ?: default
+}
+
 @OptIn(ExperimentalUuidApi::class)
 fun main() {
+    val hostname = getenv("HOSTNAME", "0.0.0.0")
+    val port = getenv("PORT", "8080").toInt()
+    val data = getenv("DATA", "/data")
+
     val log = Logger.getLogger("dev.scriptor")
     log.level = Level.INFO
 
@@ -32,7 +44,7 @@ fun main() {
 
     val sessions = SessionContext()
 
-    val server = scan(log, "0.0.0.0", 8080, "dev.scriptor")
+    val server = scan(log, hostname, port, "dev.scriptor")
 
     server.inject("log", log)
     server.inject("connection", connection)
@@ -49,7 +61,6 @@ fun main() {
     ).use { statement -> statement.execute() }
 
     val extensions = arrayOf("mkv", "mp4")
-    val walk = File("/home/felix/remote").walkTopDown()
 
     val modified = Timestamp(System.currentTimeMillis())
 
@@ -62,13 +73,13 @@ fun main() {
         set modified = excluded.modified
         """.trimIndent()
     ).use { statement ->
-        for (file in walk) {
+        for (file in Path(data).walk()) {
             if (file.extension !in extensions) continue
 
             val id = Uuid.generateV7()
 
             statement.setString(1, id.toHexDashString())
-            statement.setString(2, file.absolutePath)
+            statement.setString(2, file.absolutePathString())
             statement.setTimestamp(3, modified)
 
             statement.addBatch()
@@ -80,17 +91,6 @@ fun main() {
     connection.prepareStatement("delete from media where not modified = ?").use { statement ->
         statement.setTimestamp(1, modified)
         statement.executeUpdate()
-    }
-
-    connection.prepareStatement("select id, path from media").use { statement ->
-        statement.executeQuery().use {
-            while (it.next()) {
-                val id = it.getString(1)
-                val path = it.getString(2)
-
-                log.info("media $id -> $path")
-            }
-        }
     }
 
     server.start()

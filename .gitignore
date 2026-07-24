@@ -40,3 +40,5 @@ build/
 .DS_Store
 
 *.db
+
+dependency-reduced-pom.xml

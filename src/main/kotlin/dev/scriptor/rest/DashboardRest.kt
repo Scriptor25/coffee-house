@@ -62,49 +62,56 @@ class DashboardRest {
             }
         }
 
-        val base = commonBasePath(items)
-        val tree = buildTree(items, base)
+        val document: String
+        if (items.isNotEmpty()) {
+            val base = commonBasePath(items)
+            val tree = buildTree(items, base)
 
-        var node: DirectoryNode? = tree
-        for (segment in slug) {
-            if (node == null || segment.name == node.name) break
-            node = node.children
-                .filterIsInstance<DirectoryNode>()
-                .find { it.name == segment.name }
-        }
-
-        val entries = node?.children.orEmpty().sortedBy { it.name }.map {
-            when (it) {
-                is DirectoryNode -> """<li><a href="${
-                    URI(
-                        null,
-                        null,
-                        slug.resolve(it.name).toString(),
-                        null,
-                    ).rawPath
-                }">${it.name}</a></li>"""
-
-                is MediaNode -> """<li><a href="/media/${it.item.id}?session=${session.id}">${it.name}</a></li>"""
+            var node: DirectoryNode? = tree
+            for (segment in slug) {
+                if (node == null || segment.name == node.name) break
+                node = node.children
+                    .filterIsInstance<DirectoryNode>()
+                    .find { it.name == segment.name }
             }
-        }
 
-        val list = """<ul><li><a href="${
-            URI(
-                null,
-                null,
-                slug.parent?.toString(),
-                null,
-            ).rawPath
-        }">..</a></li>${entries.joinToString("")}</ul>"""
+            val entries = node?.children.orEmpty().sortedBy { it.name }.map {
+                when (it) {
+                    is DirectoryNode -> """<li><a href="${
+                        URI(
+                            null,
+                            null,
+                            slug.resolve(it.name).toString(),
+                            null,
+                        ).rawPath
+                    }">${it.name}</a></li>"""
 
-        val template = ClassLoader.getSystemResourceAsStream("list.html").use { it!!.readBytes() }.decodeToString()
+                    is MediaNode -> """<li><a href="/media/${it.item.id}?session=${session.id}">${it.name}</a></li>"""
+                }
+            }
+
+            val list = """<ul><li><a href="${
+                URI(
+                    null,
+                    null,
+                    slug.parent?.toString(),
+                    null,
+                ).rawPath
+            }">..</a></li>${entries.joinToString("")}</ul>"""
+
+            val template = ClassLoader
+                .getSystemResourceAsStream("list.html")
+                .use { it!!.readBytes() }.decodeToString()
+
+            document = template.format(list)
+        } else document = "no media items found."
 
         val headers: MutableMap<String, String> = HashMap()
         headers["set-cookie"] = "x-session-id=${session.id}"
 
         return HTTPResultString(
             headers = headers,
-            value = template.format(list),
+            value = document,
         )
     }
 
