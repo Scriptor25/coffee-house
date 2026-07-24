@@ -11,10 +11,10 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-        <maven.compiler.source>25</maven.compiler.source>
-        <maven.compiler.target>25</maven.compiler.target>
+        <maven.compiler.source>26</maven.compiler.source>
+        <maven.compiler.target>26</maven.compiler.target>
 
-        <kotlin.compiler.jvmTarget>25</kotlin.compiler.jvmTarget>
+        <kotlin.compiler.jvmTarget>26</kotlin.compiler.jvmTarget>
         <kotlin.code.style>official</kotlin.code.style>
         <kotlin.version>2.4.0</kotlin.version>
     </properties>
