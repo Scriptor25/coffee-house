@@ -108,8 +108,6 @@ class MediaRest {
 
         val session = sessions[sid] ?: sessions.create(sid)
 
-        log.info("session ${session.id}")
-
         if (session.next == begin && now.minus(session.access).inWholeSeconds < 30L) {
             val metric = maxOf(0L, minOf(7L, session.sequence)) + 1L
 
