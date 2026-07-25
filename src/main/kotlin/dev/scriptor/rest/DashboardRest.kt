@@ -1,26 +1,21 @@
 package dev.scriptor.rest
 
-import dev.scriptor.context.SessionContext
-import dev.scriptor.getMedia
-import dev.scriptor.model.Cookie
+import dev.scriptor.context.AuthContext
+import dev.scriptor.context.MediaContext
+import dev.scriptor.model.Bearer
 import dev.scriptor.model.Media
-import dev.scriptor.model.Session
 import dev.scriptor.server.NotFoundSignal
+import dev.scriptor.server.UnauthorizedSignal
 import dev.scriptor.server.annotation.*
-import dev.scriptor.server.http.ParameterList
 import dev.scriptor.server.http.result.HTTPResult
 import dev.scriptor.server.http.result.HTTPResultString
 import java.net.URI
 import java.nio.file.Path
-import java.sql.Connection
-import java.util.logging.Logger
 import kotlin.io.path.Path
 import kotlin.io.path.name
 import kotlin.io.readBytes
 import kotlin.time.Clock.System.now
 import kotlin.use
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 
 @Endpoint("/")
 class DashboardRest {
@@ -28,48 +23,30 @@ class DashboardRest {
     @Inject("data")
     lateinit var data: String
 
-    @Inject("log")
-    lateinit var log: Logger
+    @Inject("auth")
+    lateinit var auth: AuthContext
 
-    @Inject("connection")
-    lateinit var connection: Connection
-
-    @Inject("sessions")
-    lateinit var sessions: SessionContext
+    @Inject("media")
+    lateinit var media: MediaContext
 
     @Resource("/favicon.[]")
     fun getFavicon() {
     }
 
     @Resource("/[slug+]", result = "text/html")
-    @OptIn(ExperimentalUuidApi::class)
-    fun getDashboard(@PathParameter("slug") slug: Array<String>, @Header("cookie") cookie: Cookie?): HTTPResult<*> {
-
+    fun getDashboard(
+        @PathParameter("slug") slug: Array<String>,
+        @Header("authorization") bearer: Bearer,
+    ): HTTPResult<*> {
         val slug = Path("/", *slug)
 
-        val session: Session
-        if (cookie != null && "x-session-id" in cookie) {
-            val id = cookie["x-session-id"]!!
-            val uid = Uuid.parseHexDash(id)
-            session =
-                if (uid in sessions) sessions[uid]!!
-                else sessions.create(uid)
-        } else {
-            val uid = Uuid.generateV7()
-            session = sessions.create(uid)
-        }
+        val now = now()
+        val session = auth.auth(bearer.token, now)
+            ?: throw UnauthorizedSignal()
 
-        session.access = now()
+        session.access = now
 
-        val items = connection.prepareStatement("select * from media").use { statement ->
-            statement.executeQuery().use {
-                val list = mutableListOf<Media>()
-                while (it.next()) {
-                    list += it.getMedia()
-                }
-                list
-            }
-        }
+        val items = media.getAllMedia()
 
         val document: String
         if (items.isNotEmpty()) {
@@ -118,13 +95,7 @@ class DashboardRest {
             document = template.format(list)
         } else document = "no media items found."
 
-        val headers = ParameterList()
-        headers["set-cookie"] = "x-session-id=${session.id}"
-
-        return HTTPResultString(
-            headers = headers,
-            value = document,
-        )
+        return HTTPResultString(value = document)
     }
 
     private sealed class FileNode(val name: String)
@@ -164,28 +135,5 @@ class DashboardRest {
         }
 
         return tree
-    }
-
-    private fun commonBasePath(items: List<Media>): Path {
-        var common = items.first().path
-
-        for ((_, path, _) in items.drop(1)) {
-            var i = 0
-            val max = minOf(common.nameCount, path.nameCount)
-
-            while (i < max && common.getName(i) == path.getName(i)) {
-                i++
-            }
-
-            common = common.root.resolve(
-                common.subpath(0, i)
-            )
-
-            if (common.nameCount == 0) {
-                break
-            }
-        }
-
-        return common
     }
 }

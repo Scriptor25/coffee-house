@@ -1,74 +1,57 @@
 package dev.scriptor.rest
 
-import dev.scriptor.context.SessionContext
-import dev.scriptor.getMedia
-import dev.scriptor.model.Cookie
+import dev.scriptor.context.AuthContext
+import dev.scriptor.context.MediaContext
+import dev.scriptor.model.Bearer
 import dev.scriptor.model.Media
 import dev.scriptor.server.NotFoundSignal
+import dev.scriptor.server.ParameterList
+import dev.scriptor.server.UnauthorizedSignal
 import dev.scriptor.server.annotation.*
-import dev.scriptor.server.http.ParameterList
 import dev.scriptor.server.http.result.HTTPResult
 import dev.scriptor.server.http.result.HTTPResultChannel
 import java.nio.channels.FileChannel
-import java.sql.Connection
-import java.util.logging.Logger
 import kotlin.io.path.extension
 import kotlin.time.Clock.System.now
-import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 @Endpoint("/media")
 class MediaRest {
 
-    @Inject("log")
-    lateinit var log: Logger
+    @Inject("auth")
+    lateinit var auth: AuthContext
 
-    @Inject("connection")
-    lateinit var connection: Connection
+    @Inject("media")
+    lateinit var media: MediaContext
 
-    @Inject("sessions")
-    lateinit var sessions: SessionContext
+    @Resource("/", result = "application/json")
+    fun getMediaList(@Header("authorization") bearer: Bearer): List<Media> {
+        auth.auth(bearer.token)
+            ?: throw UnauthorizedSignal()
 
-    val cache: MutableMap<Uuid, Media> = HashMap()
-
-    @Resource("/list", result = "application/json")
-    fun getMediaList(): Array<Media> {
-        return connection.prepareStatement("select * from media").use { statement ->
-            statement.executeQuery().use {
-                val list = mutableListOf<Media>()
-                while (it.next()) {
-                    list += it.getMedia()
-                }
-                list.toTypedArray()
-            }
-        }
+        return media.getAllMedia()
     }
 
-    fun getMediaById(id: Uuid): Media? {
-        if (id in cache) return cache[id]
-        val value = connection.prepareStatement("select * from media where id = ? limit 1").use { statement ->
-            statement.setString(1, id.toHexDashString())
-            statement.executeQuery().use {
-                if (it.next())
-                    it.getMedia()
-                else null
-            }
-        }
-        if (value != null) {
-            cache[id] = value
-        }
-        return value
+    @Resource("/[id]", result = "application/json")
+    fun getMediaById(@PathParameter("id") id: Uuid, @Header("authorization") bearer: Bearer): Media {
+        auth.auth(bearer.token)
+            ?: throw UnauthorizedSignal()
+
+        return media.getMediaById(id)
+            ?: throw NotFoundSignal(content = "no media for id $id")
     }
 
-    @Resource("/[id]")
-    @OptIn(ExperimentalUuidApi::class)
-    fun getMediaById(
+    @Resource("/stream/[id]")
+    fun getMediaStreamById(
         @PathParameter("id") id: Uuid,
-        @QueryParameter("session") sessionId: Uuid?,
-        @Header("cookie") cookie: Cookie?,
+        @QueryParameter("token") token: String,
         @Header("range") range: String?,
     ): HTTPResult<*> {
-        val media = getMediaById(id)
+        val now = now()
+        val session = auth.auth(token, now)
+            ?: throw UnauthorizedSignal()
+
+        val media = media.getMediaById(id)
             ?: throw NotFoundSignal(content = "no media for id $id")
 
         val channel = FileChannel.open(media.path)
@@ -93,24 +76,10 @@ class MediaRest {
                 else null
         }
 
-        val now = now()
-
         val chunk: Long
         val sequence: Long
 
-        val sid: Uuid
-        if (sessionId != null)
-            sid = sessionId
-        else if (cookie != null && "x-session-id" in cookie) {
-            val id = cookie["x-session-id"]!!
-            sid = Uuid.parseHexDash(id)
-        } else {
-            sid = Uuid.generateV7()
-        }
-
-        val session = sessions[sid] ?: sessions.create(sid)
-
-        if (session.next == begin && now.minus(session.access).inWholeSeconds < 30L) {
+        if (session.next == begin && session.access != null && (now - session.access!!).inWholeSeconds < 30L) {
             val metric = maxOf(0L, minOf(7L, session.sequence)) + 1L
 
             chunk = metric * 512L * 1024L

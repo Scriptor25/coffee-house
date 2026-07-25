@@ -1,45 +1,42 @@
 package dev.scriptor.context
 
+import dev.scriptor.*
 import dev.scriptor.model.Session
-import kotlin.time.Clock.System.now
+import dev.scriptor.server.annotation.Context
+import dev.scriptor.server.annotation.Inject
+import java.sql.Connection
 import kotlin.uuid.Uuid
 
+@Context("sessions")
 class SessionContext {
 
-    private val map: MutableMap<Uuid, Session> = HashMap()
+    @Inject("connection")
+    lateinit var connection: Connection
 
-    fun timeout(): Array<Session> {
-        val now = now()
-
-        val remove = mutableSetOf<Uuid>()
-        for ((key, value) in map) {
-            if (now.minus(value.access).inWholeMinutes > 60L) {
-                remove.add(key)
-            }
-        }
-
-        val sessions = mutableListOf<Session>()
-        for (key in remove) {
-            sessions.add(map.remove(key)!!)
-        }
-
-        return sessions.toTypedArray()
-    }
-
-    @OptIn(ExperimentalStdlibApi::class)
-    fun create(id: Uuid): Session {
-        val session = map.getOrPutIfMissing(id) { Session(id) }
-
-        session.access = now()
-
+    fun createSession(session: Session): Session {
+        SQL().insertValues<Session>(connection, session)
         return session
     }
 
-    fun delete(id: Uuid): Session? {
-        return map.remove(id)
+    fun deleteSession(session: Session): Session {
+        SQL()
+            .deleteFrom<Session>()
+            .where(Session::id eq session.id)
+            .execute(connection)
+        return session
     }
 
-    operator fun contains(id: Uuid): Boolean = id in map
+    fun getSessionById(id: Uuid): Session? = SQL()
+        .selectFrom<Session>()
+        .where(Session::id eq id)
+        .limit(1)
+        .query<Session>(connection)
+        .firstOrNull()
 
-    operator fun get(id: Uuid): Session? = map[id]
+    fun getSessionByToken(token: String): Session? = SQL()
+        .selectFrom<Session>()
+        .where(Session::token eq token)
+        .limit(1)
+        .query<Session>(connection)
+        .firstOrNull()
 }

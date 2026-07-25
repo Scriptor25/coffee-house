@@ -11,7 +11,9 @@ class MediaJsonConverter : Converter<Media, JSONObject> {
         val json = JSONObject()
         json.put("id", value.id.toHexDashString())
         json.put("path", value.path.absolutePathString())
-        json.put("modified", value.modified.toString())
+        json.put("title", value.title)
+        json.put("created_at", value.createdAt.toString())
+        json.put("modified_at", value.modifiedAt.toString())
         return json
     }
 }

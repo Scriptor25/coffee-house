@@ -4,11 +4,11 @@ import dev.scriptor.model.Media
 import dev.scriptor.server.converter.Converter
 import org.json.JSONArray
 
-class MediaArrayJsonConverter : Converter<Array<Media>, JSONArray> {
+class MediaListJsonConverter : Converter<List<Media>, JSONArray> {
 
     val converter = MediaJsonConverter()
 
-    override fun convert(value: Array<Media>): JSONArray {
+    override fun convert(value: List<Media>): JSONArray {
         val json = JSONArray()
         for (entry in value) {
             json.put(converter.convert(entry))
