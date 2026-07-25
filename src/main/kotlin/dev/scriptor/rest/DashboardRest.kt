@@ -1,11 +1,13 @@
 package dev.scriptor.rest
 
 import dev.scriptor.context.SessionContext
+import dev.scriptor.getMedia
 import dev.scriptor.model.Cookie
 import dev.scriptor.model.Media
 import dev.scriptor.model.Session
-import dev.scriptor.model.getMedia
+import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.annotation.*
+import dev.scriptor.server.http.ParameterList
 import dev.scriptor.server.http.result.HTTPResult
 import dev.scriptor.server.http.result.HTTPResultString
 import java.net.URI
@@ -81,7 +83,11 @@ class DashboardRest {
                     .find { it.name == segment.name }
             }
 
-            val entries = node?.children.orEmpty().sortedBy { it.name }.map {
+            if (node == null) {
+                throw NotFoundSignal(content = "no node for path $slug")
+            }
+
+            val entries = node.children.sortedBy { it.name }.map {
                 when (it) {
                     is DirectoryNode -> """<li><a href="${
                         URI(
@@ -112,7 +118,7 @@ class DashboardRest {
             document = template.format(list)
         } else document = "no media items found."
 
-        val headers: MutableMap<String, String> = HashMap()
+        val headers = ParameterList()
         headers["set-cookie"] = "x-session-id=${session.id}"
 
         return HTTPResultString(

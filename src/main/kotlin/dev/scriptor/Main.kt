@@ -1,6 +1,7 @@
 package dev.scriptor
 
 import dev.scriptor.context.SessionContext
+import dev.scriptor.server.http.HTTPServer
 import dev.scriptor.server.scan
 import java.lang.System.getenv
 import java.sql.DriverManager
@@ -43,15 +44,6 @@ fun main() {
     val connection = DriverManager.getConnection("jdbc:sqlite:index.db")
 
     val sessions = SessionContext()
-
-    val server = scan(log, hostname, port, "dev.scriptor")
-
-    server.inject("data", data)
-    server.inject("log", log)
-    server.inject("connection", connection)
-    server.inject("sessions", sessions)
-
-    server.registerTask("session-timeout", 60L * 60_000L) { sessions.timeout() }
 
     connection.prepareStatement(
         """
@@ -96,8 +88,18 @@ fun main() {
         statement.executeUpdate()
     }
 
-    server.start()
+    HTTPServer(log, hostname, port).use { server ->
+        scan(server, "dev.scriptor")
 
-    server.close()
+        server.inject("data", data)
+        server.inject("log", log)
+        server.inject("connection", connection)
+        server.inject("sessions", sessions)
+
+        server.registerTask("session-timeout", 60L * 60_000L) { sessions.timeout() }
+
+        server.start()
+    }
+
     connection.close()
 }

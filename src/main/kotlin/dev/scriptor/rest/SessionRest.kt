@@ -2,6 +2,7 @@ package dev.scriptor.rest
 
 import dev.scriptor.context.SessionContext
 import dev.scriptor.model.Session
+import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.annotation.Endpoint
 import dev.scriptor.server.annotation.Inject
 import dev.scriptor.server.annotation.PathParameter
@@ -29,12 +30,12 @@ class SessionRest {
     }
 
     @Resource("/[id]", method = HTTPMethod.DELETE, result = "application/json")
-    fun deleteSession(@PathParameter("id") id: Uuid): Session? {
-        return sessions.delete(id)
+    fun deleteSession(@PathParameter("id") id: Uuid): Session {
+        return sessions.delete(id) ?: throw NotFoundSignal(content = "no session for id $id")
     }
 
     @Resource("/[id]", method = HTTPMethod.GET, result = "application/json")
-    fun getSession(@PathParameter("id") id: Uuid): Session? {
-        return sessions[id]
+    fun getSession(@PathParameter("id") id: Uuid): Session {
+        return sessions[id] ?: throw NotFoundSignal(content = "no session for id $id")
     }
 }

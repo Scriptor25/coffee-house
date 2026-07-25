@@ -7,13 +7,8 @@ import kotlin.time.toKotlinInstant
 import kotlin.uuid.Uuid
 
 data class Media(
-    val id: Uuid,
+    override val id: Uuid,
+
     val path: Path,
     val modified: Instant,
-)
-
-fun ResultSet.getMedia(): Media = Media(
-    Uuid.parseHexDash(getString("id")),
-    Path.of(getString("path")),
-    getTimestamp("modified").toInstant().toKotlinInstant(),
-)
+) : Entity

@@ -1,13 +1,14 @@
 package dev.scriptor.rest
 
 import dev.scriptor.context.SessionContext
+import dev.scriptor.getMedia
 import dev.scriptor.model.Cookie
 import dev.scriptor.model.Media
-import dev.scriptor.model.getMedia
+import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.annotation.*
+import dev.scriptor.server.http.ParameterList
 import dev.scriptor.server.http.result.HTTPResult
 import dev.scriptor.server.http.result.HTTPResultChannel
-import dev.scriptor.server.http.result.HTTPResultUnit
 import java.nio.channels.FileChannel
 import java.sql.Connection
 import java.util.logging.Logger
@@ -67,7 +68,8 @@ class MediaRest {
         @Header("cookie") cookie: Cookie?,
         @Header("range") range: String?,
     ): HTTPResult<*> {
-        val media = getMediaById(id) ?: return HTTPResultUnit(404, "Not Found")
+        val media = getMediaById(id)
+            ?: throw NotFoundSignal(content = "no media for id $id")
 
         val channel = FileChannel.open(media.path)
         val total = channel.size()
@@ -111,10 +113,10 @@ class MediaRest {
         if (session.next == begin && now.minus(session.access).inWholeSeconds < 30L) {
             val metric = maxOf(0L, minOf(7L, session.sequence)) + 1L
 
-            chunk = metric * 1024L * 1024L
+            chunk = metric * 512L * 1024L
             sequence = session.sequence + 1L
         } else {
-            chunk = 1024L * 1024L
+            chunk = 512L * 1024L
             sequence = 0L
         }
 
@@ -130,7 +132,7 @@ class MediaRest {
 
         val limit = begin + count - 1
 
-        val headers: MutableMap<String, String> = HashMap()
+        val headers = ParameterList()
         headers["accept-ranges"] = "bytes"
         headers["content-type"] = when (media.path.extension) {
             "mp4" -> "video/mp4"
