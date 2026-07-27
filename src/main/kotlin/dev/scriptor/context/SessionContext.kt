@@ -14,29 +14,29 @@ class SessionContext {
     lateinit var connection: Connection
 
     fun createSession(session: Session): Session {
-        SQL().insertValues<Session>(connection, session)
+        SQL(connection).insert<Session>(session)
         return session
     }
 
     fun deleteSession(session: Session): Session {
-        SQL()
-            .deleteFrom<Session>()
+        SQL(connection)
+            .delete<Session>()
             .where(Session::id eq session.id)
-            .execute(connection)
+            .execute()
         return session
     }
 
-    fun getSessionById(id: Uuid): Session? = SQL()
-        .selectFrom<Session>()
+    fun getSessionById(id: Uuid): Session? = SQL(connection)
+        .select<Session>()
         .where(Session::id eq id)
         .limit(1)
-        .query<Session>(connection)
+        .query<Session>()
         .firstOrNull()
 
-    fun getSessionByToken(token: String): Session? = SQL()
-        .selectFrom<Session>()
+    fun getSessionByToken(token: String): Session? = SQL(connection)
+        .select<Session>()
         .where(Session::token eq token)
         .limit(1)
-        .query<Session>(connection)
+        .query<Session>()
         .firstOrNull()
 }

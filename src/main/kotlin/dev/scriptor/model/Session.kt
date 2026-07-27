@@ -12,26 +12,26 @@ data class Session(
 
     @Column("id")
     @PrimaryKey
-    override val id: Uuid,
+    override var id: Uuid,
 
     @Column("user_id")
     @ForeignKey("user", "id")
-    val userId: Uuid,
+    var userId: Uuid,
 
     @Column("token")
-    val token: String,
+    var token: String,
 
     @Column("created_at")
-    val createdAt: Instant,
+    var createdAt: Instant,
 
     @Column("expires_at")
-    val expiresAt: Instant,
+    var expiresAt: Instant,
 
     @Column("access")
     var access: Instant?,
 
     @Column("agent")
-    val agent: String?,
+    var agent: String?,
 
     @Column("sequence")
     var sequence: Long = 0L,

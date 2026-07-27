@@ -3,22 +3,23 @@ package dev.scriptor
 import dev.scriptor.model.Media
 import dev.scriptor.model.Session
 import dev.scriptor.model.User
+import dev.scriptor.model.UserRole
 import dev.scriptor.server.http.HTTPServer
 import dev.scriptor.server.scan
 import java.nio.file.Files
 import java.nio.file.attribute.BasicFileAttributes
 import java.sql.DriverManager
-import java.sql.Timestamp
 import java.util.logging.*
 import kotlin.io.path.*
+import kotlin.time.toKotlinInstant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-fun getenv(): Map<String, String> = System.getenv()
+fun getEnvironment(): Map<String, String> = System.getenv()
 
 @OptIn(ExperimentalUuidApi::class)
 fun main() {
-    val env = getenv()
+    val env = getEnvironment()
 
     val hostname = env["HOSTNAME"] ?: "0.0.0.0"
     val port = env["PORT"]?.toInt() ?: 8080
@@ -45,45 +46,53 @@ fun main() {
 
     val connection = DriverManager.getConnection("jdbc:sqlite:index.db")
 
-    SQL().createTable<User>().execute(connection)
-    SQL().createTable<Session>().execute(connection)
-    SQL().createTable<Media>().execute(connection)
+    connection.typeMap = mapOf(
+        Pair("USER_ROLE", UserRole::class.java),
+    )
+
+    SQL(connection).create<User>().execute()
+    SQL(connection).create<Session>().execute()
+    SQL(connection).create<Media>().execute()
 
     val extensions = arrayOf("mkv", "mp4")
 
-    connection.prepareStatement(
-        """
-        insert into media (id, path, title, created_at, modified_at)
-        values (?, ?, ?, ?, ?)
-        on conflict(path)
-        do update set title = excluded.title, created_at = excluded.created_at, modified_at = excluded.modified_at
-        """.trimIndent()
-    ).use { statement ->
-        for (file in Path(data).walk()) {
-            if (file.extension !in extensions) continue
+    SQL(connection)
+        .insert<Media>()
+        .conflict(Media::path) { sql ->
+            sql.update(
+                Pair(columnOf(Media::class, Media::size), excluded("size")),
+                Pair(columnOf(Media::class, Media::title), excluded("title")),
+                Pair(columnOf(Media::class, Media::createdAt), excluded("created_at")),
+                Pair(columnOf(Media::class, Media::modifiedAt), excluded("modified_at")),
+            )
+        }
+        .batch {
+            for (path in Path(data).walk()) {
+                if (path.extension !in extensions) continue
 
-            val id = Uuid.generateV7()
+                val id = Uuid.generateV7()
 
-            val attributes = Files.readAttributes(file, BasicFileAttributes::class.java)
+                val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
 
-            val size = attributes.size()
+                val size = attributes.size()
 
-            val createdAt = attributes.creationTime()
-            val modifiedAt = attributes.lastModifiedTime()
+                val createdAt = attributes.creationTime()
+                val modifiedAt = attributes.lastModifiedTime()
 
-            statement.setString(1, id.toHexDashString())
-            statement.setString(2, file.absolutePathString())
-            statement.setString(3, file.nameWithoutExtension)
-            statement.setTimestamp(4, Timestamp.from(createdAt.toInstant()))
-            statement.setTimestamp(5, Timestamp.from(modifiedAt.toInstant()))
-
-            statement.addBatch()
+                it(
+                    Media(
+                        id,
+                        path,
+                        size,
+                        path.nameWithoutExtension,
+                        createdAt.toInstant().toKotlinInstant(),
+                        modifiedAt.toInstant().toKotlinInstant(),
+                    ),
+                )
+            }
         }
 
-        statement.executeLargeBatch()
-    }
-
-    connection.prepareStatement("select * from media").use { statement ->
+    SQL(connection).select<Media>().prepare().use { statement ->
         statement.executeQuery().use { result ->
             while (result.next()) {
                 val path = Path(result.getString("path"))

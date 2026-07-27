@@ -10,14 +10,14 @@ data class User(
 
     @Column("id")
     @PrimaryKey
-    override val id: Uuid,
+    override var id: Uuid,
 
     @Column("name")
-    val name: String,
+    var name: String,
 
     @Column("hash")
-    val hash: String,
+    var hash: String,
 
     @Column("role")
-    val role: UserRole,
+    var role: UserRole,
 ) : Entity
