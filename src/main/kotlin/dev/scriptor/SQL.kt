@@ -618,7 +618,7 @@ inline fun <reified T : Any> SQL.insert(value: T): SQL {
 
     val tableRef = tableOf(klass)
     val columnRefs = columns.map { ColumnRef(tableRef, it.first) }
-    val values = columns.map { it.second.getter.call(value) }
+    val values = columns.map { it.second.call(value) }
 
     return insert(tableRef, columnRefs, values)
 }
@@ -671,7 +671,7 @@ inline fun <reified T : Any> SQL.batch(noinline callback: ((T) -> Unit) -> Unit)
     prepare().use { statement ->
         callback {
             for ((index, entry) in columns.withIndex()) {
-                val value = entry.second.getter.call(it)
+                val value = entry.second.call(it)
                 statement.setObject(index + 1, value)
             }
 
