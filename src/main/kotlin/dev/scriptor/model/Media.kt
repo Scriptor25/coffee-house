@@ -1,6 +1,7 @@
 package dev.scriptor.model
 
 import dev.scriptor.annotation.Column
+import dev.scriptor.annotation.PrimaryKey
 import dev.scriptor.annotation.Table
 import java.nio.file.Path
 import kotlin.time.Instant
@@ -10,6 +11,7 @@ import kotlin.uuid.Uuid
 data class Media(
 
     @Column("id")
+    @PrimaryKey
     override val id: Uuid,
 
     @Column("path")

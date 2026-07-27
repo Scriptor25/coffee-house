@@ -1,11 +1,19 @@
 package dev.scriptor
 
 import dev.scriptor.annotation.Column
+import dev.scriptor.annotation.ForeignKey
+import dev.scriptor.annotation.PrimaryKey
 import dev.scriptor.annotation.Table
+import java.nio.file.Path
 import java.sql.Connection
 import java.sql.PreparedStatement
 import kotlin.reflect.*
 import kotlin.reflect.full.findAnnotation
+import kotlin.reflect.full.isSubtypeOf
+import kotlin.reflect.full.starProjectedType
+import kotlin.reflect.full.withNullability
+import kotlin.time.Instant
+import kotlin.uuid.Uuid
 
 sealed interface Node {
 
@@ -24,13 +32,91 @@ data class ColumnRef(val table: TableRef, val name: String) {
     override fun toString(): String = "$table.$name"
 }
 
+data class ColumnDef(
+    val name: String,
+    val type: String,
+    val notNull: Boolean = false,
+) {
+
+    override fun toString(): String = "$name $type ${if (notNull) "not null" else ""}"
+}
+
+data class ConstraintDef(
+    val name: String? = null,
+    val constraint: Constraint,
+) {
+    constructor(constraint: Constraint) : this(null, constraint)
+
+    override fun toString(): String = if (name != null) "constraint $name $constraint" else "$constraint"
+}
+
+enum class CreateTableMod(val value: String) {
+    IF_NOT_EXISTS("if not exists");
+
+    override fun toString(): String = value
+}
+
+private data class CreateTableNode(
+    val modifiers: List<CreateTableMod>,
+    val table: TableRef,
+    val columns: List<ColumnDef>,
+    val constraints: List<ConstraintDef>,
+) : Node {
+
+    override fun generate(sql: StringBuilder, parameters: MutableList<Any?>) {
+        sql.append("create table ")
+
+        for (modifier in modifiers) {
+            sql.append(modifier).append(' ')
+        }
+
+        sql.append(table)
+
+        if (columns.isNotEmpty() || constraints.isNotEmpty()) {
+            sql.append(" (")
+            for ((index, column) in columns.withIndex()) {
+                if (index > 0) sql.append(", ")
+                sql.append(column)
+            }
+            if (columns.isNotEmpty() && constraints.isNotEmpty()) {
+                sql.append(", ")
+            }
+            for ((index, constraint) in constraints.withIndex()) {
+                if (index > 0) sql.append(", ")
+                sql.append(constraint)
+            }
+            sql.append(')')
+        }
+    }
+}
+
+private data class AlterTableNode(val table: TableRef) : Node {
+
+    override fun generate(sql: StringBuilder, parameters: MutableList<Any?>) {
+        sql
+            .append("alter table ")
+            .append(table)
+    }
+}
+
+private data class AddConstraintNode(val name: String, val constraint: Constraint) : Node {
+
+    override fun generate(sql: StringBuilder, parameters: MutableList<Any?>) {
+        sql
+            .append("add constraint ")
+            .append(name)
+            .append(' ')
+            .append(constraint)
+    }
+}
+
 private data class SelectNode(val columns: List<ColumnRef>) : Node {
 
     override fun generate(sql: StringBuilder, parameters: MutableList<Any?>) {
         sql.append("select ")
 
         for ((index, column) in columns.withIndex()) {
-            if (index > 0) sql.append(',')
+            if (index > 0) sql.append(", ")
             sql.append(column)
         }
     }
@@ -74,26 +160,12 @@ private data class LimitNode(val limit: Int) : Node {
     }
 }
 
-private class InsertNode : Node {
+private data class IntoNode(val table: TableRef) : Node {
 
     override fun generate(sql: StringBuilder, parameters: MutableList<Any?>) {
-        sql.append("insert")
-    }
-}
-
-private data class IntoNode(val table: TableRef, val columns: List<ColumnRef>) : Node {
-
-    override fun generate(sql: StringBuilder, parameters: MutableList<Any?>) {
-        sql.append("into ").append(table)
-
-        if (columns.isNotEmpty()) {
-            sql.append('(')
-            for ((index, column) in columns.withIndex()) {
-                if (index > 0) sql.append(',')
-                sql.append(column.name)
-            }
-            sql.append(')')
-        }
+        sql
+            .append("into ")
+            .append(table)
     }
 }
 
@@ -102,7 +174,7 @@ private data class ValuesNode(val values: List<Any?>) : Node {
     override fun generate(sql: StringBuilder, parameters: MutableList<Any?>) {
         sql.append("values (")
         for ((index, _) in values.withIndex()) {
-            if (index > 0) sql.append(',')
+            if (index > 0) sql.append(", ")
             sql.append('?')
         }
         sql.append(')')
@@ -111,10 +183,24 @@ private data class ValuesNode(val values: List<Any?>) : Node {
     }
 }
 
-private class DeleteNode : Node {
+private data class StaticNode(val value: String) : Node {
 
     override fun generate(sql: StringBuilder, parameters: MutableList<Any?>) {
-        sql.append("delete")
+        sql.append(value)
+    }
+}
+
+private data class ColumnRefNode(val columns: List<ColumnRef>) : Node {
+
+    override fun generate(sql: StringBuilder, parameters: MutableList<Any?>) {
+        sql.append('(')
+
+        for ((index, column) in columns.withIndex()) {
+            if (index > 0) sql.append(", ")
+            sql.append(column.name)
+        }
+
+        sql.append(')')
     }
 }
 
@@ -203,9 +289,56 @@ private data class ConditionNot(val condition: Condition) : Condition {
     }
 }
 
+sealed interface Constraint
+
+private data class ConstraintPrimaryKey(val columns: List<String>) : Constraint {
+
+    override fun toString(): String = "primary key (${columns.joinToString(", ")})"
+}
+
+private data class ConstraintForeignKey(
+    val key: String,
+    val references: String,
+    val columns: List<String>,
+) : Constraint {
+
+    override fun toString(): String =
+        "foreign key (${key}) references ${references}(${columns.joinToString(", ")})"
+}
+
+private data class ConstraintUnique(val columns: List<String>) : Constraint {
+
+    override fun toString(): String = "unique (${columns.joinToString(", ")})"
+}
+
 class SQL {
 
     private val nodes = mutableListOf<Node>()
+
+    fun createTable(
+        table: TableRef,
+        modifiers: List<CreateTableMod> = emptyList(),
+        columns: List<ColumnDef> = emptyList(),
+        constraints: List<ConstraintDef> = emptyList(),
+    ): SQL {
+        nodes += CreateTableNode(modifiers, table, columns, constraints)
+        return this
+    }
+
+    fun alterTable(table: TableRef): SQL {
+        nodes += AlterTableNode(table)
+        return this
+    }
+
+    fun addConstraint(name: String, constraint: Constraint): SQL {
+        nodes += AddConstraintNode(name, constraint)
+        return this
+    }
+
+    fun delete(): SQL {
+        nodes += StaticNode("delete")
+        return this
+    }
 
     fun select(vararg columns: ColumnRef): SQL {
         nodes += SelectNode(columns.asList())
@@ -232,13 +365,8 @@ class SQL {
         return this
     }
 
-    fun insert(): SQL {
-        nodes += InsertNode()
-        return this
-    }
-
-    fun into(table: TableRef, vararg columns: ColumnRef): SQL {
-        nodes += IntoNode(table, columns.asList())
+    fun insertInto(table: TableRef): SQL {
+        nodes += IntoNode(table)
         return this
     }
 
@@ -247,8 +375,8 @@ class SQL {
         return this
     }
 
-    fun delete(): SQL {
-        nodes += DeleteNode()
+    operator fun invoke(vararg columns: ColumnRef): SQL {
+        nodes += ColumnRefNode(columns.asList())
         return this
     }
 
@@ -275,11 +403,77 @@ class SQL {
     }
 }
 
-inline fun <reified T> SQL.selectFrom(): SQL {
-
+inline fun <reified T : Any> SQL.createTable(): SQL {
     val klass = T::class
-    val table = klass.findAnnotation<Table>() ?: throw UnsupportedOperationException()
-    val tableRef = TableRef(table.value)
+
+    val table = tableOf(klass)
+    val columns = mutableListOf<ColumnDef>()
+    val constraints = mutableListOf<ConstraintDef>()
+
+    for (member in klass.members) {
+        if (member !is KProperty) continue
+
+        val column = member.findAnnotation<Column>()
+        if (column == null) continue
+
+        val primaryKey = member.findAnnotation<PrimaryKey>()
+        val foreignKey = member.findAnnotation<ForeignKey>()
+
+        val name = column.value
+        val type = member.getter.returnType
+
+        val sqlType = when {
+            type.withNullability(false).isSubtypeOf(Uuid::class.starProjectedType)
+                -> "uuid"
+
+            type.withNullability(false).isSubtypeOf(CharSequence::class.starProjectedType) ||
+                    type.withNullability(false).isSubtypeOf(Enum::class.starProjectedType) ||
+                    type.withNullability(false).isSubtypeOf(Path::class.starProjectedType)
+                -> "string"
+
+            type.withNullability(false).isSubtypeOf(Byte::class.starProjectedType)
+                -> "byte"
+
+            type.withNullability(false).isSubtypeOf(Short::class.starProjectedType)
+                -> "short"
+
+            type.withNullability(false).isSubtypeOf(Int::class.starProjectedType)
+                -> "int"
+
+            type.withNullability(false).isSubtypeOf(Long::class.starProjectedType)
+                -> "long"
+
+            type.withNullability(false).isSubtypeOf(Instant::class.starProjectedType)
+                -> "timestamp"
+
+            else -> throw UnsupportedOperationException("sql of ${type.withNullability(false)}")
+        }
+
+        val notNull = !type.isMarkedNullable
+
+        columns += ColumnDef(name, sqlType, notNull)
+
+        if (primaryKey != null) {
+            constraints += ConstraintDef(primaryKey(name))
+        }
+
+        if (foreignKey != null) {
+            constraints += ConstraintDef(foreignKey(name, foreignKey.table, foreignKey.column))
+        }
+    }
+
+    return createTable(
+        table,
+        listOf(CreateTableMod.IF_NOT_EXISTS),
+        columns,
+        constraints,
+    )
+}
+
+inline fun <reified T : Any> SQL.selectFrom(): SQL {
+    val klass = T::class
+
+    val tableRef = tableOf(klass)
 
     val columnRefs = klass.members
         .mapNotNull { it.findAnnotation<Column>() }
@@ -318,9 +512,7 @@ inline fun <reified T : Any> SQL.insertInto(): SQL {
         .map { ColumnRef(tableRef, it.key) }
         .toTypedArray()
 
-    return this
-        .insert()
-        .into(tableRef, *columnRefs)
+    return insertInto(tableRef)(*columnRefs)
 }
 
 inline fun <reified T : Any> SQL.insertValues(connection: Connection, entity: T) {
@@ -344,9 +536,7 @@ inline fun <reified T : Any> SQL.insertValues(connection: Connection, entity: T)
         .map { it.value.getter.call(entity) }
         .toTypedArray()
 
-    this
-        .insert()
-        .into(tableRef, *columnRefs)
+    insertInto(tableRef)(*columnRefs)
         .values(*values)
         .prepare(connection)
         .use { statement -> statement.executeUpdate() }
@@ -430,4 +620,12 @@ infix fun ColumnRef.ge(value: Any?): Condition = ConditionGe(this, value)
 infix fun Condition.and(other: Condition): Condition = ConditionAnd(this, other)
 infix fun Condition.or(other: Condition): Condition = ConditionOr(this, other)
 
-fun Condition.not(): Condition = ConditionNot(this)
+fun Condition.not(): Condition = if (this is ConditionNot) condition else ConditionNot(this)
+
+fun primaryKey(vararg columns: String): Constraint =
+    ConstraintPrimaryKey(columns.asList())
+
+fun foreignKey(key: String, references: String, vararg columns: String): Constraint =
+    ConstraintForeignKey(key, references, columns.asList())
+
+fun unique(vararg columns: String): Constraint = ConstraintUnique(columns.asList())

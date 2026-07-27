@@ -1,17 +1,21 @@
 package dev.scriptor.model
 
 import dev.scriptor.annotation.Column
+import dev.scriptor.annotation.ForeignKey
+import dev.scriptor.annotation.PrimaryKey
 import dev.scriptor.annotation.Table
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 @Table("session")
 data class Session(
-    
+
     @Column("id")
+    @PrimaryKey
     override val id: Uuid,
 
     @Column("user_id")
+    @ForeignKey("user", "id")
     val userId: Uuid,
 
     @Column("token")

@@ -1,5 +1,8 @@
 package dev.scriptor
 
+import dev.scriptor.model.Media
+import dev.scriptor.model.Session
+import dev.scriptor.model.User
 import dev.scriptor.server.http.HTTPServer
 import dev.scriptor.server.scan
 import java.nio.file.Files
@@ -11,16 +14,17 @@ import kotlin.io.path.*
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-fun getenv(name: String): String? = System.getenv(name)
-fun getenv(name: String, default: String): String = System.getenv(name) ?: default
+fun getenv(): Map<String, String> = System.getenv()
 
 @OptIn(ExperimentalUuidApi::class)
 fun main() {
-    val hostname = getenv("HOSTNAME", "0.0.0.0")
-    val port = getenv("PORT", "8080").toInt()
-    val data = getenv("DATA", "/data")
-    val username = getenv("USERNAME")
-    val password = getenv("PASSWORD")
+    val env = getenv()
+
+    val hostname = env["HOSTNAME"] ?: "0.0.0.0"
+    val port = env["PORT"]?.toInt() ?: 8080
+    val data = env["DATA"] ?: "/data"
+    val username = env["USERNAME"]
+    val password = env["PASSWORD"]
 
     val log = Logger.getLogger("dev.scriptor")
     log.level = Level.INFO
@@ -41,52 +45,11 @@ fun main() {
 
     val connection = DriverManager.getConnection("jdbc:sqlite:index.db")
 
-    connection.prepareStatement(
-        """
-        create table if not exists user (
-            id uuid not null primary key,
-            name string not null,
-            hash string not null,
-            role string not null
-        )
-        """.trimIndent()
-    ).use { statement -> statement.execute() }
-
-    connection.prepareStatement(
-        """
-        create table if not exists session (
-            id uuid not null primary key,
-            user_id uuid not null,
-            token string not null,
-            created_at timestamp not null,
-            expires_at timestamp not null,
-            access timestamp null,
-            agent string null,
-            sequence long not null,
-            next long not null,
-        
-            constraint fk_user
-            foreign key (user_id)
-            references user(id)
-        )
-        """.trimIndent()
-    ).use { statement -> statement.execute() }
-
-    connection.prepareStatement(
-        """
-        create table if not exists media (
-            id uuid not null primary key,
-            path string unique not null,
-            title string not null,
-            created_at timestamp not null,
-            modified_at timestamp not null
-        )
-        """.trimIndent()
-    ).use { statement -> statement.execute() }
+    SQL().createTable<User>().execute(connection)
+    SQL().createTable<Session>().execute(connection)
+    SQL().createTable<Media>().execute(connection)
 
     val extensions = arrayOf("mkv", "mp4")
-
-    val modified = Timestamp(System.currentTimeMillis())
 
     connection.prepareStatement(
         """

@@ -1,6 +1,7 @@
 package dev.scriptor.model
 
 import dev.scriptor.annotation.Column
+import dev.scriptor.annotation.PrimaryKey
 import dev.scriptor.annotation.Table
 import kotlin.uuid.Uuid
 
@@ -8,6 +9,7 @@ import kotlin.uuid.Uuid
 data class User(
 
     @Column("id")
+    @PrimaryKey
     override val id: Uuid,
 
     @Column("name")
