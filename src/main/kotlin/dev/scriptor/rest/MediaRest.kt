@@ -103,19 +103,16 @@ class MediaRest {
 
         val headers = ParameterList()
         headers["accept-ranges"] = "bytes"
-        headers["content-type"] = when (media.path.extension) {
-            "mp4" -> "video/mp4"
-            "mkv" -> "video/x-matroska"
-            else -> "*/*"
-        }
-        headers["content-length"] = count.toString()
         headers["content-range"] = "bytes $begin-$limit/$total"
-
-        headers["set-cookie"] = "x-session-id=${session.id}"
 
         return HTTPResultChannel(
             206,
             "Partial Content",
+            when (media.path.extension) {
+                "mp4" -> "video/mp4"
+                "mkv" -> "video/x-matroska"
+                else -> "*/*"
+            },
             headers,
             channel,
             begin,

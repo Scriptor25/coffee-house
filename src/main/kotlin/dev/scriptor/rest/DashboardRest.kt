@@ -89,7 +89,7 @@ class DashboardRest {
             }">..</a></li>${entries.joinToString("")}</ul>"""
 
             val template = ClassLoader
-                .getSystemResourceAsStream("list.html")
+                .getSystemResourceAsStream("dashboard.html")
                 .use { it!!.readBytes() }.decodeToString()
 
             document = template.format(list)
