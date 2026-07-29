@@ -16,7 +16,7 @@ data class Session(
 
     @Column("user_id")
     @ForeignKey("user", "id")
-    var userId: Uuid,
+    var userId: Uuid?,
 
     @Column("token")
     var token: String,

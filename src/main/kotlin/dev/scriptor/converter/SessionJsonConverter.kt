@@ -9,7 +9,12 @@ class SessionJsonConverter : Converter<Session, JSONObject> {
     override fun convert(value: Session): JSONObject {
         val json = JSONObject()
         json.put("id", value.id)
+        json.put("user_id", value.userId)
+        json.put("token", value.token)
+        json.put("created_at", value.createdAt)
+        json.put("expires_at", value.expiresAt)
         json.put("access", value.access)
+        json.put("agent", value.agent)
         json.put("sequence", value.sequence)
         json.put("next", value.next)
         return json

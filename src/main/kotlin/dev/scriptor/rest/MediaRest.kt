@@ -38,7 +38,7 @@ class MediaRest {
             ?: throw UnauthorizedSignal()
 
         return media.getMediaById(id)
-            ?: throw NotFoundSignal(content = "no media for id $id")
+            ?: throw NotFoundSignal()
     }
 
     @Resource("/stream/[id]")
@@ -52,7 +52,7 @@ class MediaRest {
             ?: throw UnauthorizedSignal()
 
         val media = media.getMediaById(id)
-            ?: throw NotFoundSignal(content = "no media for id $id")
+            ?: throw NotFoundSignal()
 
         val channel = FileChannel.open(media.path)
         val total = channel.size()

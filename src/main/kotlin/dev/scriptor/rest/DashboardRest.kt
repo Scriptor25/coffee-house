@@ -61,7 +61,7 @@ class DashboardRest {
             }
 
             if (node == null) {
-                throw NotFoundSignal(content = "no node for path $slug")
+                throw NotFoundSignal()
             }
 
             val entries = node.children.sortedBy { it.name }.map {

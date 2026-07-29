@@ -37,7 +37,7 @@ fun main() {
         override fun format(record: LogRecord?): String? {
             if (record == null) return null
 
-            return "[${record.level}][${record.instant}][${record.sourceClassName}.${record.sourceMethodName}(...)] ${record.message}\n"
+            return "[${record.level}][${record.instant}] ${record.message}\n"
         }
     }
 
