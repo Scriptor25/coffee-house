@@ -1,5 +1,5 @@
 package dev.scriptor.annotation
 
-@Target(AnnotationTarget.PROPERTY)
+@Target(AnnotationTarget.VALUE_PARAMETER)
 @Retention(AnnotationRetention.RUNTIME)
 annotation class PrimaryKey

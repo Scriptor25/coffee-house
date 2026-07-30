@@ -75,10 +75,7 @@ class SessionRest {
             token,
             createdAt,
             expiresAt,
-            null,
             agent,
-            0L,
-            0L,
         )
 
         return sessions.createSession(session)

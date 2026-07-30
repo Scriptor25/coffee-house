@@ -5,29 +5,30 @@ import dev.scriptor.annotation.PrimaryKey
 import dev.scriptor.annotation.Table
 import dev.scriptor.annotation.Unique
 import java.nio.file.Path
+import java.sql.Timestamp
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 @Table("media")
 data class Media(
 
-    @Column("id")
+    @Column(type = String::class)
     @PrimaryKey
-    override var id: Uuid,
+    val id: Uuid,
 
-    @Column("path")
+    @Column(type = String::class)
     @Unique
-    var path: Path,
+    val path: Path,
 
-    @Column("size")
-    var size: Long,
+    @Column
+    val size: Long,
 
-    @Column("title")
-    var title: String,
+    @Column
+    val title: String,
 
-    @Column("created_at")
-    var createdAt: Instant,
+    @Column("created_at", Timestamp::class)
+    val createdAt: Instant,
 
-    @Column("modified_at")
-    var modifiedAt: Instant,
-) : Entity
+    @Column("modified_at", Timestamp::class)
+    val modifiedAt: Instant,
+)

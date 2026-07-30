@@ -46,10 +46,6 @@ fun main() {
 
     val connection = DriverManager.getConnection("jdbc:sqlite:index.db")
 
-    connection.typeMap = mapOf(
-        Pair("USER_ROLE", UserRole::class.java),
-    )
-
     SQL(connection).create<User>().execute()
     SQL(connection).create<Session>().execute()
     SQL(connection).create<Media>().execute()
@@ -60,10 +56,10 @@ fun main() {
         .insert<Media>()
         .conflict(Media::path) { sql ->
             sql.update(
-                Pair(columnOf(Media::class, Media::size), excluded("size")),
-                Pair(columnOf(Media::class, Media::title), excluded("title")),
-                Pair(columnOf(Media::class, Media::createdAt), excluded("created_at")),
-                Pair(columnOf(Media::class, Media::modifiedAt), excluded("modified_at")),
+                Media::size to excluded("size"),
+                Media::title to excluded("title"),
+                Media::createdAt to excluded("created_at"),
+                Media::modifiedAt to excluded("modified_at"),
             )
         }
         .batch {
@@ -92,7 +88,7 @@ fun main() {
             }
         }
 
-    SQL(connection).select<Media>().prepare().use { statement ->
+    SQL(connection).select<Media>().prepare().use { (statement, _) ->
         statement.executeQuery().use { result ->
             while (result.next()) {
                 val path = Path(result.getString("path"))

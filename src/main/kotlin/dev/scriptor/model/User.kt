@@ -8,16 +8,16 @@ import kotlin.uuid.Uuid
 @Table("user")
 data class User(
 
-    @Column("id")
+    @Column(type = String::class)
     @PrimaryKey
-    override var id: Uuid,
+    val id: Uuid,
 
-    @Column("name")
-    var name: String,
+    @Column
+    val name: String,
 
-    @Column("hash")
-    var hash: String,
+    @Column
+    val hash: String,
 
-    @Column("role")
-    var role: UserRole,
-) : Entity
+    @Column(type = String::class)
+    val role: UserRole,
+)

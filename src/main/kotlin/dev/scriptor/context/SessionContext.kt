@@ -14,7 +14,9 @@ class SessionContext {
     lateinit var connection: Connection
 
     fun createSession(session: Session): Session {
-        SQL(connection).insert<Session>(session)
+        SQL(connection)
+            .insert<Session>(session)
+            .execute()
         return session
     }
 

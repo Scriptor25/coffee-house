@@ -4,38 +4,39 @@ import dev.scriptor.annotation.Column
 import dev.scriptor.annotation.ForeignKey
 import dev.scriptor.annotation.PrimaryKey
 import dev.scriptor.annotation.Table
+import java.sql.Timestamp
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 @Table("session")
 data class Session(
 
-    @Column("id")
+    @Column(type = String::class)
     @PrimaryKey
-    override var id: Uuid,
+    val id: Uuid,
 
-    @Column("user_id")
+    @Column("user_id", String::class)
     @ForeignKey("user", "id")
-    var userId: Uuid?,
+    val userId: Uuid?,
 
-    @Column("token")
-    var token: String,
+    @Column
+    val token: String,
 
-    @Column("created_at")
-    var createdAt: Instant,
+    @Column("created_at", type = Timestamp::class)
+    val createdAt: Instant,
 
-    @Column("expires_at")
-    var expiresAt: Instant,
+    @Column("expires_at", type = Timestamp::class)
+    val expiresAt: Instant,
 
-    @Column("access")
-    var access: Instant?,
+    @Column
+    val agent: String?,
 
-    @Column("agent")
-    var agent: String?,
+    @Column(type = Timestamp::class)
+    var access: Instant? = null,
 
-    @Column("sequence")
+    @Column
     var sequence: Long = 0L,
 
-    @Column("next")
+    @Column
     var next: Long = 0L,
-) : Entity
+)

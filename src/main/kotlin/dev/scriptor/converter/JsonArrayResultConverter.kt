@@ -7,5 +7,6 @@ import org.json.JSONArray
 
 class JsonArrayResultConverter : Converter<JSONArray, HTTPResult<*>> {
 
-    override fun convert(value: JSONArray): HTTPResult<*> = HTTPResultString(value = value.toString())
+    override fun convert(value: JSONArray): HTTPResult<*> =
+        HTTPResultString(contentType = "application/json", value = value.toString())
 }
