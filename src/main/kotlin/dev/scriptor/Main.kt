@@ -101,13 +101,13 @@ fun main() {
 
     val provider = Provider()
 
+    provider += connection
+
     provider["hostname"] = hostname
     provider["port"] = port
     provider["data"] = data
     provider["username"] = username
     provider["password"] = password
-
-    provider["connection"] = connection
 
     Server(log, provider, hostname, port).use { server ->
         scan(server, "dev.scriptor")

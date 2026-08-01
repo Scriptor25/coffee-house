@@ -8,7 +8,7 @@ import dev.scriptor.select
 import dev.scriptor.server.annotation.Context
 import java.sql.Connection
 
-@Context("users")
+@Context
 class UserContext {
 
     context(connection: Connection)

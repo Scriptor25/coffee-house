@@ -6,7 +6,7 @@ import java.sql.Connection
 import kotlin.time.Clock.System.now
 import kotlin.time.Instant
 
-@Context("auth")
+@Context
 class AuthContext {
 
     context(

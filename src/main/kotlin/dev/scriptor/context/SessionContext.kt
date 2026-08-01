@@ -6,7 +6,7 @@ import dev.scriptor.server.annotation.Context
 import java.sql.Connection
 import kotlin.uuid.Uuid
 
-@Context("sessions")
+@Context
 class SessionContext {
 
     context(connection: Connection)

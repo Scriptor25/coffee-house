@@ -9,7 +9,7 @@ import dev.scriptor.server.annotation.Context
 import java.sql.Connection
 import kotlin.uuid.Uuid
 
-@Context("media")
+@Context
 class MediaContext {
 
     context(connection: Connection)
