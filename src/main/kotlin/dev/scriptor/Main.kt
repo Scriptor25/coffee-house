@@ -3,8 +3,8 @@ package dev.scriptor
 import dev.scriptor.model.Media
 import dev.scriptor.model.Session
 import dev.scriptor.model.User
-import dev.scriptor.model.UserRole
-import dev.scriptor.server.http.HTTPServer
+import dev.scriptor.server.Provider
+import dev.scriptor.server.http.Server
 import dev.scriptor.server.scan
 import java.nio.file.Files
 import java.nio.file.attribute.BasicFileAttributes
@@ -62,7 +62,7 @@ fun main() {
                 Media::modifiedAt to excluded("modified_at"),
             )
         }
-        .batch {
+        .batch { submit ->
             for (path in Path(data).walk()) {
                 if (path.extension !in extensions) continue
 
@@ -75,7 +75,7 @@ fun main() {
                 val createdAt = attributes.creationTime()
                 val modifiedAt = attributes.lastModifiedTime()
 
-                it(
+                submit(
                     Media(
                         id,
                         path,
@@ -88,7 +88,7 @@ fun main() {
             }
         }
 
-    SQL(connection).select<Media>().prepare().use { (statement, _) ->
+    SQL(connection).select<Media>().prepare().use { (statement) ->
         statement.executeQuery().use { result ->
             while (result.next()) {
                 val path = Path(result.getString("path"))
@@ -99,17 +99,18 @@ fun main() {
         }
     }
 
-    HTTPServer(log, hostname, port).use { server ->
+    val provider = Provider()
+
+    provider["hostname"] = hostname
+    provider["port"] = port
+    provider["data"] = data
+    provider["username"] = username
+    provider["password"] = password
+
+    provider["connection"] = connection
+
+    Server(log, provider, hostname, port).use { server ->
         scan(server, "dev.scriptor")
-
-        server.inject("hostname", hostname)
-        server.inject("port", port)
-        server.inject("data", data)
-        server.inject("username", username)
-        server.inject("password", password)
-
-        server.inject("log", log)
-        server.inject("connection", connection)
 
         server.start()
     }

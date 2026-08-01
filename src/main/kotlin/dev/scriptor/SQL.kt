@@ -4,7 +4,6 @@ import dev.scriptor.annotation.*
 import java.sql.*
 import kotlin.reflect.KClass
 import kotlin.reflect.KParameter
-import kotlin.reflect.KProperty
 import kotlin.reflect.KProperty1
 import kotlin.reflect.full.findAnnotation
 import kotlin.reflect.full.memberProperties
@@ -535,16 +534,10 @@ inline fun <reified T : Any> SQL.create(): SQL {
     val columnDefs = mutableListOf<ColumnDef>()
     val constraintDefs = mutableListOf<ConstraintDef>()
 
-    for ((name, parameter) in columns) {
-        val column = parameter.findAnnotation<Column>()!!
-
+    for ((name, type, parameter) in columns) {
         val primaryKey = parameter.findAnnotation<PrimaryKey>()
         val foreignKey = parameter.findAnnotation<ForeignKey>()
         val unique = parameter.findAnnotation<Unique>()
-
-        val type = if (column.type == Unit::class)
-            parameter.type.classifier
-        else column.type
 
         val jdbcType = when (type) {
             Boolean::class -> JDBCType.BOOLEAN
@@ -622,13 +615,7 @@ inline fun <reified T : Any> SQL.insert(value: T): SQL {
     return insert(
         table,
         columns.map { (name) -> ColumnRef(table, name) },
-        columns.map { (_, parameter, property) ->
-            val column = parameter.findAnnotation<Column>()!!
-
-            val type = if (column.type == Unit::class)
-                parameter.type.classifier
-            else column.type
-
+        columns.map { (name, type, parameter, property) ->
             // TODO: convert to jdbc type
             property.call(value)
         },
@@ -649,20 +636,15 @@ inline fun <reified T : Any> SQL.query(): List<T> {
     val constructor = T::class.primaryConstructor
         ?: throw UnsupportedOperationException()
 
-    val parameters = constructor.parameters
+    val columns = columns<T>()
 
-    return prepare().use { (statement, _) ->
+    return prepare().use { (statement) ->
         statement.executeQuery().use { result ->
             val entities = mutableListOf<T>()
             while (result.next()) {
-                val arguments = parameters.map { parameter ->
-                    val column = parameter.findAnnotation<Column>()!!
-                    val name = column.value.ifEmpty { parameter.name!! }
-
-                    result.getObject(
-                        name,
-                        (parameter.type.classifier as? KClass<*>)?.java,
-                    )
+                val arguments = columns.map { (name, type, parameter) ->
+                    // TODO: convert to parameter type
+                    result.getObject(name, type.java)
                 }.toTypedArray()
 
                 entities += constructor.call(*arguments)
@@ -677,10 +659,12 @@ inline fun <reified T : Any> SQL.batch(noinline callback: ((T) -> Unit) -> Unit)
     val columns = columns<T>()
 
     prepare().use { (statement, named) ->
-        callback {
-            for ((name, _, property) in columns) {
+        callback { instance ->
+            for ((name, type, parameter, property) in columns) {
                 val index = named["$table.$name"] ?: -1
-                val value = property.call(it)
+                val value = property.call(instance)
+
+                // TODO: convert to jdbc type
                 statement.setObject(index + 1, value)
             }
 
@@ -711,7 +695,14 @@ inline fun <reified T : Any> columnOf(property: KProperty1<T, *>): ColumnRef {
     )
 }
 
-inline fun <reified T : Any> columns(): List<Triple<String, KParameter, KProperty<*>>> {
+data class ColumnData<T : Any>(
+    val name: String,
+    val type: KClass<*>,
+    val parameter: KParameter,
+    val property: KProperty1<T, *>,
+)
+
+inline fun <reified T : Any> columns(): List<ColumnData<T>> {
     val constructor = T::class.primaryConstructor
         ?: throw UnsupportedOperationException()
     val properties = T::class.memberProperties
@@ -719,8 +710,11 @@ inline fun <reified T : Any> columns(): List<Triple<String, KParameter, KPropert
     return constructor.parameters
         .map { it.findAnnotation<Column>()!! to it }
         .map { (column, parameter) ->
-            Triple(
+            ColumnData(
                 column.value.ifEmpty { parameter.name!! },
+                if (column.type == Unit::class)
+                    parameter.type.classifier as KClass<*>
+                else column.type,
                 parameter,
                 properties.first { it.name == parameter.name },
             )

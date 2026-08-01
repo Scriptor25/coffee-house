@@ -2,15 +2,17 @@ package dev.scriptor.rest
 
 import dev.scriptor.context.AuthContext
 import dev.scriptor.context.MediaContext
+import dev.scriptor.context.SessionContext
 import dev.scriptor.model.Bearer
 import dev.scriptor.model.Media
 import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.ParameterList
 import dev.scriptor.server.UnauthorizedSignal
 import dev.scriptor.server.annotation.*
-import dev.scriptor.server.http.result.HTTPResult
-import dev.scriptor.server.http.result.HTTPResultChannel
+import dev.scriptor.server.result.ChannelResult
+import dev.scriptor.server.result.Result
 import java.nio.channels.FileChannel
+import java.sql.Connection
 import kotlin.io.path.extension
 import kotlin.time.Clock.System.now
 import kotlin.uuid.Uuid
@@ -18,23 +20,29 @@ import kotlin.uuid.Uuid
 @Endpoint("/media")
 class MediaRest {
 
-    @Inject("auth")
-    lateinit var auth: AuthContext
-
-    @Inject("media")
-    lateinit var media: MediaContext
-
     @Resource("/", result = "application/json")
-    fun getMediaList(@Header("authorization") bearer: Bearer): List<Media> {
-        auth.auth(bearer.token)
+    context(
+        _: Connection,
+        auth: AuthContext,
+        _: SessionContext,
+        media: MediaContext,
+    )
+    fun getMediaList(@Header authorization: Bearer): List<Media> {
+        auth.auth(authorization.token)
             ?: throw UnauthorizedSignal()
 
         return media.getAllMedia()
     }
 
     @Resource("/[id]", result = "application/json")
-    fun getMediaById(@PathParameter("id") id: Uuid, @Header("authorization") bearer: Bearer): Media {
-        auth.auth(bearer.token)
+    context(
+        _: Connection,
+        auth: AuthContext,
+        _: SessionContext,
+        media: MediaContext,
+    )
+    fun getMediaById(@PathParameter id: Uuid, @Header authorization: Bearer): Media {
+        auth.auth(authorization.token)
             ?: throw UnauthorizedSignal()
 
         return media.getMediaById(id)
@@ -42,11 +50,17 @@ class MediaRest {
     }
 
     @Resource("/stream/[id]")
+    context(
+        _: Connection,
+        auth: AuthContext,
+        _: SessionContext,
+        media: MediaContext,
+    )
     fun getMediaStreamById(
-        @PathParameter("id") id: Uuid,
-        @QueryParameter("token") token: String,
-        @Header("range") range: String?,
-    ): HTTPResult<*> {
+        @PathParameter id: Uuid,
+        @QueryParameter token: String,
+        @Header range: String?,
+    ): Result {
         val now = now()
         val session = auth.auth(token, now)
             ?: throw UnauthorizedSignal()
@@ -105,7 +119,7 @@ class MediaRest {
         headers["accept-ranges"] = "bytes"
         headers["content-range"] = "bytes $begin-$limit/$total"
 
-        return HTTPResultChannel(
+        return ChannelResult(
             206,
             "Partial Content",
             when (media.path.extension) {

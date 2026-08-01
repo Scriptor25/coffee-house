@@ -1,12 +1,12 @@
 package dev.scriptor.converter
 
-import dev.scriptor.server.converter.Converter
-import dev.scriptor.server.http.result.HTTPResult
-import dev.scriptor.server.http.result.HTTPResultString
+import dev.scriptor.server.Provider
+import dev.scriptor.server.converter.ResultConverter
+import dev.scriptor.server.result.StringResult
 import org.json.JSONObject
 
-class JsonObjectResultConverter : Converter<JSONObject, HTTPResult<*>> {
+class JsonObjectResultConverter : ResultConverter<JSONObject, StringResult> {
 
-    override fun convert(value: JSONObject): HTTPResult<*> =
-        HTTPResultString(contentType = "application/json", value = value.toString())
+    context(provider: Provider)
+    override fun convert(value: JSONObject) = StringResult(contentType = "application/json", value = value.toString())
 }

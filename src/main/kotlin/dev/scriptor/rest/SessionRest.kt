@@ -4,11 +4,13 @@ import dev.scriptor.context.SessionContext
 import dev.scriptor.context.UserContext
 import dev.scriptor.model.Session
 import dev.scriptor.server.NotFoundSignal
+import dev.scriptor.server.Provider
 import dev.scriptor.server.UnauthorizedSignal
 import dev.scriptor.server.annotation.*
-import dev.scriptor.server.http.HTTPMethod
+import dev.scriptor.server.http.Method.*
 import org.json.JSONObject
 import java.security.SecureRandom
+import java.sql.Connection
 import java.time.Duration.ofMinutes
 import kotlin.io.encoding.Base64
 import kotlin.time.Clock.System.now
@@ -19,30 +21,27 @@ import kotlin.uuid.Uuid
 @Endpoint("/session")
 class SessionRest {
 
-    @Inject("users")
-    lateinit var users: UserContext
-
-    @Inject("sessions")
-    lateinit var sessions: SessionContext
-
-    @Inject("username")
-    var rootUsername: String? = null
-
-    @Inject("password")
-    var rootPassword: String? = null
-
     private val random = SecureRandom()
 
     @Resource(
-        path = "/",
-        method = HTTPMethod.POST,
-        accept = "application/json",
-        result = "application/json",
+        "/",
+        POST,
+        "application/json",
+        "application/json",
     )
     @OptIn(ExperimentalUuidApi::class)
+    context(
+        provider: Provider,
+        _: Connection,
+        users: UserContext,
+        sessions: SessionContext,
+    )
     fun createSession(@Body body: JSONObject, @Header("user-agent") agent: String?): Session {
         val username = body.getString("username")
         val password = body.getString("password")
+
+        val rootUsername: String? = provider["username"]
+        val rootPassword: String? = provider["password"]
 
         val userId: Uuid?
         if (rootUsername != null && rootPassword != null && username == rootUsername) {
@@ -81,14 +80,30 @@ class SessionRest {
         return sessions.createSession(session)
     }
 
-    @Resource("/[id]", method = HTTPMethod.GET, result = "application/json")
-    fun getSessionById(@PathParameter("id") id: Uuid): Session {
+    @Resource(
+        "/[id]",
+        GET,
+        result = "application/json",
+    )
+    context(
+        _: Connection,
+        sessions: SessionContext,
+    )
+    fun getSessionById(@PathParameter id: Uuid): Session {
         return sessions.getSessionById(id)
             ?: throw NotFoundSignal()
     }
 
-    @Resource("/[id]", method = HTTPMethod.DELETE, result = "application/json")
-    fun deleteSessionById(@PathParameter("id") id: Uuid): Session {
+    @Resource(
+        "/[id]",
+        DELETE,
+        result = "application/json",
+    )
+    context(
+        _: Connection,
+        sessions: SessionContext,
+    )
+    fun deleteSessionById(@PathParameter id: Uuid): Session {
         val session = sessions.getSessionById(id)
             ?: throw NotFoundSignal()
         return sessions.deleteSession(session)

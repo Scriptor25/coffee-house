@@ -3,16 +3,13 @@ package dev.scriptor.context
 import dev.scriptor.*
 import dev.scriptor.model.Session
 import dev.scriptor.server.annotation.Context
-import dev.scriptor.server.annotation.Inject
 import java.sql.Connection
 import kotlin.uuid.Uuid
 
 @Context("sessions")
 class SessionContext {
 
-    @Inject("connection")
-    lateinit var connection: Connection
-
+    context(connection: Connection)
     fun createSession(session: Session): Session {
         SQL(connection)
             .insert<Session>(session)
@@ -20,6 +17,7 @@ class SessionContext {
         return session
     }
 
+    context(connection: Connection)
     fun deleteSession(session: Session): Session {
         SQL(connection)
             .delete<Session>()
@@ -28,6 +26,7 @@ class SessionContext {
         return session
     }
 
+    context(connection: Connection)
     fun getSessionById(id: Uuid): Session? = SQL(connection)
         .select<Session>()
         .where(Session::id eq id)
@@ -35,6 +34,7 @@ class SessionContext {
         .query<Session>()
         .firstOrNull()
 
+    context(connection: Connection)
     fun getSessionByToken(token: String): Session? = SQL(connection)
         .select<Session>()
         .where(Session::token eq token)

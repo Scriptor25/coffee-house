@@ -1,11 +1,13 @@
 package dev.scriptor.converter
 
 import dev.scriptor.model.Session
+import dev.scriptor.server.Provider
 import dev.scriptor.server.converter.Converter
 import org.json.JSONObject
 
 class SessionJsonConverter : Converter<Session, JSONObject> {
 
+    context(provider: Provider)
     override fun convert(value: Session): JSONObject {
         val json = JSONObject()
         json.put("id", value.id)

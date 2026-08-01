@@ -2,15 +2,19 @@ package dev.scriptor.rest
 
 import dev.scriptor.context.AuthContext
 import dev.scriptor.context.MediaContext
+import dev.scriptor.context.SessionContext
 import dev.scriptor.model.Bearer
 import dev.scriptor.model.Media
 import dev.scriptor.server.NotFoundSignal
+import dev.scriptor.server.Provider
 import dev.scriptor.server.UnauthorizedSignal
-import dev.scriptor.server.annotation.*
-import dev.scriptor.server.http.result.HTTPResult
-import dev.scriptor.server.http.result.HTTPResultString
+import dev.scriptor.server.annotation.Endpoint
+import dev.scriptor.server.annotation.Header
+import dev.scriptor.server.annotation.PathParameter
+import dev.scriptor.server.annotation.Resource
 import java.net.URI
 import java.nio.file.Path
+import java.sql.Connection
 import kotlin.io.path.Path
 import kotlin.io.path.name
 import kotlin.io.readBytes
@@ -20,28 +24,26 @@ import kotlin.use
 @Endpoint("/")
 class DashboardRest {
 
-    @Inject("data")
-    lateinit var data: String
-
-    @Inject("auth")
-    lateinit var auth: AuthContext
-
-    @Inject("media")
-    lateinit var media: MediaContext
-
     @Resource("/favicon.[]")
     fun getFavicon() {
     }
 
     @Resource("/[slug+]", result = "text/html")
+    context(
+        provider: Provider,
+        _: Connection,
+        auth: AuthContext,
+        _: SessionContext,
+        media: MediaContext,
+    )
     fun getDashboard(
-        @PathParameter("slug") slug: Array<String>,
-        @Header("authorization") bearer: Bearer,
-    ): HTTPResult<*> {
+        @PathParameter slug: Array<String>,
+        @Header authorization: Bearer,
+    ): String {
         val slug = Path("/", *slug)
 
         val now = now()
-        val session = auth.auth(bearer.token, now)
+        val session = auth.auth(authorization.token, now)
             ?: throw UnauthorizedSignal()
 
         session.access = now
@@ -50,7 +52,7 @@ class DashboardRest {
 
         val document: String
         if (items.isNotEmpty()) {
-            val tree = buildTree(items, Path(data))
+            val tree = buildTree(items, Path(provider["data"]))
 
             var node: DirectoryNode? = tree
             for (segment in slug) {
@@ -95,7 +97,7 @@ class DashboardRest {
             document = template.format(list)
         } else document = "no media items found."
 
-        return HTTPResultString(value = document)
+        return document
     }
 
     private sealed class FileNode(val name: String)

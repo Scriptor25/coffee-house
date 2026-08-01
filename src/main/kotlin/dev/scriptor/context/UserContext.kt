@@ -6,15 +6,12 @@ import dev.scriptor.model.User
 import dev.scriptor.query
 import dev.scriptor.select
 import dev.scriptor.server.annotation.Context
-import dev.scriptor.server.annotation.Inject
 import java.sql.Connection
 
 @Context("users")
 class UserContext {
 
-    @Inject("connection")
-    lateinit var connection: Connection
-
+    context(connection: Connection)
     fun getUserByName(name: String): User? = SQL(connection)
         .select<User>()
         .where(User::name eq name)

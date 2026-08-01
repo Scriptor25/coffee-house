@@ -1,10 +1,12 @@
 package dev.scriptor.converter
 
 import dev.scriptor.model.Bearer
+import dev.scriptor.server.Provider
 import dev.scriptor.server.converter.Converter
 
 class StringBearerConverter : Converter<String, Bearer> {
 
+    context(provider: Provider)
     override fun convert(value: String): Bearer {
         val token = value.substringAfter("Bearer ")
         if (token == value) {
