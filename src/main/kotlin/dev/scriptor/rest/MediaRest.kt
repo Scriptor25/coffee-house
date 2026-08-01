@@ -14,8 +14,10 @@ import dev.scriptor.server.result.ChannelResult
 import dev.scriptor.server.result.Result
 import java.nio.channels.FileChannel
 import java.sql.Connection
+import java.time.Duration.ofMinutes
 import kotlin.io.path.extension
 import kotlin.time.Clock.System.now
+import kotlin.time.toKotlinDuration
 import kotlin.uuid.Uuid
 
 @Endpoint("/media")
@@ -114,6 +116,7 @@ class MediaRest {
         )
 
         session.access = now
+        session.expiresAt = now + ofMinutes(60).toKotlinDuration()
         session.sequence = sequence
         session.next = begin + count
 

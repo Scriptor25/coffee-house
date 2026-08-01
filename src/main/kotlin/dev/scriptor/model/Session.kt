@@ -25,7 +25,7 @@ data class Session(
     val createdAt: Instant,
 
     @Column("expires_at", type = String::class)
-    val expiresAt: Instant,
+    var expiresAt: Instant,
 
     @Column
     val agent: String?,

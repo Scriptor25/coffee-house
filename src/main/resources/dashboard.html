@@ -166,7 +166,7 @@
 
         const loginForm = document.getElementById("login-form")
         const mediaList = document.getElementById("media-list")
-        
+
         const endpoint = window.location.origin
 
         if (session !== null) {
@@ -226,7 +226,12 @@
                     mediaList.append(...listItems)
                 }
 
+                loginForm.style.display = "none"
                 mediaList.style.display = "block"
+            } else if (response.status === 401) {
+                localStorage.removeItem("session")
+
+                await render()
             } else {
                 console.log(response.status, response.statusText, await response.text())
             }
@@ -258,6 +263,7 @@
             })
 
             loginForm.style.display = "block"
+            mediaList.style.display = "none"
         }
     }
 
