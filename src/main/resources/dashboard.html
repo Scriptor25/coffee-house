@@ -7,19 +7,24 @@
 </head>
 <body>
 
-<form id="login-form" style="display: none">
-    <label>
-        <span hidden>username</span>
-        <input type="text" name="username" placeholder="username" required/>
-    </label>
-    <label>
-        <span hidden>password</span>
-        <input type="password" name="password" placeholder="password" required/>
-    </label>
-    <button type="submit">login</button>
-</form>
+<section id="login" style="display: none">
+    <form id="form">
+        <label>
+            <span hidden>username</span>
+            <input type="text" name="username" placeholder="username" required/>
+        </label>
+        <label>
+            <span hidden>password</span>
+            <input type="password" name="password" placeholder="password" required/>
+        </label>
+        <button type="submit">login</button>
+    </form>
+</section>
 
-<ul id="media-list" style="display: none"></ul>
+<section id="media" style="display: none">
+    <button id="playlist" type="button">download playlist</button>
+    <ul id="list"></ul>
+</section>
 
 <script type="module" src="/script/index.js"></script>
 
