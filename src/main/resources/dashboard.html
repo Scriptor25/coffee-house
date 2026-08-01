@@ -22,8 +22,6 @@
 <ul id="media-list" style="display: none"></ul>
 
 <script type="text/javascript">
-    const ENDPOINT = "http://localhost:8080"
-
     /**
      * @typedef {{ id: string, path: string, title: string }} Media
      */
@@ -168,9 +166,11 @@
 
         const loginForm = document.getElementById("login-form")
         const mediaList = document.getElementById("media-list")
+        
+        const endpoint = window.location.origin
 
         if (session !== null) {
-            const response = await fetch(`${ENDPOINT}/media`, {
+            const response = await fetch(`${endpoint}/media`, {
                 method: "GET",
                 headers: {
                     "authorization": `Bearer ${session}`,
@@ -203,9 +203,9 @@
                             /**
                              * @type {MediaNode} node
                              */
-                            anchor.href = encodeURI(`${ENDPOINT}/media/stream/${node.item.id}?token=${session}`)
+                            anchor.href = encodeURI(`${endpoint}/media/stream/${node.item.id}?token=${session}`)
                         } else {
-                            anchor.href = encodeURI(`${ENDPOINT}${slug.length ? "/" + slug.join("/") : ""}/${node.name}`)
+                            anchor.href = encodeURI(`${endpoint}${slug.length ? "/" + slug.join("/") : ""}/${node.name}`)
                         }
                         anchor.append(node.name)
                         listItem.append(anchor)
@@ -217,7 +217,7 @@
 
                         const listItem = document.createElement("li")
                         const anchor = document.createElement("a")
-                        anchor.href = encodeURI(`${ENDPOINT}${target.length ? "/" + target.join("/") : ""}`)
+                        anchor.href = encodeURI(`${endpoint}${target.length ? "/" + target.join("/") : ""}`)
                         anchor.append("..")
                         listItem.append(anchor)
                         listItems.unshift(listItem)
@@ -238,7 +238,7 @@
 
                 event.currentTarget.reset()
 
-                const response = await fetch(`${ENDPOINT}/session`, {
+                const response = await fetch(`${endpoint}/session`, {
                     method: "POST",
                     body: JSON.stringify(Object.fromEntries(data)),
                     headers: {
