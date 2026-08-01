@@ -27,6 +27,14 @@ fun main() {
     val username = env["USERNAME"]
     val password = env["PASSWORD"]
 
+    val provider = Provider()
+
+    provider["hostname"] = hostname
+    provider["port"] = port
+    provider["data"] = data
+    provider["username"] = username
+    provider["password"] = password
+
     val log = Logger.getLogger("dev.scriptor")
     log.level = Level.INFO
 
@@ -44,73 +52,69 @@ fun main() {
     log.useParentHandlers = false
     log.addHandler(handler)
 
+    provider += log
+
     val connection = DriverManager.getConnection("jdbc:sqlite:index.db")
-
-    SQL(connection).create<User>().execute()
-    SQL(connection).create<Session>().execute()
-    SQL(connection).create<Media>().execute()
-
-    val extensions = arrayOf("mkv", "mp4")
-
-    SQL(connection)
-        .insert<Media>()
-        .conflict(Media::path) { sql ->
-            sql.update(
-                Media::size to excluded("size"),
-                Media::title to excluded("title"),
-                Media::createdAt to excluded("created_at"),
-                Media::modifiedAt to excluded("modified_at"),
-            )
-        }
-        .batch { submit ->
-            for (path in Path(data).walk()) {
-                if (path.extension !in extensions) continue
-
-                val id = Uuid.generateV7()
-
-                val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
-
-                val size = attributes.size()
-
-                val createdAt = attributes.creationTime()
-                val modifiedAt = attributes.lastModifiedTime()
-
-                submit(
-                    Media(
-                        id,
-                        path,
-                        size,
-                        path.nameWithoutExtension,
-                        createdAt.toInstant().toKotlinInstant(),
-                        modifiedAt.toInstant().toKotlinInstant(),
-                    ),
-                )
-            }
-        }
-
-    SQL(connection).select<Media>().prepare().use { (statement) ->
-        statement.executeQuery().use { result ->
-            while (result.next()) {
-                val path = Path(result.getString("path"))
-                if (path.notExists()) {
-                    result.deleteRow()
-                }
-            }
-        }
-    }
-
-    val provider = Provider()
 
     provider += connection
 
-    provider["hostname"] = hostname
-    provider["port"] = port
-    provider["data"] = data
-    provider["username"] = username
-    provider["password"] = password
-
     Server(log, provider, hostname, port).use { server ->
         scan(server, "dev.scriptor")
+
+        SQL(connection).create<User>().execute()
+        SQL(connection).create<Session>().execute()
+        SQL(connection).create<Media>().execute()
+
+        val extensions = arrayOf("mkv", "mp4")
+
+        context(provider) {
+            SQL(connection)
+                .insert<Media>()
+                .conflict(Media::path) { sql ->
+                    sql.update(
+                        Media::size to excluded("size"),
+                        Media::title to excluded("title"),
+                        Media::createdAt to excluded("created_at"),
+                        Media::modifiedAt to excluded("modified_at"),
+                    )
+                }
+                .batch { submit ->
+                    for (path in Path(data).walk()) {
+                        if (path.extension !in extensions) continue
+
+                        val id = Uuid.generateV7()
+
+                        val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
+
+                        val size = attributes.size()
+
+                        val createdAt = attributes.creationTime()
+                        val modifiedAt = attributes.lastModifiedTime()
+
+                        submit(
+                            Media(
+                                id,
+                                path,
+                                size,
+                                path.nameWithoutExtension,
+                                createdAt.toInstant().toKotlinInstant(),
+                                modifiedAt.toInstant().toKotlinInstant(),
+                            ),
+                        )
+                    }
+                }
+
+            SQL(connection).select<Media>().prepare().use { (statement) ->
+                statement.executeQuery().use { result ->
+                    while (result.next()) {
+                        val path = Path(result.getString("path"))
+                        if (path.notExists()) {
+                            result.deleteRow()
+                        }
+                    }
+                }
+            }
+        }
 
         server.start()
     }

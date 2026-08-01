@@ -1,16 +1,29 @@
 package dev.scriptor
 
 import dev.scriptor.annotation.*
+import dev.scriptor.server.Provider
 import java.sql.*
 import kotlin.reflect.KClass
 import kotlin.reflect.KParameter
 import kotlin.reflect.KProperty1
-import kotlin.reflect.full.findAnnotation
-import kotlin.reflect.full.memberProperties
-import kotlin.reflect.full.primaryConstructor
+import kotlin.reflect.KType
+import kotlin.reflect.full.*
 
 sealed interface Value {
     fun generate(sql: StringBuilder, parameters: MutableList<Any?>, named: MutableMap<String, Int>)
+}
+
+data class NamedValue(val name: String, val value: Any?) : Value {
+
+    override fun generate(
+        sql: StringBuilder,
+        parameters: MutableList<Any?>,
+        named: MutableMap<String, Int>,
+    ) {
+        sql.append('?')
+        named[name] = parameters.size
+        parameters.add(value)
+    }
 }
 
 sealed interface Node {
@@ -539,7 +552,7 @@ inline fun <reified T : Any> SQL.create(): SQL {
         val foreignKey = parameter.findAnnotation<ForeignKey>()
         val unique = parameter.findAnnotation<Unique>()
 
-        val jdbcType = when (type) {
+        val jdbcType = when (type.classifier) {
             Boolean::class -> JDBCType.BOOLEAN
             Byte::class -> JDBCType.TINYINT
             Short::class -> JDBCType.SMALLINT
@@ -551,10 +564,10 @@ inline fun <reified T : Any> SQL.create(): SQL {
             Date::class -> JDBCType.DATE
             Time::class -> JDBCType.TIME
             Timestamp::class -> JDBCType.TIMESTAMP
-            else -> throw Error("no jdbc type for '$type'")
+            else -> throw Error("no jdbc type for '${type.classifier}'")
         }
 
-        val notNull = !parameter.type.isMarkedNullable
+        val notNull = !type.isMarkedNullable
 
         columnDefs += ColumnDef(name, jdbcType.name, notNull)
 
@@ -576,7 +589,7 @@ inline fun <reified T : Any> SQL.create(): SQL {
         }
     }
 
-    return create(
+    return this.create(
         table,
         listOf(CreateTableMod.IF_NOT_EXISTS),
         columnDefs,
@@ -588,36 +601,46 @@ inline fun <reified T : Any> SQL.select(): SQL {
     val table = tableOf<T>()
     val columns = columns<T>()
 
-    return select(*columns.map { (name) -> ColumnRef(table, name) }.toTypedArray()).from(table)
+    return this.select(*columns.map { (name) -> ColumnRef(table, name) }.toTypedArray()).from(table)
 }
 
 inline fun <reified T : Any> SQL.delete(): SQL {
     val table = tableOf<T>()
 
-    return delete().from(table)
+    return this.delete().from(table)
 }
 
 inline fun <reified T : Any> SQL.insert(): SQL {
     val table = tableOf<T>()
     val columns = columns<T>()
 
-    return insert(
+    return this.insert(
         table,
         columns.map { (name) -> ColumnRef(table, name) },
         columns.map { null },
     )
 }
 
+context(provider: Provider)
 inline fun <reified T : Any> SQL.insert(value: T): SQL {
     val table = tableOf<T>()
     val columns = columns<T>()
 
-    return insert(
+    return this.insert(
         table,
         columns.map { (name) -> ColumnRef(table, name) },
-        columns.map { (name, type, parameter, property) ->
-            // TODO: convert to jdbc type
-            property.call(value)
+        columns.map { (_, type, parameter, property) ->
+            val x = property.call(value)
+
+            if (x != null) {
+                val src = parameter.type.withNullability(false)
+                val dst = type.withNullability(false)
+
+                val converter = provider[src to dst]
+                    ?: throw UnsupportedOperationException("conversion from $src to $dst")
+
+                converter.convert(x)
+            } else x
         },
     )
 }
@@ -625,26 +648,48 @@ inline fun <reified T : Any> SQL.insert(value: T): SQL {
 inline fun <reified T : Any> SQL.conflict(property: KProperty1<T, *>, noinline next: (SQL) -> SQL): SQL {
     val column = columnOf<T>(property)
 
-    return conflict(listOf(column), next)
+    return this.conflict(listOf(column), next)
 }
 
 inline fun <reified T : Any> SQL.update(vararg set: Pair<KProperty1<T, *>, Value>): SQL {
-    return update(*set.map { (property, value) -> columnOf<T>(property) to value }.toTypedArray())
+    return this.update(*set.map { (property, value) -> columnOf<T>(property) to value }.toTypedArray())
 }
 
+inline fun <reified T : Any> SQL.update(value: T, condition: Condition): SQL {
+    val table = tableOf<T>()
+
+    val columns = columns<T>()
+    val set = columns.map { columnOf(it.property) to NamedValue("$table.${it.name}", it.property.get(value)) }
+
+    return this.update(table, set, condition)
+}
+
+context(provider: Provider)
 inline fun <reified T : Any> SQL.query(): List<T> {
     val constructor = T::class.primaryConstructor
         ?: throw UnsupportedOperationException()
 
     val columns = columns<T>()
 
-    return prepare().use { (statement) ->
+    return this.prepare().use { (statement) ->
         statement.executeQuery().use { result ->
             val entities = mutableListOf<T>()
             while (result.next()) {
                 val arguments = columns.map { (name, type, parameter) ->
-                    // TODO: convert to parameter type
-                    result.getObject(name, type.java)
+                    val value = result.getObject(
+                        name,
+                        (type.classifier as KClass<*>).javaObjectType,
+                    )
+
+                    if (value != null) {
+                        val src = type.withNullability(false)
+                        val dst = parameter.type.withNullability(false)
+
+                        val converter = provider[src to dst]
+                            ?: throw UnsupportedOperationException("conversion from $src to $dst")
+
+                        converter.convert(value)
+                    } else value
                 }.toTypedArray()
 
                 entities += constructor.call(*arguments)
@@ -654,18 +699,28 @@ inline fun <reified T : Any> SQL.query(): List<T> {
     }
 }
 
+context(provider: Provider)
 inline fun <reified T : Any> SQL.batch(noinline callback: ((T) -> Unit) -> Unit) {
     val table = tableOf<T>()
     val columns = columns<T>()
 
-    prepare().use { (statement, named) ->
+    this.prepare().use { (statement, named) ->
         callback { instance ->
             for ((name, type, parameter, property) in columns) {
                 val index = named["$table.$name"] ?: -1
                 val value = property.call(instance)
 
-                // TODO: convert to jdbc type
-                statement.setObject(index + 1, value)
+                val x = if (value != null) {
+                    val src = parameter.type.withNullability(false)
+                    val dst = type.withNullability(false)
+
+                    val converter = provider[src to dst]
+                        ?: throw UnsupportedOperationException("conversion from $src to $dst")
+
+                    converter.convert(value)
+                } else value
+
+                statement.setObject(index + 1, x)
             }
 
             statement.addBatch()
@@ -697,7 +752,7 @@ inline fun <reified T : Any> columnOf(property: KProperty1<T, *>): ColumnRef {
 
 data class ColumnData<T : Any>(
     val name: String,
-    val type: KClass<*>,
+    val type: KType,
     val parameter: KParameter,
     val property: KProperty1<T, *>,
 )
@@ -713,8 +768,8 @@ inline fun <reified T : Any> columns(): List<ColumnData<T>> {
             ColumnData(
                 column.value.ifEmpty { parameter.name!! },
                 if (column.type == Unit::class)
-                    parameter.type.classifier as KClass<*>
-                else column.type,
+                    parameter.type
+                else column.type.starProjectedType,
                 parameter,
                 properties.first { it.name == parameter.name },
             )
@@ -753,7 +808,7 @@ infix fun Condition.or(other: Condition): Condition = ConditionOr(this, other)
 
 operator fun Condition.not(): Condition =
     if (this is ConditionNot)
-        condition
+        this.condition
     else ConditionNot(this)
 
 fun primaryKey(vararg columns: ColumnRef): Constraint =

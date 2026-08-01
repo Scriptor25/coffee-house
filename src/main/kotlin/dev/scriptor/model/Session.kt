@@ -4,7 +4,6 @@ import dev.scriptor.annotation.Column
 import dev.scriptor.annotation.ForeignKey
 import dev.scriptor.annotation.PrimaryKey
 import dev.scriptor.annotation.Table
-import java.sql.Timestamp
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
@@ -22,16 +21,16 @@ data class Session(
     @Column
     val token: String,
 
-    @Column("created_at", type = Timestamp::class)
+    @Column("created_at", type = String::class)
     val createdAt: Instant,
 
-    @Column("expires_at", type = Timestamp::class)
+    @Column("expires_at", type = String::class)
     val expiresAt: Instant,
 
     @Column
     val agent: String?,
 
-    @Column(type = Timestamp::class)
+    @Column(type = String::class)
     var access: Instant? = null,
 
     @Column

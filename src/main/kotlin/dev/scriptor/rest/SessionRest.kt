@@ -77,7 +77,8 @@ class SessionRest {
             agent,
         )
 
-        return sessions.createSession(session)
+        sessions.createSession(session)
+        return session
     }
 
     @Resource(
@@ -86,6 +87,7 @@ class SessionRest {
         result = "application/json",
     )
     context(
+        _: Provider,
         _: Connection,
         sessions: SessionContext,
     )
@@ -100,12 +102,14 @@ class SessionRest {
         result = "application/json",
     )
     context(
+        _: Provider,
         _: Connection,
         sessions: SessionContext,
     )
     fun deleteSessionById(@PathParameter id: Uuid): Session {
         val session = sessions.getSessionById(id)
             ?: throw NotFoundSignal()
-        return sessions.deleteSession(session)
+        sessions.deleteSession(session)
+        return session
     }
 }

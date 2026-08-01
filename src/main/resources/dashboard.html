@@ -46,6 +46,7 @@
                     anchor.href = `${ENDPOINT}/media/stream/${item.id}?token=${session}`
                     anchor.append(item.title)
                     listItem.append(anchor)
+                    return listItem
                 })
 
                 loginForm.style.display = "none"

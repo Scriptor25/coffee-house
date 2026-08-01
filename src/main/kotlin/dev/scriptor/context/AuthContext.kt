@@ -1,6 +1,7 @@
 package dev.scriptor.context
 
 import dev.scriptor.model.Session
+import dev.scriptor.server.Provider
 import dev.scriptor.server.annotation.Context
 import java.sql.Connection
 import kotlin.time.Clock.System.now
@@ -10,6 +11,7 @@ import kotlin.time.Instant
 class AuthContext {
 
     context(
+        _: Provider,
         _: Connection,
         sessions: SessionContext,
     )

@@ -7,6 +7,7 @@ import dev.scriptor.model.Bearer
 import dev.scriptor.model.Media
 import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.ParameterList
+import dev.scriptor.server.Provider
 import dev.scriptor.server.UnauthorizedSignal
 import dev.scriptor.server.annotation.*
 import dev.scriptor.server.result.ChannelResult
@@ -22,6 +23,7 @@ class MediaRest {
 
     @Resource("/", result = "application/json")
     context(
+        _: Provider,
         _: Connection,
         auth: AuthContext,
         _: SessionContext,
@@ -36,6 +38,7 @@ class MediaRest {
 
     @Resource("/[id]", result = "application/json")
     context(
+        _: Provider,
         _: Connection,
         auth: AuthContext,
         _: SessionContext,
@@ -51,9 +54,10 @@ class MediaRest {
 
     @Resource("/stream/[id]")
     context(
+        _: Provider,
         _: Connection,
         auth: AuthContext,
-        _: SessionContext,
+        sessions: SessionContext,
         media: MediaContext,
     )
     fun getMediaStreamById(
@@ -112,6 +116,8 @@ class MediaRest {
         session.access = now
         session.sequence = sequence
         session.next = begin + count
+
+        sessions.updateSession(session)
 
         val limit = begin + count - 1
 
