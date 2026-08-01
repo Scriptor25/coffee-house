@@ -9,11 +9,21 @@ import dev.scriptor.server.result.StreamResult
 @Endpoint("/")
 class DashboardRest {
 
-    @Resource("/favicon.[]")
-    fun getFavicon() {
+    @Resource("/favicon.[]", result = "image/svg+xml")
+    fun getFavicon(): StreamResult {
+        val stream = ClassLoader.getSystemResourceAsStream("favicon.svg")
+            ?: throw NullPointerException()
+
+        val headers = ParameterList()
+        headers["cache-control"] = "public, max-age=604800, immutable"
+
+        return StreamResult(
+            headers = headers,
+            value = stream,
+        )
     }
 
-    @Resource("/[slug+]", result = "text/html")
+    @Resource("/", result = "text/html")
     fun getDashboard(): StreamResult {
         val stream = ClassLoader.getSystemResourceAsStream("dashboard.html")
             ?: throw NullPointerException()

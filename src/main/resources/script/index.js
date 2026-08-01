@@ -7,13 +7,27 @@ async function render() {
     const loginForm = document.getElementById("login-form")
     const mediaList = document.getElementById("media-list")
 
+    loginForm.style.display = "none"
+    mediaList.style.display = "none"
+
     const endpoint = window.location.origin
 
     if (session !== null) {
         const response = await fetchAPI("media", {method: "GET"})
 
         if (response.ok) {
-            const slug = segments(decodeURI(window.location.pathname))
+            const fragment = window.location.hash
+            const slug = fragment.length ? segments(decodeURI(fragment.slice(1))) : []
+
+            const listener = event => {
+                event.preventDefault()
+
+                window.removeEventListener("hashchange", listener)
+
+                render().then()
+            }
+
+            window.addEventListener("hashchange", listener)
 
             /**
              * @type {Media[]}
@@ -40,7 +54,7 @@ async function render() {
                          */
                         anchor.href = encodeURI(`${endpoint}/media/stream/${node.item.id}?token=${session}`)
                     } else {
-                        anchor.href = encodeURI(`${endpoint}${slug.length ? "/" + slug.join("/") : ""}/${node.name}`)
+                        anchor.href = encodeURI(`${endpoint}/#${slug.length ? "/" + slug.join("/") : ""}/${node.name}`)
                     }
                     anchor.append(node.name)
                     listItem.append(anchor)
@@ -52,26 +66,25 @@ async function render() {
 
                     const listItem = document.createElement("li")
                     const anchor = document.createElement("a")
-                    anchor.href = encodeURI(`${endpoint}${target.length ? "/" + target.join("/") : ""}`)
+                    anchor.href = encodeURI(`${endpoint}/#${target.length ? "/" + target.join("/") : ""}`)
                     anchor.append("..")
                     listItem.append(anchor)
                     listItems.unshift(listItem)
                 }
 
-                mediaList.append(...listItems)
+                mediaList.replaceChildren(...listItems)
             }
 
             loginForm.style.display = "none"
             mediaList.style.display = "block"
-        } else if (response.status === 401) {
+        } else {
+            console.log(response.status, response.statusText, await response.text())
             localStorage.removeItem("session")
 
             render().then()
-        } else {
-            console.log(response.status, response.statusText, await response.text())
         }
     } else {
-        loginForm.addEventListener("submit", async (event) => {
+        const listener = async (event) => {
             event.preventDefault()
 
             const data = new FormData(event.currentTarget, event.submitter)
@@ -86,14 +99,18 @@ async function render() {
 
             if (response.ok) {
                 const data = await response.json()
-
                 localStorage.setItem("session", data.token)
-
-                render().then()
             } else {
                 console.log(response.status, response.statusText, await response.text())
+                localStorage.removeItem("session")
             }
-        })
+
+            loginForm.removeEventListener("submit", listener)
+
+            render().then()
+        }
+
+        loginForm.addEventListener("submit", listener)
 
         loginForm.style.display = "block"
         mediaList.style.display = "none"
