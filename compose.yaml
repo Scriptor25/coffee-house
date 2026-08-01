@@ -1,6 +1,6 @@
 services:
-  coffee-house:
-    image: docker.io/jiflabs/coffee-house:latest
+  coffee-house-service:
+    # image: docker.io/jiflabs/coffee-house:latest
 
     build:
       context: .

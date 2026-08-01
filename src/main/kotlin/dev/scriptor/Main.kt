@@ -17,6 +17,8 @@ import kotlin.uuid.Uuid
 
 fun getEnvironment(): Map<String, String> = System.getenv()
 
+val EXTENSIONS = arrayOf("mkv", "mp4")
+
 @OptIn(ExperimentalUuidApi::class)
 fun main() {
     val env = getEnvironment()
@@ -36,7 +38,7 @@ fun main() {
     provider["password"] = password
 
     val log = Logger.getLogger("dev.scriptor")
-    log.level = Level.INFO
+    log.level = Level.ALL
 
     val handler = ConsoleHandler()
     handler.level = log.level
@@ -61,13 +63,12 @@ fun main() {
     Server(log, provider, hostname, port).use { server ->
         scan(server, "dev.scriptor")
 
-        SQL(connection).create<User>().execute()
-        SQL(connection).create<Session>().execute()
-        SQL(connection).create<Media>().execute()
-
-        val extensions = arrayOf("mkv", "mp4")
-
         context(provider) {
+
+            SQL(connection).create<User>().execute()
+            SQL(connection).create<Session>().execute()
+            SQL(connection).create<Media>().execute()
+
             SQL(connection)
                 .insert<Media>()
                 .conflict(Media::path) { sql ->
@@ -80,7 +81,7 @@ fun main() {
                 }
                 .batch { submit ->
                     for (path in Path(data).walk()) {
-                        if (path.extension !in extensions) continue
+                        if (path.extension !in EXTENSIONS) continue
 
                         val id = Uuid.generateV7()
 

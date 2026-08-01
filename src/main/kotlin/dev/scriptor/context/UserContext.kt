@@ -12,7 +12,10 @@ import java.sql.Connection
 @Context
 class UserContext {
 
-    context(_: Provider, connection: Connection)
+    context(
+        _: Provider,
+        connection: Connection,
+    )
     fun getUserByName(name: String): User? = SQL(connection)
         .select<User>()
         .where(User::name eq name)

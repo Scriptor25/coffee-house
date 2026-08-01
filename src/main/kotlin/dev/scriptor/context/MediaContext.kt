@@ -13,12 +13,18 @@ import kotlin.uuid.Uuid
 @Context
 class MediaContext {
 
-    context(_: Provider, connection: Connection)
+    context(
+        _: Provider,
+        connection: Connection,
+    )
     fun getAllMedia(): List<Media> = SQL(connection)
         .select<Media>()
         .query<Media>()
 
-    context(_: Provider, connection: Connection)
+    context(
+        _: Provider,
+        connection: Connection,
+    )
     fun getMediaById(id: Uuid): Media? = SQL(connection)
         .select<Media>()
         .where(Media::id eq id)
