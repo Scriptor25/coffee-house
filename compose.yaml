@@ -1,0 +1,32 @@
+services:
+  coffee-house:
+    image: docker.io/jiflabs/coffee-house:latest
+
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    restart: unless-stopped
+
+    ports:
+      - "8080:8080"
+
+    environment:
+      HOSTNAME: "0.0.0.0"
+      PORT: "8080"
+      USERNAME: "root"
+      PASSWORD: "root"
+      DATA: "/data"
+
+    volumes:
+      - coffee-house-data:/app
+      - /home/felix/remote:/data:ro
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  coffee-house-data:

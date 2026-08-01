@@ -769,7 +769,7 @@ inline fun <reified T : Any> columns(): List<ColumnData<T>> {
                 column.value.ifEmpty { parameter.name!! },
                 if (column.type == Unit::class)
                     parameter.type
-                else column.type.starProjectedType,
+                else column.type.createType(nullable = parameter.type.isMarkedNullable),
                 parameter,
                 properties.first { it.name == parameter.name },
             )
