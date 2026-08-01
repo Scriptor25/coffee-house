@@ -5,6 +5,7 @@ import dev.scriptor.model.Session
 import dev.scriptor.server.Provider
 import dev.scriptor.server.annotation.Context
 import java.sql.Connection
+import kotlin.time.Clock.System.now
 import kotlin.uuid.Uuid
 
 @Context
@@ -62,4 +63,13 @@ class SessionContext {
         .limit(1)
         .query<Session>()
         .firstOrNull()
+
+    context(
+        _: Provider,
+        connection: Connection,
+    )
+    fun getExpiredSessions(): List<Session> = SQL(connection)
+        .select<Session>()
+        .where(Session::expiresAt le now())
+        .query<Session>()
 }

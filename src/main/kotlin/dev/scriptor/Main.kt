@@ -1,5 +1,6 @@
 package dev.scriptor
 
+import dev.scriptor.context.SessionContext
 import dev.scriptor.model.Media
 import dev.scriptor.model.Session
 import dev.scriptor.model.User
@@ -11,6 +12,7 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.sql.DriverManager
 import java.util.logging.*
 import kotlin.io.path.*
+import kotlin.reflect.full.starProjectedType
 import kotlin.time.toKotlinInstant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -114,6 +116,13 @@ fun main() {
                         }
                     }
                 }
+            }
+        }
+
+        server.register("session-reaper", 0L, 10L * 60L * 1000L) {
+            val sessions = provider[SessionContext::class.starProjectedType] as SessionContext
+            context(provider, connection) {
+                sessions.getExpiredSessions().forEach { session -> sessions.deleteSession(session) }
             }
         }
 
