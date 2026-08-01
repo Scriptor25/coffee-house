@@ -7,7 +7,7 @@
 </head>
 <body>
 
-<form id="login-form">
+<form id="login-form" style="display: none">
     <label>
         <span hidden>username</span>
         <input type="text" name="username" placeholder="username" required/>
@@ -19,12 +19,151 @@
     <button type="submit">login</button>
 </form>
 
-<ul id="media-list"></ul>
+<ul id="media-list" style="display: none"></ul>
 
 <script type="text/javascript">
     const ENDPOINT = "http://localhost:8080"
 
-    const render = async () => {
+    /**
+     * @typedef {{ id: string, path: string, title: string }} Media
+     */
+
+    class FileNode {
+        /**
+         * @param {string} name
+         */
+        constructor(name) {
+            this.name = name
+        }
+    }
+
+    class DirectoryNode extends FileNode {
+
+        /**
+         * @param {string} name
+         * @param {FileNode[]} children
+         */
+        constructor(name, children) {
+            super(name)
+            this.children = children
+        }
+    }
+
+    class MediaNode extends FileNode {
+        /**
+         * @param {Media} item
+         */
+        constructor(item) {
+            super(item.title)
+            this.item = item
+        }
+    }
+
+    /**
+     * @param {string} str
+     * @returns {string[]}
+     */
+    function segments(str) {
+        return str.split("/").filter(item => !!item)
+    }
+
+    /**
+     * @param {string} path
+     * @returns {string[]}
+     */
+    function normalize(path) {
+        const stack = []
+
+        for (const segment of segments(path)) {
+            if (segment === "..") {
+                if (stack.length) stack.pop()
+            } else {
+                stack.push(segment)
+            }
+        }
+
+        return stack
+    }
+
+    /**
+     * @param {string} from
+     * @param {string} to
+     * @returns {string}
+     */
+    function relative(from, to) {
+        const a = normalize(from)
+        const b = normalize(to)
+
+        let i = 0
+        for (; i < a.length && i < b.length && a[i] === b[i]; ++i) {
+        }
+
+        /**
+         * @type {string[]}
+         */
+        const result = [
+            ...Array(a.length - i).fill(".."),
+            ...b.slice(i),
+        ]
+
+        const absolute = a.length === i
+
+        return result.length ? ((absolute ? "/" : "") + result.join("/")) : (absolute ? "/" : ".")
+    }
+
+    /**
+     * @param {Media[]} items
+     * @returns {string}
+     */
+    function getCommonBase(items) {
+        const directories = items.map(item => segments(item.path))
+
+        const common = []
+
+        for (let i = 0; ; ++i) {
+            const segment = directories[0][i]
+            if (segment === undefined) break
+            if (!directories.every(item => item[i] === segment)) break
+            common.push(segment)
+        }
+
+        return "/" + common.join("/")
+    }
+
+    /**
+     * @param {Media[]} items
+     * @param {string} base
+     * @returns {DirectoryNode}
+     */
+    function buildTree(items, base) {
+        const tree = new DirectoryNode("", [])
+
+        for (const item of items) {
+            let current = tree
+            const rel = segments(relative(base, item.path))
+
+            for (let i = 0; i < rel.length - 1; ++i) {
+                const name = rel[i]
+
+                let child = current.children
+                    .filter((node) => node instanceof DirectoryNode)
+                    .find((node) => node.name === name) ?? null
+
+                if (child === null) {
+                    child = new DirectoryNode(name, [])
+                    current.children.push(child)
+                }
+
+                current = child
+            }
+
+            current.children.push(new MediaNode(item))
+        }
+
+        return tree
+    }
+
+    async function render() {
         const session = localStorage.getItem("session")
 
         const loginForm = document.getElementById("login-form")
@@ -39,18 +178,55 @@
             })
 
             if (response.ok) {
-                const items = await response.json()
-                const listItems = items.map(item => {
-                    const listItem = document.createElement("li")
-                    const anchor = document.createElement("a")
-                    anchor.href = `${ENDPOINT}/media/stream/${item.id}?token=${session}`
-                    anchor.append(item.title)
-                    listItem.append(anchor)
-                    return listItem
-                })
+                const slug = segments(decodeURI(window.location.pathname))
 
-                loginForm.style.display = "none"
-                mediaList.append(...listItems)
+                /**
+                 * @type {Media[]}
+                 */
+                const items = await response.json()
+
+                const base = getCommonBase(items)
+
+                let node = buildTree(items, base)
+                for (const segment of slug) {
+                    if (node === null || node.name === segment) break
+                    node = node.children
+                        .filter(node => node instanceof DirectoryNode)
+                        .find(node => node.name === segment) ?? null
+                }
+
+                if (node !== null) {
+                    const listItems = node.children.toSorted((a, b) => a.name.localeCompare(b.name)).map(node => {
+                        const listItem = document.createElement("li")
+                        const anchor = document.createElement("a")
+                        if (node instanceof MediaNode) {
+                            /**
+                             * @type {MediaNode} node
+                             */
+                            anchor.href = encodeURI(`${ENDPOINT}/media/stream/${node.item.id}?token=${session}`)
+                        } else {
+                            anchor.href = encodeURI(`${ENDPOINT}${slug.length ? "/" + slug.join("/") : ""}/${node.name}`)
+                        }
+                        anchor.append(node.name)
+                        listItem.append(anchor)
+                        return listItem
+                    })
+
+                    if (slug.length) {
+                        const target = slug.slice(0, -1)
+
+                        const listItem = document.createElement("li")
+                        const anchor = document.createElement("a")
+                        anchor.href = encodeURI(`${ENDPOINT}${target.length ? "/" + target.join("/") : ""}`)
+                        anchor.append("..")
+                        listItem.append(anchor)
+                        listItems.unshift(listItem)
+                    }
+
+                    mediaList.append(...listItems)
+                }
+
+                mediaList.style.display = "block"
             } else {
                 console.log(response.status, response.statusText, await response.text())
             }
@@ -80,7 +256,8 @@
                     console.log(response.status, response.statusText, await response.text())
                 }
             })
-            mediaList.style.display = "none"
+
+            loginForm.style.display = "block"
         }
     }
 
