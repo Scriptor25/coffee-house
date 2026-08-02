@@ -2,12 +2,17 @@ package dev.scriptor.rest
 
 import dev.scriptor.context.SessionContext
 import dev.scriptor.context.UserContext
+import dev.scriptor.model.Bearer
 import dev.scriptor.model.Session
 import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.Provider
 import dev.scriptor.server.UnauthorizedSignal
-import dev.scriptor.server.annotation.*
-import dev.scriptor.server.http.Method.*
+import dev.scriptor.server.annotation.Body
+import dev.scriptor.server.annotation.Endpoint
+import dev.scriptor.server.annotation.Header
+import dev.scriptor.server.annotation.Resource
+import dev.scriptor.server.http.Method.DELETE
+import dev.scriptor.server.http.Method.POST
 import org.json.JSONObject
 import java.security.SecureRandom
 import java.sql.Connection
@@ -82,8 +87,7 @@ class SessionRest {
     }
 
     @Resource(
-        "/[id]",
-        GET,
+        "/",
         result = "application/json",
     )
     context(
@@ -91,13 +95,13 @@ class SessionRest {
         _: Connection,
         sessions: SessionContext,
     )
-    fun getSessionById(@PathParameter id: Uuid): Session {
-        return sessions.getSessionById(id)
+    fun getCurrentSession(@Header authorization: Bearer): Session {
+        return sessions.getSessionByToken(authorization.token)
             ?: throw NotFoundSignal()
     }
 
     @Resource(
-        "/[id]",
+        "/",
         DELETE,
         result = "application/json",
     )
@@ -106,8 +110,8 @@ class SessionRest {
         _: Connection,
         sessions: SessionContext,
     )
-    fun deleteSessionById(@PathParameter id: Uuid): Session {
-        val session = sessions.getSessionById(id)
+    fun deleteSessionById(@Header authorization: Bearer): Session {
+        val session = sessions.getSessionByToken(authorization.token)
             ?: throw NotFoundSignal()
         sessions.deleteSession(session)
         return session

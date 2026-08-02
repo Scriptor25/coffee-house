@@ -38,9 +38,9 @@ class DashboardRest {
         )
     }
 
-    @Resource("/script/[slug+]", result = "text/javascript")
+    @Resource("/script/[slug+].js", result = "text/javascript")
     fun getScript(@PathParameter slug: Array<String>): StreamResult {
-        val stream = ClassLoader.getSystemResourceAsStream("script/${slug.joinToString("/")}")
+        val stream = ClassLoader.getSystemResourceAsStream("script/${slug.joinToString("/")}.js")
             ?: throw NullPointerException()
 
         val headers = ParameterList()
