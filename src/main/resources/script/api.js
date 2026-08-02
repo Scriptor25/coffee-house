@@ -1,6 +1,6 @@
 /**
  * @param {string} resource
- * @param {RequestInit} init
+ * @param {RequestInit=} init
  * @param {boolean} session
  * @returns {Promise<Response>}
  */
@@ -13,7 +13,7 @@ export async function fetchAPI(resource, init, session = true) {
         return fetch(`${endpoint}/${resource}`, {
             ...init,
             headers: {
-                ...init.headers,
+                ...init?.headers,
                 "authorization": `Bearer ${token}`,
             },
         })

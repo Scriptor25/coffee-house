@@ -1,7 +1,16 @@
 /**
- * @typedef {{ id: string, path: string, title: string }} Media
+ * @interface  Media
+ * @property {string} id
+ * @property {string} path
+ * @property {number} size
+ * @property {string} title
+ * @property {string} created_at
+ * @property {string} modified_at
  */
 
+/**
+ * @property {string} name
+ */
 export class FileNode {
 
     /**
@@ -24,6 +33,9 @@ export class DirectoryNode extends FileNode {
     }
 }
 
+/**
+ * @property {Media} item
+ */
 export class MediaNode extends FileNode {
 
     /**
@@ -48,6 +60,7 @@ export function segments(str) {
  * @returns {string[]}
  */
 export function normalize(path) {
+    /** @type {string[]} */
     const stack = []
 
     for (const segment of segments(path)) {
@@ -74,11 +87,8 @@ export function relative(from, to) {
     for (; i < a.length && i < b.length && a[i] === b[i]; ++i) {
     }
 
-    /**
-     * @type {string[]}
-     */
     const result = [
-        ...Array(a.length - i).fill(".."),
+        ...Array.from({length: a.length - i}, () => ".."),
         ...b.slice(i),
     ]
 

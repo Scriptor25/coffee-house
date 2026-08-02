@@ -11,20 +11,28 @@
     <form id="form">
         <label>
             <span hidden>username</span>
-            <input type="text" name="username" placeholder="username" required/>
+            <input type="text" name="username" placeholder="username" required autocomplete="username"/>
         </label>
         <label>
             <span hidden>password</span>
-            <input type="password" name="password" placeholder="password" required/>
+            <input type="password" name="password" placeholder="password" required autocomplete="current-password"/>
         </label>
-        <button type="submit">login</button>
+        <button type="submit">submit</button>
     </form>
 </section>
 
 <section id="media" style="display: none">
-    <button id="playlist" type="button">download playlist</button>
+    <button id="playlist" type="button">playlist</button>
     <ul id="list"></ul>
 </section>
+
+<template id="list-item">
+    <li>
+        <a>
+            <slot></slot>
+        </a>
+    </li>
+</template>
 
 <script type="module" src="/script/index.js"></script>
 

@@ -1,18 +1,35 @@
 import {fetchAPI} from "./api.js"
 import {buildTree, DirectoryNode, getCommonBase, MediaNode, segments} from "./tree.js"
 
+const listItemT = document.getElementById("list-item")
+
+const loginSectionEl = document.getElementById("login")
+const formEl = document.getElementById("form")
+
+const mediaSectionEl = document.getElementById("media")
+const playlistButtonEl = document.getElementById("playlist")
+const listEl = document.getElementById("list")
+
+/**
+ * @param {string} content
+ * @param {string} href
+ * @returns {HTMLElement}
+ */
+function createListItem(content, href) {
+    const listItemEl = document.importNode(listItemT.content, true)
+
+    const anchorEl = listItemEl.querySelector("a")
+    anchorEl.href = href
+    anchorEl.innerText = content
+
+    return listItemEl
+}
+
 async function render() {
     const session = localStorage.getItem("session")
 
-    const loginEl = document.getElementById("login")
-    const formEl = document.getElementById("form")
-
-    const mediaEl = document.getElementById("media")
-    const playlistEl = document.getElementById("playlist")
-    const listEl = document.getElementById("list")
-
-    loginEl.style.display = "none"
-    mediaEl.style.display = "none"
+    loginSectionEl.style.display = "none"
+    mediaSectionEl.style.display = "none"
 
     if (session !== null) {
         const response = await fetchAPI("media", {method: "GET"})
@@ -36,10 +53,10 @@ async function render() {
 
         /** @type {Media[]} */
         const items = await response.json()
-
         const base = getCommonBase(items)
+        const tree = buildTree(items, base)
 
-        let node = buildTree(items, base)
+        let node = tree
         for (const segment of slug) {
             if (node === null || node.name === segment) break
             node = node.children
@@ -53,37 +70,30 @@ async function render() {
 
             const listItemEls = sorted
                 .map(node => {
-                    const listItemEl = document.createElement("li")
-                    const anchorEl = document.createElement("a")
-                    if (node instanceof MediaNode) {
-                        anchorEl.href = encodeURI(`/media/stream/${node.item.id}?token=${session}`)
-                    } else {
-                        anchorEl.href = encodeURI(`/#${slug.length ? "/" + slug.join("/") : ""}/${node.name}`)
-                    }
-                    anchorEl.append(node.name)
-                    listItemEl.append(anchorEl)
-                    return listItemEl
+                    const uri = (node instanceof MediaNode)
+                        ? `/media/stream/${node.item.id}?token=${session}`
+                        : `/#${slug.length ? "/" + slug.join("/") : ""}/${node.name}`
+                    return createListItem(node.name, encodeURI(uri))
                 })
 
             if (slug.length) {
                 const target = slug.slice(0, -1)
 
-                const listItemEl = document.createElement("li")
-                const anchorEl = document.createElement("a")
-                anchorEl.href = encodeURI(`/#${target.length ? "/" + target.join("/") : ""}`)
-                anchorEl.append("..")
-                listItemEl.append(anchorEl)
+                const uri = `/#${target.length ? "/" + target.join("/") : ""}`
+                const listItemEl = createListItem("..", encodeURI(uri))
                 listItemEls.unshift(listItemEl)
             }
 
             listEl.replaceChildren(...listItemEls)
 
             const playlist = sorted
-                .map(item => {
-                    if (!(item instanceof MediaNode)) return
-                    return item.item
-                })
-                .filter(item => !!item)
+                .filter(item => item instanceof MediaNode)
+                .map(
+                    /**
+                     * @param {MediaNode} item
+                     * @return {Media}
+                     */
+                    item => item.item)
 
             const lines = playlist.flatMap(item => {
                 const url = new URL(
@@ -95,7 +105,7 @@ async function render() {
 
             const data = `#EXTM3U\r\n${lines.join("\r\n")}`
 
-            playlistEl.addEventListener("click", async () => {
+            playlistButtonEl.addEventListener("click", async () => {
                 const blob = new Blob([data], {type: "application/x-mpegurl"})
                 const objectURL = URL.createObjectURL(blob)
 
@@ -107,7 +117,7 @@ async function render() {
             })
         }
 
-        mediaEl.style.display = "block"
+        mediaSectionEl.style.display = "block"
         return
     }
 
@@ -136,7 +146,7 @@ async function render() {
         render().then()
     }, {once: true})
 
-    loginEl.style.display = "block"
+    loginSectionEl.style.display = "block"
 }
 
 render().then()
