@@ -17,6 +17,7 @@ import org.json.JSONObject
 import java.security.SecureRandom
 import java.sql.Connection
 import java.time.Duration.ofMinutes
+import java.util.logging.Logger
 import kotlin.io.encoding.Base64
 import kotlin.time.Clock.System.now
 import kotlin.time.toKotlinDuration
@@ -36,6 +37,7 @@ class SessionRest {
     )
     @OptIn(ExperimentalUuidApi::class)
     context(
+        log: Logger,
         provider: Provider,
         _: Connection,
         users: UserContext,

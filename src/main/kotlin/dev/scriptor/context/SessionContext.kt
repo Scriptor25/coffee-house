@@ -37,7 +37,8 @@ class SessionContext {
     )
     fun deleteSession(session: Session) {
         SQL(connection)
-            .delete<Session>()
+            .delete()
+            .from<Session>()
             .where(Session::id eq session.id)
             .execute()
     }
@@ -47,7 +48,7 @@ class SessionContext {
         connection: Connection,
     )
     fun getSessionById(id: Uuid): Session? = SQL(connection)
-        .select<Session>()
+        .selectFrom<Session>()
         .where(Session::id eq id)
         .limit(1)
         .query<Session>()
@@ -58,7 +59,7 @@ class SessionContext {
         connection: Connection,
     )
     fun getSessionByToken(token: String): Session? = SQL(connection)
-        .select<Session>()
+        .selectFrom<Session>()
         .where(Session::token eq token)
         .limit(1)
         .query<Session>()
@@ -69,7 +70,7 @@ class SessionContext {
         connection: Connection,
     )
     fun getExpiredSessions(): List<Session> = SQL(connection)
-        .select<Session>()
+        .selectFrom<Session>()
         .where(Session::expiresAt le now())
         .query<Session>()
 }

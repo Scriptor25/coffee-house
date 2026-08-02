@@ -1,5 +1,6 @@
 package dev.scriptor.rest
 
+import dev.scriptor.HlsCache
 import dev.scriptor.context.AuthContext
 import dev.scriptor.context.MediaContext
 import dev.scriptor.context.SessionContext
@@ -16,6 +17,7 @@ import java.nio.channels.FileChannel
 import java.sql.Connection
 import java.time.Duration.ofMinutes
 import kotlin.io.path.extension
+import kotlin.io.path.readText
 import kotlin.time.Clock.System.now
 import kotlin.time.toKotlinDuration
 import kotlin.uuid.Uuid
@@ -46,7 +48,7 @@ class MediaRest {
         _: SessionContext,
         media: MediaContext,
     )
-    fun getMediaById(@PathParameter id: Uuid, @Header authorization: Bearer): Media {
+    fun getMedia(@PathParameter id: Uuid, @Header authorization: Bearer): Media {
         auth.auth(authorization.token)
             ?: throw UnauthorizedSignal()
 
@@ -62,7 +64,7 @@ class MediaRest {
         sessions: SessionContext,
         media: MediaContext,
     )
-    fun getMediaStreamById(
+    fun getMediaStream(
         @PathParameter id: Uuid,
         @QueryParameter token: String,
         @Header range: String?,
@@ -71,10 +73,10 @@ class MediaRest {
         val session = auth.auth(token, now)
             ?: throw UnauthorizedSignal()
 
-        val media = media.getMediaById(id)
+        val item = media.getMediaById(id)
             ?: throw NotFoundSignal()
 
-        val channel = FileChannel.open(media.path)
+        val channel = FileChannel.open(item.path)
         val total = channel.size()
 
         val begin: Long
@@ -131,7 +133,7 @@ class MediaRest {
         return ChannelResult(
             206,
             "Partial Content",
-            when (media.path.extension) {
+            when (item.path.extension) {
                 "mp4" -> "video/mp4"
                 "mkv" -> "video/x-matroska"
                 else -> "*/*"
@@ -141,5 +143,178 @@ class MediaRest {
             begin,
             count,
         )
+    }
+
+    @Resource("/stream/[id]/master.m3u8", result = "application/vnd.apple.mpegurl")
+    context(
+        _: Provider,
+        _: Connection,
+        auth: AuthContext,
+        sessions: SessionContext,
+        media: MediaContext,
+    )
+    fun getMediaStreamMaster(
+        @PathParameter id: Uuid,
+        @QueryParameter token: String,
+    ): String {
+        val now = now()
+        val session = auth.auth(token, now)
+            ?: throw UnauthorizedSignal()
+
+        val item = media.getMediaMetadataById(id)
+            ?: throw NotFoundSignal()
+
+        session.access = now
+        session.expiresAt = now + ofMinutes(60).toKotlinDuration()
+
+        sessions.updateSession(session)
+
+        data class Resolution(
+            val name: String,
+            val bandwidth: Long,
+            val width: Int,
+            val height: Int,
+        )
+
+        // TODO: generate additional resolutions for item
+        val resolutions = listOf(
+            Resolution(
+                "${item.height}p",
+                if (item.bitrate == 0L)
+                    item.size * 8L * 1000L / item.duration
+                else item.bitrate,
+                item.width,
+                item.height,
+            ),
+        )
+
+        return buildString {
+            append("#EXTM3U\r\n")
+            for ((name, bandwidth, width, height) in resolutions) {
+                append("#EXT-X-STREAM-INF:BANDWIDTH=${bandwidth},RESOLUTION=${width}x${height}\r\n")
+                append("${name}/index.m3u8?token=${token}\r\n")
+            }
+        }
+    }
+
+    @Resource("/stream/[id]/[res]/index.m3u8", result = "application/vnd.apple.mpegurl")
+    context(
+        _: Provider,
+        _: Connection,
+        hls: HlsCache,
+        auth: AuthContext,
+        sessions: SessionContext,
+        media: MediaContext,
+    )
+    fun getMediaStreamIndex(
+        @PathParameter id: Uuid,
+        @PathParameter res: String,
+        @QueryParameter token: String,
+    ): String {
+        val now = now()
+        val session = auth.auth(token, now)
+            ?: throw UnauthorizedSignal()
+
+        val item = media.getMediaById(id)
+            ?: throw NotFoundSignal()
+
+        session.access = now
+        session.expiresAt = now + ofMinutes(60).toKotlinDuration()
+
+        sessions.updateSession(session)
+
+        val cache = hls.prepare(item.id, res, item.path)
+            ?: throw Error("failed to prepare cache for media id=${item.id}, res=$res, path=${item.path}")
+
+        val playlist = cache.resolve("index.m3u8")
+        val text = playlist.readText()
+
+        val regex = """segment(\d+)\.ts""".toRegex()
+
+        return text.replace(regex) { result ->
+            "segment${result.groupValues[1]}.ts?token=${token}"
+        }
+    }
+
+    @Resource("/stream/[id]/[res]/segment[index].ts")
+    context(
+        _: Provider,
+        _: Connection,
+        hls: HlsCache,
+        auth: AuthContext,
+        sessions: SessionContext,
+        media: MediaContext,
+    )
+    fun getMediaStreamSegment(
+        @PathParameter id: Uuid,
+        @PathParameter res: String,
+        @PathParameter index: Long,
+        @QueryParameter token: String,
+        @Header range: String?,
+    ): Result {
+        val now = now()
+        val session = auth.auth(token, now)
+            ?: throw UnauthorizedSignal()
+
+        val item = media.getMediaMetadataById(id)
+            ?: throw NotFoundSignal()
+
+        session.access = now
+        session.expiresAt = now + ofMinutes(60).toKotlinDuration()
+
+        sessions.updateSession(session)
+
+        val cache = hls.prepare(item.id, res, item.path)
+            ?: throw Error("failed to prepare cache for media id=${item.id}, res=$res, path=${item.path}")
+
+        val segment = cache.resolve("segment$index.ts")
+
+        val channel = FileChannel.open(segment)
+        val total = channel.size()
+
+        if (range.isNullOrBlank()) {
+            return ChannelResult(
+                200,
+                "OK",
+                "video/mp2t",
+                ParameterList(),
+                channel,
+                0L,
+                total,
+            )
+        } else {
+            val segment = range
+                .substringAfter("bytes=")
+                .split('-')
+                .filter { it.isNotBlank() }
+
+            val begin = segment[0].toLong()
+            val end =
+                if (segment.size == 2)
+                    segment[1].toLong()
+                else null
+
+            val count = minOf(
+                if (end !== null) end - begin
+                else 512L * 1024L,
+                total - begin,
+            )
+
+            val limit = begin + count - 1
+
+            val headers = ParameterList()
+            headers["accept-ranges"] = "bytes"
+            headers["content-range"] = "bytes $begin-$limit/$total"
+
+            return ChannelResult(
+                206,
+                "Partial Content",
+                "video/mp2t",
+                headers,
+                channel,
+                begin,
+                count,
+            )
+        }
     }
 }

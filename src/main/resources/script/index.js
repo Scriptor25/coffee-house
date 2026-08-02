@@ -71,7 +71,7 @@ async function render() {
             const listItemEls = sorted
                 .map(node => {
                     const uri = (node instanceof MediaNode)
-                        ? `/media/stream/${node.item.id}?token=${session}`
+                        ? `/media/stream/${node.item.id}/master.m3u8?token=${session}`
                         : `/#${slug.length ? "/" + slug.join("/") : ""}/${node.name}`
                     return createListItem(node.name, encodeURI(uri))
                 })
@@ -97,10 +97,10 @@ async function render() {
 
             const lines = playlist.flatMap(item => {
                 const url = new URL(
-                    encodeURI(`/media/stream/${item.id}?token=${session}`),
+                    encodeURI(`/media/stream/${item.id}/master.m3u8?token=${session}`),
                     window.location.origin,
                 )
-                return [`#EXTINF:0,${item.title}`, url.toString()]
+                return [`#EXTINF:-1,${item.title}`, url.toString()]
             })
 
             const data = `#EXTM3U\r\n${lines.join("\r\n")}`

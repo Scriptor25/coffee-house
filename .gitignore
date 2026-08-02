@@ -42,3 +42,5 @@ build/
 *.db
 
 dependency-reduced-pom.xml
+
+cache/

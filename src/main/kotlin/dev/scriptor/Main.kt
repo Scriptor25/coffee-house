@@ -2,12 +2,19 @@ package dev.scriptor
 
 import dev.scriptor.context.SessionContext
 import dev.scriptor.model.Media
+import dev.scriptor.model.Metadata
 import dev.scriptor.model.Session
 import dev.scriptor.model.User
 import dev.scriptor.server.Provider
 import dev.scriptor.server.http.Server
 import dev.scriptor.server.scan
+import org.bytedeco.ffmpeg.avutil.AVDictionary
+import org.bytedeco.ffmpeg.avutil.AVRational
+import org.bytedeco.ffmpeg.global.avcodec.avcodec_get_name
+import org.bytedeco.ffmpeg.global.avformat.*
+import org.bytedeco.ffmpeg.global.avutil.*
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
 import java.sql.DriverManager
 import java.util.logging.*
@@ -21,6 +28,66 @@ fun getEnvironment(): Map<String, String> = System.getenv()
 
 val EXTENSIONS = arrayOf("mkv", "mp4")
 
+fun getMetadata(id: Uuid, path: Path): Metadata {
+    val context = avformat_alloc_context()
+
+    if (avformat_open_input(context, path.absolutePathString(), null, null) < 0) {
+        throw Error("failed to open file $path")
+    }
+
+    try {
+        if (avformat_find_stream_info(context, null as AVDictionary?) < 0) {
+            throw Error("failed to read stream information")
+        }
+
+        var width = 0
+        var height = 0
+        var fps = 0.0
+        var videoCodec: String? = null
+        var audioCodec: String? = null
+
+        for (i in 0 until context.nb_streams()) {
+            val stream = context.streams(i)
+            val codec = stream.codecpar()
+
+            when (codec.codec_type()) {
+                AVMEDIA_TYPE_VIDEO -> {
+                    width = codec.width()
+                    height = codec.height()
+
+                    val rate: AVRational = stream.avg_frame_rate()
+                    if (rate.den() != 0) {
+                        fps = rate.num().toDouble() / rate.den()
+                    }
+
+                    videoCodec = avcodec_get_name(codec.codec_id()).string
+                }
+
+                AVMEDIA_TYPE_AUDIO -> {
+                    audioCodec = avcodec_get_name(codec.codec_id()).string
+                }
+            }
+        }
+
+        return Metadata(
+            id,
+
+            context.duration() * 1000L / AV_TIME_BASE,
+            context.bit_rate(),
+
+            width,
+            height,
+
+            fps,
+
+            videoCodec,
+            audioCodec,
+        )
+    } finally {
+        avformat_close_input(context)
+    }
+}
+
 @OptIn(ExperimentalUuidApi::class)
 fun main() {
     val env = getEnvironment()
@@ -28,6 +95,7 @@ fun main() {
     val hostname = env["HOSTNAME"] ?: "0.0.0.0"
     val port = env["PORT"]?.toInt() ?: 8080
     val data = env["DATA"] ?: "/data"
+    val cache = env["CACHE"] ?: "/cache"
     val username = env["USERNAME"]
     val password = env["PASSWORD"]
 
@@ -36,10 +104,13 @@ fun main() {
     provider["hostname"] = hostname
     provider["port"] = port
     provider["data"] = data
+    provider["cache"] = cache
     provider["username"] = username
     provider["password"] = password
 
     val log = Logger.getLogger("dev.scriptor")
+    provider += log
+
     log.level = Level.ALL
 
     val handler = ConsoleHandler()
@@ -56,67 +127,92 @@ fun main() {
     log.useParentHandlers = false
     log.addHandler(handler)
 
-    provider += log
-
     val connection = DriverManager.getConnection("jdbc:sqlite:index.db")
-
     provider += connection
+
+    val hls = HlsCache(Path(cache))
+    provider += hls
 
     Server(log, provider, hostname, port).use { server ->
         scan(server, "dev.scriptor")
 
         context(provider) {
-
             SQL(connection).create<User>().execute()
             SQL(connection).create<Session>().execute()
             SQL(connection).create<Media>().execute()
+            SQL(connection).create<Metadata>().execute()
 
-            SQL(connection)
-                .insert<Media>()
-                .conflict(Media::path) { sql ->
-                    sql.update(
-                        Media::size to excluded("size"),
-                        Media::title to excluded("title"),
-                        Media::createdAt to excluded("created_at"),
-                        Media::modifiedAt to excluded("modified_at"),
-                    )
-                }
-                .batch { submit ->
-                    for (path in Path(data).walk()) {
-                        if (path.extension !in EXTENSIONS) continue
-
-                        val id = Uuid.generateV7()
-
-                        val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
-
-                        val size = attributes.size()
-
-                        val createdAt = attributes.creationTime()
-                        val modifiedAt = attributes.lastModifiedTime()
-
-                        submit(
-                            Media(
-                                id,
-                                path,
-                                size,
-                                path.nameWithoutExtension,
-                                createdAt.toInstant().toKotlinInstant(),
-                                modifiedAt.toInstant().toKotlinInstant(),
-                            ),
+            Thread {
+                SQL(connection)
+                    .insert<Media>()
+                    .conflict(Media::path) { sql ->
+                        sql.update(
+                            Media::size to excluded("size"),
+                            Media::title to excluded("title"),
+                            Media::createdAt to excluded("created_at"),
+                            Media::modifiedAt to excluded("modified_at"),
                         )
                     }
-                }
+                    .batch { submit ->
+                        for (path in Path(data).walk()) {
+                            if (path.extension !in EXTENSIONS) continue
 
-            SQL(connection).select<Media>().prepare().use { (statement) ->
-                statement.executeQuery().use { result ->
-                    while (result.next()) {
-                        val path = Path(result.getString("path"))
-                        if (path.notExists()) {
-                            result.deleteRow()
+                            val id = Uuid.generateV7()
+
+                            val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
+
+                            val size = attributes.size()
+
+                            val createdAt = attributes.creationTime()
+                            val modifiedAt = attributes.lastModifiedTime()
+
+                            submit(
+                                Media(
+                                    id,
+                                    path,
+                                    size,
+                                    path.nameWithoutExtension,
+                                    createdAt.toInstant().toKotlinInstant(),
+                                    modifiedAt.toInstant().toKotlinInstant(),
+                                ),
+                            )
+                        }
+                    }
+
+                SQL(connection).selectFrom<Media>().prepare().use { (statement) ->
+                    statement.executeQuery().use { result ->
+                        while (result.next()) {
+                            val path = Path(result.getString("path"))
+                            if (path.notExists()) {
+                                result.deleteRow()
+                            }
                         }
                     }
                 }
-            }
+
+                val items = SQL(connection)
+                    .selectFrom<Media>()
+                    .query<Media>()
+
+                SQL(connection)
+                    .insert<Metadata>()
+                    .conflict(Metadata::id) { sql ->
+                        sql.update(
+                            Metadata::duration to excluded("duration"),
+                            Metadata::bitrate to excluded("bitrate"),
+                            Metadata::width to excluded("width"),
+                            Metadata::height to excluded("height"),
+                            Metadata::framerate to excluded("framerate"),
+                            Metadata::videoCodec to excluded("video_codec"),
+                            Metadata::audioCodec to excluded("audio_codec"),
+                        )
+                    }
+                    .batch { submit ->
+                        for ((id, path) in items) {
+                            submit(getMetadata(id, path))
+                        }
+                    }
+            }.start()
         }
 
         server.register("session-reaper", 0L, 10L * 60L * 1000L) {
