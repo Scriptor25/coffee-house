@@ -14,12 +14,14 @@ services:
     environment:
       HOSTNAME: "0.0.0.0"
       PORT: "8080"
+      DATA: "/data"
+      CACHE: "/cache"
       USERNAME: "root"
       PASSWORD: "root"
-      DATA: "/data"
 
     volumes:
       - coffee-house-data:/app
+      - coffee-house-cache:/cache
       - /home/felix/remote:/data:ro
 
     healthcheck:
@@ -30,3 +32,4 @@ services:
 
 volumes:
   coffee-house-data:
+  coffee-house-cache:
