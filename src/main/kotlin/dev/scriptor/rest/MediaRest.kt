@@ -17,7 +17,7 @@ import java.nio.channels.FileChannel
 import java.sql.Connection
 import java.time.Duration.ofMinutes
 import kotlin.io.path.extension
-import kotlin.io.path.readText
+import kotlin.math.min
 import kotlin.time.Clock.System.now
 import kotlin.time.toKotlinDuration
 import kotlin.uuid.Uuid
@@ -215,7 +215,7 @@ class MediaRest {
         val session = auth.auth(token, now)
             ?: throw UnauthorizedSignal()
 
-        val item = media.getMediaById(id)
+        val item = media.getMediaMetadataById(id)
             ?: throw NotFoundSignal()
 
         session.access = now
@@ -223,16 +223,23 @@ class MediaRest {
 
         sessions.updateSession(session)
 
-        val cache = hls.prepare(item.id, res, item.path)
-            ?: throw Error("failed to prepare cache for media id=${item.id}, res=$res, path=${item.path}")
+        hls.prepare(id, res, item.path)
 
-        val playlist = cache.resolve("index.m3u8")
-        val text = playlist.readText()
+        return buildString {
+            append("#EXTM3U\r\n")
+            append("#EXT-X-VERSION:6\r\n")
+            append("#EXT-X-TARGETDURATION:6\r\n")
+            append("#EXT-X-MEDIA-SEQUENCE:0\r\n")
+            append("#EXT-X-PLAYLIST-TYPE:VOD\r\n")
 
-        val regex = """segment(\d+)\.ts""".toRegex()
+            var index = 0L
+            for (d in 0 until item.duration step 6000L) {
+                val len = min(6000L, item.duration - d) / 1000.0
+                append("#EXTINF:${String.format("%.3f", len)}\r\n")
+                append("segment${index++}.ts?token=${token}\r\n")
+            }
 
-        return text.replace(regex) { result ->
-            "segment${result.groupValues[1]}.ts?token=${token}"
+            append("#EXT-X-ENDLIST\r\n")
         }
     }
 
@@ -264,10 +271,10 @@ class MediaRest {
 
         sessions.updateSession(session)
 
-        val cache = hls.prepare(item.id, res, item.path)
-            ?: throw Error("failed to prepare cache for media id=${item.id}, res=$res, path=${item.path}")
+        hls.prepare(id, res, item.path)
 
-        val segment = cache.resolve("segment$index.ts")
+        val segment = hls.segment(id, res, index)
+            ?: throw Error("failed to get segment $index")
 
         val channel = FileChannel.open(segment)
         val total = channel.size()
