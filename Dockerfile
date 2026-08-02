@@ -1,4 +1,5 @@
 FROM eclipse-temurin:26
+RUN apt-get update && apt-get install -y ffmpeg
 
 WORKDIR /app
 
