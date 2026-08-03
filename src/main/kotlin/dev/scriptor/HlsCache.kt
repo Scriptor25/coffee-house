@@ -3,13 +3,12 @@ package dev.scriptor
 import java.lang.ProcessBuilder.Redirect.INHERIT
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.io.path.absolutePathString
 import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
 import kotlin.io.path.notExists
 import kotlin.math.ceil
 import kotlin.uuid.Uuid
-
-fun Path.realPathString(): String = this.toRealPath().toString()
 
 class HlsCache(private val base: Path) {
 
@@ -30,7 +29,7 @@ class HlsCache(private val base: Path) {
         return cache
     }
 
-    fun segment(id: Uuid, res: String, index: Long): Path? = file(id, res, "segment$index.ts")
+    fun segment(id: Uuid, res: String, index: Long): Path? = file(id, res, "segment$index")
 
     fun file(id: Uuid, res: String, filename: String): Path? {
         val key = "${id.toHexDashString()}/$res"
@@ -59,7 +58,7 @@ class HlsCache(private val base: Path) {
             val command = listOf(
                 "ffmpeg",
 
-                "-i", path.realPathString(),
+                "-i", path.absolutePathString(),
 
                 "-c:v", "libx264",
                 "-c:a", "aac",
@@ -77,7 +76,7 @@ class HlsCache(private val base: Path) {
                 "-segment_time", "$length",
                 "-segment_format", "mpegts",
 
-                cache.resolve("segment%d.ts").realPathString(),
+                cache.resolve("segment%d").absolutePathString(),
             )
 
             val process = ProcessBuilder(command).redirectError(INHERIT).start()
