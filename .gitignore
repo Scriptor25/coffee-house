@@ -44,3 +44,4 @@ build/
 dependency-reduced-pom.xml
 
 cache/
+.cache/

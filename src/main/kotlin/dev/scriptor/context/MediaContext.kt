@@ -39,6 +39,7 @@ class MediaContext {
         .select<MediaMetadata>()
         .from<Media>()
         .join<Metadata>(Media::id eq Metadata::id)
+        .where(Media::id eq id)
         .limit(1)
         .query<MediaMetadata>()
         .firstOrNull()

@@ -17,7 +17,7 @@ import java.nio.channels.FileChannel
 import java.sql.Connection
 import java.time.Duration.ofMinutes
 import kotlin.io.path.extension
-import kotlin.math.min
+import kotlin.math.ceil
 import kotlin.time.Clock.System.now
 import kotlin.time.toKotlinDuration
 import kotlin.uuid.Uuid
@@ -149,6 +149,7 @@ class MediaRest {
     context(
         _: Provider,
         _: Connection,
+        hls: HlsCache,
         auth: AuthContext,
         sessions: SessionContext,
         media: MediaContext,
@@ -169,29 +170,14 @@ class MediaRest {
 
         sessions.updateSession(session)
 
-        data class Resolution(
-            val name: String,
-            val bandwidth: Long,
-            val width: Int,
-            val height: Int,
-        )
-
-        // TODO: generate additional resolutions for item
-        val resolutions = listOf(
-            Resolution(
-                "${item.height}p",
-                if (item.bitrate == 0L)
-                    item.size * 8L * 1000L / item.duration
-                else item.bitrate,
-                item.width,
-                item.height,
-            ),
-        )
+        val variants = hls.variants(item)
+        val job = hls.prepare(item, variants, 6000L)
 
         return buildString {
             append("#EXTM3U\r\n")
-            for ((name, bandwidth, width, height) in resolutions) {
-                append("#EXT-X-STREAM-INF:BANDWIDTH=${bandwidth},RESOLUTION=${width}x${height}\r\n")
+
+            for ((name, width, height, bitrate) in variants) {
+                append("#EXT-X-STREAM-INF:BANDWIDTH=${bitrate},RESOLUTION=${width}x${height}\r\n")
                 append("${name}/index.m3u8?token=${token}\r\n")
             }
         }
@@ -223,20 +209,19 @@ class MediaRest {
 
         sessions.updateSession(session)
 
-        hls.prepare(id, res, item.path, item.framerate)
+        val targetDuration = ceil(job.boundaries.maxOf { it.second - it.first }).toInt()
 
         return buildString {
             append("#EXTM3U\r\n")
             append("#EXT-X-VERSION:6\r\n")
-            append("#EXT-X-TARGETDURATION:6\r\n")
+            append("#EXT-X-TARGETDURATION:${targetDuration}\r\n")
             append("#EXT-X-MEDIA-SEQUENCE:0\r\n")
             append("#EXT-X-PLAYLIST-TYPE:VOD\r\n")
 
-            var index = 0L
-            for (d in 0 until item.duration step 6000L) {
-                val len = min(6000L, item.duration - d) / 1000.0
-                append("#EXTINF:${String.format("%.3f", len)}\r\n")
-                append("segment${index++}.ts?token=${token}\r\n")
+            for ((index, segment) in job.boundaries.withIndex()) {
+                val dur = segment.second - segment.first
+                append("#EXTINF:${String.format("%.3f", dur)}\r\n")
+                append("segment${index}.ts?token=${token}\r\n")
             }
 
             append("#EXT-X-ENDLIST\r\n")
@@ -263,15 +248,13 @@ class MediaRest {
         val session = auth.auth(token, now)
             ?: throw UnauthorizedSignal()
 
-        val item = media.getMediaMetadataById(id)
+        media.getMediaById(id)
             ?: throw NotFoundSignal()
 
         session.access = now
         session.expiresAt = now + ofMinutes(60).toKotlinDuration()
 
         sessions.updateSession(session)
-
-        hls.prepare(id, res, item.path, item.framerate)
 
         val segment = hls.segment(id, res, index)
             ?: throw Error("failed to get segment $index")
@@ -303,7 +286,7 @@ class MediaRest {
 
             val count = minOf(
                 if (end !== null) end - begin
-                else 512L * 1024L,
+                else 2048L * 1024L,
                 total - begin,
             )
 
