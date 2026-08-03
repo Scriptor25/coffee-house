@@ -1,12 +1,15 @@
 package dev.scriptor
 
+import java.lang.ProcessBuilder.Redirect.INHERIT
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.io.path.absolutePathString
 import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
 import kotlin.io.path.notExists
+import kotlin.math.ceil
 import kotlin.uuid.Uuid
+
+fun Path.realPathString(): String = this.toRealPath().toString()
 
 class HlsCache(private val base: Path) {
 
@@ -17,13 +20,13 @@ class HlsCache(private val base: Path) {
 
     private val jobs = ConcurrentHashMap<String, Job>()
 
-    fun prepare(id: Uuid, res: String, path: Path): Path {
+    fun prepare(id: Uuid, res: String, path: Path, framerate: Double): Path {
         val key = "${id.toHexDashString()}/$res"
         val cache = base.resolve(id.toHexDashString()).resolve(res)
 
         cache.createDirectories()
 
-        start(key, path, cache)
+        enqueue(key, path, framerate, cache)
         return cache
     }
 
@@ -48,12 +51,15 @@ class HlsCache(private val base: Path) {
         return if (path.exists()) path else null
     }
 
-    private fun start(key: String, path: Path, cache: Path) {
+    private fun enqueue(key: String, path: Path, framerate: Double, cache: Path) {
         jobs.computeIfAbsent(key) {
+            val length = 6
+            val frames = ceil(length * framerate)
+
             val command = listOf(
                 "ffmpeg",
 
-                "-i", path.absolutePathString(),
+                "-i", path.realPathString(),
 
                 "-c:v", "libx264",
                 "-c:a", "aac",
@@ -62,17 +68,19 @@ class HlsCache(private val base: Path) {
 
                 "-f", "segment",
 
-                "-g", "180",
-                "-keyint_min", "180",
+                "-g", "$frames",
+                "-keyint_min", "$frames",
                 "-sc_threshold", "0",
 
-                "-segment_time", "6",
+                "-force_key_frames", "expr:gte(t,n_forced*$length)",
+
+                "-segment_time", "$length",
                 "-segment_format", "mpegts",
 
-                cache.resolve("segment%d.ts").absolutePathString(),
+                cache.resolve("segment%d.ts").realPathString(),
             )
 
-            val process = ProcessBuilder(command).start()
+            val process = ProcessBuilder(command).redirectError(INHERIT).start()
 
             Job(cache, process)
         }

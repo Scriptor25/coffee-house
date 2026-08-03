@@ -223,7 +223,7 @@ class MediaRest {
 
         sessions.updateSession(session)
 
-        hls.prepare(id, res, item.path)
+        hls.prepare(id, res, item.path, item.framerate)
 
         return buildString {
             append("#EXTM3U\r\n")
@@ -271,7 +271,7 @@ class MediaRest {
 
         sessions.updateSession(session)
 
-        hls.prepare(id, res, item.path)
+        hls.prepare(id, res, item.path, item.framerate)
 
         val segment = hls.segment(id, res, index)
             ?: throw Error("failed to get segment $index")

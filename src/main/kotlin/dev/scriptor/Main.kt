@@ -31,7 +31,7 @@ val EXTENSIONS = arrayOf("mkv", "mp4")
 fun getMetadata(id: Uuid, path: Path): Metadata {
     val context = avformat_alloc_context()
 
-    if (avformat_open_input(context, path.absolutePathString(), null, null) < 0) {
+    if (avformat_open_input(context, path.realPathString(), null, null) < 0) {
         throw Error("failed to open file $path")
     }
 
