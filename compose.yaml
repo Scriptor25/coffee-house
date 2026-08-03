@@ -18,7 +18,7 @@ services:
       CACHE: "/cache"
       USERNAME: "root"
       PASSWORD: "root"
-      TRANSCODING: "false"
+      TRANSCODING: "true"
 
     volumes:
       - coffee-house-data:/app

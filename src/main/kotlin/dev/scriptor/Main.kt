@@ -137,6 +137,7 @@ fun main() {
     val hls = HlsCache(
         Path(cache),
         !transcoding,
+        setOf("1080p", "720p", "480p"),
     )
 
     provider += hls

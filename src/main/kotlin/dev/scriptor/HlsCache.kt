@@ -12,6 +12,7 @@ import kotlin.uuid.Uuid
 class HlsCache(
     private val base: Path,
     private val disableTranscoding: Boolean,
+    private val enabledVariants: Set<String> = setOf("2160p", "1440p", "1080p", "720p", "480p", "360p", "144p"),
 ) {
 
     enum class Profile(
@@ -68,7 +69,7 @@ class HlsCache(
         if (disableTranscoding) return result
 
         for (variant in definedVariants) {
-            if (variant.width < item.width && variant.height < item.height) {
+            if (variant.name in enabledVariants && variant.width < item.width && variant.height < item.height) {
                 val aspect = item.width.toDouble() / item.height.toDouble()
                 val width = (variant.height * aspect).toInt()
                 val height = variant.height

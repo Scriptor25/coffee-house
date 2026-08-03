@@ -105,7 +105,7 @@ async function render() {
 
             const data = `#EXTM3U\r\n${lines.join("\r\n")}`
 
-            playlistButtonEl.addEventListener("click", async () => {
+            playlistButtonEl.onclick = async () => {
                 const blob = new Blob([data], {type: "application/x-mpegurl"})
                 const objectURL = URL.createObjectURL(blob)
 
@@ -114,7 +114,7 @@ async function render() {
                 anchorEl.download = "playlist.m3u8"
                 anchorEl.click()
                 URL.revokeObjectURL(objectURL)
-            })
+            }
         }
 
         mediaSectionEl.style.display = "block"
