@@ -98,6 +98,7 @@ fun main() {
     val cache = env["CACHE"] ?: "/cache"
     val username = env["USERNAME"]
     val password = env["PASSWORD"]
+    val transcoding = env["TRANSCODING"].toBoolean()
 
     val provider = Provider()
 
@@ -107,9 +108,9 @@ fun main() {
     provider["cache"] = cache
     provider["username"] = username
     provider["password"] = password
+    provider["transcoding"] = transcoding
 
     val log = Logger.getLogger("dev.scriptor")
-    provider += log
 
     log.level = Level.ALL
 
@@ -127,10 +128,17 @@ fun main() {
     log.useParentHandlers = false
     log.addHandler(handler)
 
+    provider += log
+
     val connection = DriverManager.getConnection("jdbc:sqlite:index.db")
+
     provider += connection
 
-    val hls = HlsCache(Path(cache))
+    val hls = HlsCache(
+        Path(cache),
+        !transcoding,
+    )
+
     provider += hls
 
     Server(log, provider, hostname, port).use { server ->

@@ -53,5 +53,5 @@ class DashboardRest {
     }
 
     @Resource("/health")
-    fun getHealth(): UnitResult = UnitResult(204, "No Content")
+    fun getHealth(): UnitResult = UnitResult(200, "OK")
 }

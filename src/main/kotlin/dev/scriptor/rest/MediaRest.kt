@@ -17,7 +17,7 @@ import java.nio.channels.FileChannel
 import java.sql.Connection
 import java.time.Duration.ofMinutes
 import kotlin.io.path.extension
-import kotlin.math.ceil
+import kotlin.io.path.readText
 import kotlin.time.Clock.System.now
 import kotlin.time.toKotlinDuration
 import kotlin.uuid.Uuid
@@ -171,19 +171,22 @@ class MediaRest {
         sessions.updateSession(session)
 
         val variants = hls.variants(item)
-        val job = hls.prepare(item, variants, 6000L)
+        hls.prepare(item, variants, 6000L)
+
+        val available = hls.available(id)
 
         return buildString {
             append("#EXTM3U\r\n")
 
             for ((name, width, height, bitrate) in variants) {
+                if (name !in available) continue
                 append("#EXT-X-STREAM-INF:BANDWIDTH=${bitrate},RESOLUTION=${width}x${height}\r\n")
                 append("${name}/index.m3u8?token=${token}\r\n")
             }
         }
     }
 
-    @Resource("/stream/[id]/[res]/index.m3u8", result = "application/vnd.apple.mpegurl")
+    @Resource("/stream/[id]/[name]/index.m3u8", result = "application/vnd.apple.mpegurl")
     context(
         _: Provider,
         _: Connection,
@@ -194,14 +197,14 @@ class MediaRest {
     )
     fun getMediaStreamIndex(
         @PathParameter id: Uuid,
-        @PathParameter res: String,
+        @PathParameter name: String,
         @QueryParameter token: String,
     ): String {
         val now = now()
         val session = auth.auth(token, now)
             ?: throw UnauthorizedSignal()
 
-        val item = media.getMediaMetadataById(id)
+        media.getMediaById(id)
             ?: throw NotFoundSignal()
 
         session.access = now
@@ -209,26 +212,14 @@ class MediaRest {
 
         sessions.updateSession(session)
 
-        val targetDuration = ceil(job.boundaries.maxOf { it.second - it.first }).toInt()
+        val index = hls.index(id to name)
 
-        return buildString {
-            append("#EXTM3U\r\n")
-            append("#EXT-X-VERSION:6\r\n")
-            append("#EXT-X-TARGETDURATION:${targetDuration}\r\n")
-            append("#EXT-X-MEDIA-SEQUENCE:0\r\n")
-            append("#EXT-X-PLAYLIST-TYPE:VOD\r\n")
-
-            for ((index, segment) in job.boundaries.withIndex()) {
-                val dur = segment.second - segment.first
-                append("#EXTINF:${String.format("%.3f", dur)}\r\n")
-                append("segment${index}.ts?token=${token}\r\n")
-            }
-
-            append("#EXT-X-ENDLIST\r\n")
-        }
+        return index
+            .readText()
+            .replace("segment(\\d+)\\.ts".toRegex()) { result -> "segment${result.groupValues[1]}.ts?token=${token}" }
     }
 
-    @Resource("/stream/[id]/[res]/segment[index].ts")
+    @Resource("/stream/[id]/[name]/segment[index].ts")
     context(
         _: Provider,
         _: Connection,
@@ -239,7 +230,7 @@ class MediaRest {
     )
     fun getMediaStreamSegment(
         @PathParameter id: Uuid,
-        @PathParameter res: String,
+        @PathParameter name: String,
         @PathParameter index: Long,
         @QueryParameter token: String,
         @Header range: String?,
@@ -256,8 +247,7 @@ class MediaRest {
 
         sessions.updateSession(session)
 
-        val segment = hls.segment(id, res, index)
-            ?: throw Error("failed to get segment $index")
+        val segment = hls.segment(id to name, index)
 
         val channel = FileChannel.open(segment)
         val total = channel.size()

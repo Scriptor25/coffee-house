@@ -1,17 +1,18 @@
 package dev.scriptor
 
 import dev.scriptor.model.MediaMetadata
-import org.json.JSONObject
 import java.lang.ProcessBuilder.Redirect.INHERIT
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
-import kotlin.io.path.notExists
 import kotlin.uuid.Uuid
 
-class HlsCache(private val base: Path) {
+class HlsCache(
+    private val base: Path,
+    private val disableTranscoding: Boolean,
+) {
 
     enum class Profile(
         val preset: String,
@@ -32,7 +33,7 @@ class HlsCache(private val base: Path) {
         val profile: Profile,
     )
 
-    val variants = listOf(
+    private val definedVariants = listOf(
         Variant("2160p", 3840, 2160, 16_000_000L, Profile.HIGH),
         Variant("1440p", 2560, 1440, 8_000_000L, Profile.HIGH),
         Variant("1080p", 1920, 1080, 6_000_000L, Profile.MEDIUM),
@@ -42,15 +43,14 @@ class HlsCache(private val base: Path) {
         Variant("144p", 256, 144, 300_000L, Profile.POTATO),
     )
 
-    data class Job(
+    private data class Job(
         val cache: Path,
-        val keyframes: List<Double>,
-        val boundaries: List<Pair<Double, Double>>,
-        val process: Process,
-        val processSegments: Map<String, Process>,
+        val result: Path,
+        val process: Process?,
     )
 
-    private val jobs = ConcurrentHashMap<Uuid, Job>()
+    private val processes: MutableMap<Pair<Uuid, String>, Job> = ConcurrentHashMap()
+    private val segmentation: MutableMap<Pair<Uuid, String>, Job> = ConcurrentHashMap()
 
     fun variants(item: MediaMetadata): List<Variant> {
         val result = mutableListOf(
@@ -64,7 +64,10 @@ class HlsCache(private val base: Path) {
                 Profile.LOSSLESS,
             )
         )
-        for (variant in variants) {
+
+        if (disableTranscoding) return result
+
+        for (variant in definedVariants) {
             if (variant.width < item.width && variant.height < item.height) {
                 val aspect = item.width.toDouble() / item.height.toDouble()
                 val width = (variant.height * aspect).toInt()
@@ -79,160 +82,221 @@ class HlsCache(private val base: Path) {
                 )
             }
         }
+
         return result
     }
 
-    fun prepare(item: MediaMetadata, variants: List<Variant>, segment: Long): Job {
-        return enqueue(
+    fun available(id: Uuid): List<String> {
+        val names = mutableListOf<String>()
+        for ((key, proc) in processes) {
+            if (key.first != id) continue
+            if (proc.process != null) {
+                if (proc.process.isAlive) continue
+                if (proc.process.exitValue() != 0) continue
+            }
+            names += key.second
+        }
+
+        return names.filter {
+            val job = segmentation[id to it]
+            job != null && (job.process == null || (!job.process.isAlive && job.process.exitValue() == 0))
+        }
+    }
+
+    fun prepare(item: MediaMetadata, variants: List<Variant>, segment: Long) {
+        if (variants.isEmpty()) return
+
+        val sorted = variants.sortedBy(Variant::height)
+        val segment = segment.toDouble() / 1000.0
+        val cache = base.resolve(item.id.toHexDashString())
+
+        enqueue(
             item.id,
             item.path,
-            item.duration / 1000.0,
-            segment / 1000.0,
-            variants,
-            base.resolve(item.id.toHexDashString()),
+            cache,
+            segment,
+            sorted.subList(0, 1),
+        )
+
+        val key = item.id to sorted[0].name
+        while (key !in segmentation) {
+            Thread.onSpinWait()
+        }
+
+        awaitJob(key)
+
+        enqueue(
+            item.id,
+            item.path,
+            cache,
+            segment,
+            sorted.subList(1, sorted.size),
         )
     }
 
-    fun segment(id: Uuid, name: String, index: Long): Path? = file(id, name, "segment$index.ts")
+    fun index(key: Pair<Uuid, String>): Path = file(key, "index.m3u8")
 
-    fun file(id: Uuid, name: String, filename: String): Path? {
-        val path = base
-            .resolve(id.toHexDashString())
-            .resolve(name)
-            .resolve(filename)
+    fun segment(key: Pair<Uuid, String>, index: Long): Path = file(key, "segment$index.ts")
 
-        while (path.notExists()) {
-            Thread.onSpinWait()
+    private fun awaitProcess(key: Pair<Uuid, String>): Job {
+        val proc = processes[key]
+            ?: throw Error("process $key does not exist")
 
-            val job = jobs[id]
-            if (job != null && !job.process.isAlive) {
-                break
+        if (proc.process != null && proc.process.waitFor() != 0) {
+            throw Error("process $key failed")
+        }
+
+        return proc
+    }
+
+    private fun awaitJob(key: Pair<Uuid, String>): Job {
+        awaitProcess(key)
+
+        val job = segmentation[key]
+            ?: throw Error("segmentation $key does not exist")
+
+        if (job.process != null && job.process.waitFor() != 0) {
+            throw Error("segmentation $key failed")
+        }
+
+        return job
+    }
+
+    private fun file(key: Pair<Uuid, String>, filename: String): Path {
+        val job = awaitJob(key)
+
+        return job.cache.resolve(filename)
+    }
+
+    private fun generateVariants(id: Uuid, path: Path, cache: Path, variants: List<Variant>) {
+        if (variants.isEmpty()) return
+
+        if (disableTranscoding) {
+            for ((name) in variants) {
+                processes[id to name] = Job(
+                    cache,
+                    path,
+                    null,
+                )
+            }
+
+            return
+        }
+
+        val splitter = mutableListOf<String>()
+        val scaler = mutableListOf<String>()
+        val mapper = mutableListOf<String>()
+
+        val exists = mutableSetOf<String>()
+
+        for ((index, variant) in variants.withIndex()) {
+            val variantPath = cache.resolve("${variant.name}.mp4")
+
+            if (variantPath.exists()) {
+                exists += variant.name
+            } else {
+                splitter += "[v${index + 1}]"
+                scaler += "[v${index + 1}]scale=${variant.width}:${variant.height}[v${variant.height}]"
+
+                mapper += listOf(
+                    "-map", "[v${variant.height}]", "-map", "0:a",
+                    "-c:v", "libx264",
+                    "-b:v", "${variant.bitrate}",
+                    "-c:a", "aac",
+                    "-maxrate", "${variant.bitrate}",
+                    "-bufsize", "${variant.bitrate * 2}",
+                    "-preset", variant.profile.preset,
+                    "-crf", variant.profile.crf.toString(),
+                    variantPath.absolutePathString(),
+                )
             }
         }
 
-        return if (path.exists()) path else null
-    }
+        cache.createDirectories()
 
-    fun keyframes(path: Path): List<Double> {
+        val split = "[0:v]split=${variants.size}" + splitter.joinToString("")
+        val scale = scaler.joinToString(";")
+        val map = mapper.toTypedArray()
+
         val command = listOf(
-            "ffprobe",
-            "-skip_frame", "nokey",
-            "-select_streams", "v:0",
-            "-show_entries", "frame=pts_time",
-            "-of", "json",
-            path.absolutePathString(),
+            "ffmpeg",
+            "-i", path.absolutePathString(),
+            "-filter_complex", "$split;$scale",
+            *map,
         )
 
         val process = ProcessBuilder(command)
             .redirectError(INHERIT)
             .start()
 
-        val json = JSONObject(process.inputStream.bufferedReader().readText())
-
-        val code = process.waitFor()
-        if (code != 0) throw Error("failed to extract keyframes")
-
-        val frames = json.getJSONArray("frames")
-
-        val keyframes = mutableListOf<Double>()
-        for (index in 0 until frames.length()) {
-            val frame = frames.getJSONObject(index)
-            val ptsTime = frame.getString("pts_time").toDouble()
-            keyframes += ptsTime
+        for ((name) in variants) {
+            processes[id to name] = Job(
+                cache,
+                cache.resolve("$name.mp4"),
+                if (name in exists) null else process,
+            )
         }
-        return keyframes
     }
 
-    fun boundaries(keyframes: List<Double>, duration: Double, segment: Double): List<Pair<Double, Double>> {
-        val boundaries = mutableListOf(0.0)
-        var next = segment
+    private fun generateSegments(id: Uuid, name: String, src: Path, dst: Path, segment: Double) {
+        val index = dst.resolve("index.m3u8")
 
-        for (keyframe in keyframes) {
-            if (keyframe >= next) {
-                boundaries += keyframe
-                next += segment
-            }
+        val process: Process?
+        if (index.exists()) {
+            process = null
+        } else {
+            dst.createDirectories()
+
+            val command = listOf(
+                "ffmpeg",
+                "-i", src.absolutePathString(),
+                "-c", "copy",
+                "-f", "hls",
+                "-hls_playlist_type", "vod",
+                "-hls_flags", "independent_segments",
+                "-hls_time", "$segment",
+                "-hls_segment_type", "mpegts",
+                "-hls_segment_filename", dst.resolve("segment%d.ts").absolutePathString(),
+                index.absolutePathString(),
+            )
+
+            process = ProcessBuilder(command)
+                .redirectError(INHERIT)
+                .start()
         }
 
-        boundaries += duration
-        return boundaries.zipWithNext()
+        segmentation[id to name] = Job(
+            dst,
+            index,
+            process,
+        )
     }
 
     private fun enqueue(
         id: Uuid,
         path: Path,
-        duration: Double,
+        cache: Path,
         segment: Double,
         variants: List<Variant>,
-        cache: Path,
-    ): Job {
-        return jobs.computeIfAbsent(id) {
-            cache.createDirectories()
+    ) {
+        if (variants.isEmpty()) return
 
-            val keyframes = keyframes(path)
-            val boundaries = boundaries(keyframes, duration, segment)
+        val toProcess = variants.filter { (id to it.name) !in processes }
+        val toSegmentation = variants.filter { (id to it.name) !in segmentation }
 
-            val split = "[0:v]split=${variants.size}" +
-                    List(variants.size) { index -> "[v${index + 1}]" }
-                        .joinToString("")
+        if (toProcess.isEmpty() && toSegmentation.isEmpty()) return
 
-            val filter = variants
-                .mapIndexed { index, variant ->
-                    "[v${index + 1}]scale=${variant.width}:${variant.height}[v${variant.height}]"
-                }
-                .joinToString(";")
+        generateVariants(id, path, cache, toProcess)
 
-            val map = variants.flatMap { variant ->
-                listOf(
-                    "-map", "[v${variant.height}]",
-                    "-c:v", "libx264",
-                    "-b:v", "${variant.bitrate}",
-                    "-maxrate", "${variant.bitrate}",
-                    "-bufsize", "${variant.bitrate * 2}",
-                    "-preset", variant.profile.preset,
-                    "-crf", variant.profile.crf.toString(),
-                    "-c:a", "aac",
-                    cache.resolve("${variant.name}.mp4").absolutePathString(),
-                )
-            }.toTypedArray()
+        for ((name) in toSegmentation) {
+            Thread {
+                val job = awaitProcess(id to name)
 
-            val command = listOf(
-                "ffmpeg",
-                "-i", path.absolutePathString(),
-                "-filter_complex", "$split;$filter",
-                *map,
-            )
+                val src = job.result
+                val dst = cache.resolve(name)
 
-            val process = ProcessBuilder(command)
-                .redirectError(INHERIT)
-                .start()
-
-            // TODO: await filter process before starting segmentation
-
-            // segment item per variant
-            val processSegments = mutableMapOf<String, Process>()
-            for (variant in variants) {
-                val dst = cache.resolve(variant.name)
-                dst.createDirectories()
-
-                val command = listOf(
-                    "ffmpeg",
-                    "-i", cache.resolve("${variant.name}.mp4").absolutePathString(),
-                    "-c", "copy",
-                    "-f", "segment",
-                    "-segment_time", "$segment",
-                    "-segment_format", "mpegts",
-                    dst.resolve("segment%d.ts").absolutePathString(),
-                )
-
-                val process = ProcessBuilder(command)
-                    .redirectError(INHERIT)
-                    .start()
-
-                processSegments[variant.name] = process
-            }
-
-            Job(cache, keyframes, boundaries, process, processSegments)
+                generateSegments(id, name, src, dst, segment)
+            }.start()
         }
     }
 }
