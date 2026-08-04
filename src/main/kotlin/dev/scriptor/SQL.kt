@@ -383,6 +383,24 @@ private data class ConditionOperator(
     }
 }
 
+private data class ConditionIn(val left: ColumnRef, val right: List<Value>) : Condition {
+
+    override fun generate(
+        sql: StringBuilder,
+        parameters: MutableList<Any?>,
+        named: MutableMap<String, Int>,
+    ) {
+        sql.append(left).append(" in (")
+
+        for ((index, value) in right.withIndex()) {
+            if (index > 0) sql.append(", ")
+            value.generate(sql, parameters, named)
+        }
+
+        sql.append(')')
+    }
+}
+
 private data class ConditionAnd(
     val left: Condition,
     val right: Condition,
@@ -937,6 +955,9 @@ inline infix fun <reified T : Any, reified V> KProperty1<T, V>.ge(value: V): Con
 inline infix fun <reified T : Any, reified U : Any, reified V : Any> KProperty1<T, V>.ge(other: KProperty1<U, V>): Condition =
     columnOf(this) ge columnOf(other)
 
+inline infix fun <reified T : Any, reified V> KProperty1<T, V>.`in`(set: List<V>): Condition =
+    columnOf(this) `in` set
+
 infix fun ColumnRef.eq(value: Any?): Condition = ConditionOperator(this, ConstantValue(value), "=")
 infix fun ColumnRef.eq(other: ColumnRef): Condition = ConditionOperator(this, other, "=")
 infix fun ColumnRef.ne(value: Any?): Condition = ConditionOperator(this, ConstantValue(value), "<>")
@@ -949,6 +970,8 @@ infix fun ColumnRef.gt(value: Any?): Condition = ConditionOperator(this, Constan
 infix fun ColumnRef.gt(other: ColumnRef): Condition = ConditionOperator(this, other, ">")
 infix fun ColumnRef.ge(value: Any?): Condition = ConditionOperator(this, ConstantValue(value), ">=")
 infix fun ColumnRef.ge(other: ColumnRef): Condition = ConditionOperator(this, other, ">=")
+
+infix fun ColumnRef.`in`(set: List<Any?>): Condition = ConditionIn(this, set.map { ConstantValue(it) })
 
 infix fun Condition.and(other: Condition): Condition = ConditionAnd(this, other)
 infix fun Condition.or(other: Condition): Condition = ConditionOr(this, other)

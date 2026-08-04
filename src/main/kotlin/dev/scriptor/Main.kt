@@ -139,15 +139,20 @@ fun main() {
         !transcoding,
     )
 
-    Thread { do while (hls.next()) }.start()
+    Thread({ do while (hls.next()) }, "HLS").start()
 
     provider += hls
 
     val server = Server(log, provider, hostname, port)
 
     Runtime.getRuntime().addShutdownHook(Thread {
-        server.stop()
-        server.close()
+        try {
+            server.stop()
+            server.close()
+        } catch (e: Throwable) {
+            log.warning(e.stackTraceToString())
+        }
+
         hls.stop()
         connection.close()
     })
@@ -161,77 +166,76 @@ fun main() {
             SQL(connection).create<Media>().execute()
             SQL(connection).create<Metadata>().execute()
 
-            Thread {
-                SQL(connection)
-                    .insert<Media>()
-                    .conflict(Media::path) { sql ->
-                        sql.update(
-                            Media::size to excluded("size"),
-                            Media::title to excluded("title"),
-                            Media::createdAt to excluded("created_at"),
-                            Media::modifiedAt to excluded("modified_at"),
+            val entries = mutableListOf<Path>()
+
+            SQL(connection)
+                .insert<Media>()
+                .conflict(Media::path) { sql ->
+                    sql.update(
+                        Media::size to excluded("size"),
+                        Media::title to excluded("title"),
+                        Media::createdAt to excluded("created_at"),
+                        Media::modifiedAt to excluded("modified_at"),
+                    )
+                }
+                .batch { submit ->
+                    for (path in Path(data).walk()) {
+                        if (path.extension !in EXTENSIONS) continue
+
+                        entries.add(path.absolute())
+
+                        val id = Uuid.generateV7()
+
+                        val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
+
+                        val size = attributes.size()
+
+                        val createdAt = attributes.creationTime()
+                        val modifiedAt = attributes.lastModifiedTime()
+
+                        submit(
+                            Media(
+                                id,
+                                path,
+                                size,
+                                path.nameWithoutExtension,
+                                createdAt.toInstant().toKotlinInstant(),
+                                modifiedAt.toInstant().toKotlinInstant(),
+                            ),
                         )
-                    }
-                    .batch { submit ->
-                        for (path in Path(data).walk()) {
-                            if (path.extension !in EXTENSIONS) continue
-
-                            val id = Uuid.generateV7()
-
-                            val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
-
-                            val size = attributes.size()
-
-                            val createdAt = attributes.creationTime()
-                            val modifiedAt = attributes.lastModifiedTime()
-
-                            submit(
-                                Media(
-                                    id,
-                                    path,
-                                    size,
-                                    path.nameWithoutExtension,
-                                    createdAt.toInstant().toKotlinInstant(),
-                                    modifiedAt.toInstant().toKotlinInstant(),
-                                ),
-                            )
-                        }
-                    }
-
-                SQL(connection).selectFrom<Media>().prepare().use { (statement) ->
-                    statement.executeQuery().use { result ->
-                        while (result.next()) {
-                            val path = Path(result.getString("path"))
-                            if (path.notExists()) {
-                                result.deleteRow()
-                            }
-                        }
                     }
                 }
 
-                val items = SQL(connection)
-                    .selectFrom<Media>()
-                    .query<Media>()
+            SQL(connection)
+                .delete()
+                .from<Media>()
+                .where(!(Media::path `in` entries))
+                .execute()
 
-                SQL(connection)
-                    .insert<Metadata>()
-                    .conflict(Metadata::id) { sql ->
-                        sql.update(
-                            Metadata::duration to excluded("duration"),
-                            Metadata::bitrate to excluded("bitrate"),
-                            Metadata::width to excluded("width"),
-                            Metadata::height to excluded("height"),
-                            Metadata::framerate to excluded("framerate"),
-                            Metadata::videoCodec to excluded("video_codec"),
-                            Metadata::audioCodec to excluded("audio_codec"),
-                        )
+            val items = SQL(connection)
+                .selectFrom<Media>()
+                .query<Media>()
+
+            SQL(connection)
+                .insert<Metadata>()
+                .conflict(Metadata::id) { sql ->
+                    sql.update(
+                        Metadata::duration to excluded("duration"),
+                        Metadata::bitrate to excluded("bitrate"),
+                        Metadata::width to excluded("width"),
+                        Metadata::height to excluded("height"),
+                        Metadata::framerate to excluded("framerate"),
+                        Metadata::videoCodec to excluded("video_codec"),
+                        Metadata::audioCodec to excluded("audio_codec"),
+                    )
+                }
+                .batch { submit ->
+                    for ((id, path) in items) {
+                        log.info("get metadata for $id : $path")
+
+                        submit(getMetadata(id, path))
                     }
-                    .batch { submit ->
-                        for ((id, path) in items) {
-                            submit(getMetadata(id, path))
-                        }
-                    }
-            }.start()
+                }
         }
 
         server.register("session-reaper", 0L, 10L * 60L * 1000L) {
