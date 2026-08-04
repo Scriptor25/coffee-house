@@ -73,4 +73,16 @@ class SessionContext {
         .selectFrom<Session>()
         .where(Session::expiresAt le now())
         .query<Session>()
+
+    context(
+        _: Provider,
+        connection: Connection,
+    )
+    fun deleteExpiredSessions() {
+        SQL(connection)
+            .delete()
+            .from<Session>()
+            .where(Session::expiresAt le now())
+            .execute()
+    }
 }

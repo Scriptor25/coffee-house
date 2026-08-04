@@ -3,7 +3,9 @@ package dev.scriptor
 import dev.scriptor.model.MediaMetadata
 import java.lang.ProcessBuilder.Redirect.INHERIT
 import java.nio.file.Path
+import java.util.concurrent.BlockingQueue
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.LinkedBlockingQueue
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
@@ -52,6 +54,17 @@ class HlsCache(
 
     private val processes: MutableMap<Pair<Uuid, String>, Job> = ConcurrentHashMap()
     private val segmentation: MutableMap<Pair<Uuid, String>, Job> = ConcurrentHashMap()
+
+    private val queue: BlockingQueue<() -> Boolean> = LinkedBlockingQueue()
+
+    fun next(): Boolean {
+        return queue.take()()
+    }
+
+    fun stop() {
+        queue.clear()
+        queue.add { false }
+    }
 
     fun variants(item: MediaMetadata): List<Variant> {
         val result = mutableListOf(
@@ -237,6 +250,8 @@ class HlsCache(
                 if (name in exists) null else process,
             )
         }
+
+        process.waitFor()
     }
 
     private fun generateSegments(id: Uuid, name: String, src: Path, dst: Path, segment: Double) {
@@ -271,6 +286,8 @@ class HlsCache(
             index,
             process,
         )
+
+        process?.waitFor()
     }
 
     private fun enqueue(
@@ -287,17 +304,23 @@ class HlsCache(
 
         if (toProcess.isEmpty() && toSegmentation.isEmpty()) return
 
-        generateVariants(id, path, cache, toProcess)
+        queue.put {
+            generateVariants(id, path, cache, toProcess)
+
+            true
+        }
 
         for ((name) in toSegmentation) {
-            Thread {
+            queue.put {
                 val job = awaitProcess(id to name)
 
                 val src = job.result
                 val dst = cache.resolve(name)
 
                 generateSegments(id, name, src, dst, segment)
-            }.start()
+
+                true
+            }
         }
     }
 }

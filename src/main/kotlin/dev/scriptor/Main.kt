@@ -139,9 +139,20 @@ fun main() {
         !transcoding,
     )
 
+    Thread { do while (hls.next()) }.start()
+
     provider += hls
 
-    Server(log, provider, hostname, port).use { server ->
+    val server = Server(log, provider, hostname, port)
+
+    Runtime.getRuntime().addShutdownHook(Thread {
+        server.stop()
+        server.close()
+        hls.stop()
+        connection.close()
+    })
+
+    server.use { server ->
         scan(server, "dev.scriptor")
 
         context(provider) {
@@ -225,13 +236,12 @@ fun main() {
 
         server.register("session-reaper", 0L, 10L * 60L * 1000L) {
             val sessions = provider[SessionContext::class.starProjectedType] as SessionContext
-            context(provider, connection) {
-                sessions.getExpiredSessions().forEach { session -> sessions.deleteSession(session) }
-            }
+            context(provider, connection) { sessions.deleteExpiredSessions() }
         }
 
         server.start()
     }
 
+    hls.stop()
     connection.close()
 }
