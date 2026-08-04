@@ -132,13 +132,6 @@ class HlsCache(
             sorted.subList(0, 1),
         )
 
-        val key = item.id to sorted[0].name
-        while (key !in segmentation) {
-            Thread.onSpinWait()
-        }
-
-        awaitJob(key)
-
         enqueue(
             item.id,
             item.path,
