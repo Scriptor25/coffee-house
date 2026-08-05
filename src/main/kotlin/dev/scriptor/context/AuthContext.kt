@@ -15,7 +15,10 @@ class AuthContext {
         _: Connection,
         sessions: SessionContext,
     )
-    fun auth(token: String, now: Instant = now()): Session? {
+    fun auth(
+        token: String,
+        now: Instant = now(),
+    ): Session? {
         val session = sessions.getSessionByToken(token)
             ?: return null
 

@@ -13,26 +13,34 @@ data class TranscodingJob(
     val variants: List<Variant>,
     val transcoding: Boolean,
 ) {
+    private companion object {
+        var next = 0L
+    }
+
+    private val id = next++
     private val command = buildCommand()
 
     @Volatile
     private var process: Process? = null
 
     @Synchronized
-    context(log: Logger)
+    context(parent: Logger)
     fun start() {
         if (process?.isAlive == true) return
 
         cache.createDirectories()
 
+        val log = getLogger("transcoding-job-$id", parent)
+
         log.fine(command.joinToString("' '", "'", "'"))
 
         val p = ProcessBuilder(command).start()
         p.attach(log)
+
         process = p
     }
 
-    context(log: Logger)
+    context(_: Logger)
     fun waitFor(path: Path): Path {
         start()
 
@@ -49,13 +57,13 @@ data class TranscodingJob(
         return path
     }
 
-    context(log: Logger)
+    context(_: Logger)
     fun master(): Path = waitFor(cache.resolve("master.m3u8"))
 
-    context(log: Logger)
+    context(_: Logger)
     fun index(name: String): Path = waitFor(cache.resolve(name).resolve("index.m3u8"))
 
-    context(log: Logger)
+    context(_: Logger)
     fun segment(name: String, index: Long): Path = waitFor(cache.resolve(name).resolve("segment$index.ts"))
 
     private fun buildCommand(): List<String> {

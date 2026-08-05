@@ -6,6 +6,7 @@ import dev.scriptor.server.Provider
 import dev.scriptor.server.annotation.Context
 import java.sql.Connection
 import kotlin.time.Clock.System.now
+import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 @Context
@@ -69,20 +70,20 @@ class SessionContext {
         _: Provider,
         connection: Connection,
     )
-    fun getExpiredSessions(): List<Session> = SQL(connection)
+    fun getExpiredSessions(now: Instant = now()): List<Session> = SQL(connection)
         .selectFrom<Session>()
-        .where(Session::expiresAt le now())
+        .where(Session::expiresAt le now)
         .query<Session>()
 
     context(
         _: Provider,
         connection: Connection,
     )
-    fun deleteExpiredSessions() {
+    fun deleteExpiredSessions(now: Instant = now()) {
         SQL(connection)
             .delete()
             .from<Session>()
-            .where(Session::expiresAt le now())
+            .where(Session::expiresAt le now)
             .execute()
     }
 }

@@ -17,7 +17,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
 import java.sql.DriverManager
-import java.util.logging.*
+import java.util.logging.Level
 import kotlin.io.path.*
 import kotlin.reflect.full.starProjectedType
 import kotlin.time.toKotlinInstant
@@ -110,23 +110,9 @@ fun main() {
     provider["password"] = password
     provider["transcoding"] = transcoding
 
-    val log = Logger.getLogger("dev.scriptor")
+    val log = getLogger("dev.scriptor")
 
     log.level = Level.ALL
-
-    val handler = ConsoleHandler()
-    handler.level = log.level
-    handler.formatter = object : Formatter() {
-
-        override fun format(record: LogRecord?): String? {
-            if (record == null) return null
-
-            return "[${record.level}][${record.instant}] ${record.message}\n"
-        }
-    }
-
-    log.useParentHandlers = false
-    log.addHandler(handler)
 
     provider += log
 
