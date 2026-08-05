@@ -1,9 +1,6 @@
 package dev.scriptor
 
-import java.util.logging.ConsoleHandler
-import java.util.logging.Formatter
-import java.util.logging.LogRecord
-import java.util.logging.Logger
+import java.util.logging.*
 
 fun getLogger(name: String, parent: Logger? = null): Logger {
     val log = Logger.getLogger(name)
@@ -11,8 +8,11 @@ fun getLogger(name: String, parent: Logger? = null): Logger {
     if (parent != null) {
         log.parent = parent
         log.useParentHandlers = true
+        log.level = null
     } else {
         val handler = ConsoleHandler()
+
+        handler.level = Level.ALL
 
         handler.formatter = object : Formatter() {
             override fun format(record: LogRecord): String {

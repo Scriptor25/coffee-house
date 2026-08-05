@@ -110,7 +110,7 @@ fun main() {
     provider["password"] = password
     provider["transcoding"] = transcoding
 
-    val log = getLogger("dev.scriptor")
+    val log = getLogger("coffee-house")
 
     log.level = Level.ALL
 
