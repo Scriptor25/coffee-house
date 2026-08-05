@@ -22,7 +22,6 @@ fun getLogger(name: String, parent: Logger? = null): Logger {
 
         log.addHandler(handler)
 
-        log.parent = null
         log.useParentHandlers = false
     }
 
