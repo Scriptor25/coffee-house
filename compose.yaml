@@ -21,7 +21,6 @@ services:
       TRANSCODING: "true"
 
     volumes:
-      - coffee-house-data:/app
       - coffee-house-cache:/cache
       - /home/felix/Videos:/data:ro
 
@@ -32,5 +31,4 @@ services:
       retries: 3
 
 volumes:
-  coffee-house-data:
   coffee-house-cache:
