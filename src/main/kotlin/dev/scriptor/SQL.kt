@@ -524,7 +524,7 @@ class SQL(val connection: Connection) {
     private var sealed = false
 
     private fun add(node: Node): SQL {
-        if (sealed) throw IllegalStateException()
+        if (sealed) error("cannot add to sealed sql statement")
         nodes.add(node)
         return this
     }
@@ -646,7 +646,7 @@ inline fun <reified T : Any> SQL.create(): SQL {
             Date::class -> JDBCType.DATE
             Time::class -> JDBCType.TIME
             Timestamp::class -> JDBCType.TIMESTAMP
-            else -> throw Error("no jdbc type for '${type.classifier}'")
+            else -> error("no jdbc type for '${type.classifier}'")
         }
 
         val notNull = !type.isMarkedNullable
@@ -700,17 +700,17 @@ fun SQL.select(vararg properties: KProperty1<*, *>): SQL {
     val columns = properties
         .map { property ->
             val klass = property.instanceParameter!!.type.classifier as KClass<*>
-            val name = (klass.findAnnotation<Table>() ?: throw UnsupportedOperationException()).value
+            val name = (klass.findAnnotation<Table>() ?: error("class $klass is not a table")).value
             val table = TableRef(name)
 
             Triple(property, klass, table)
         }
         .map { (property, klass, table) ->
             val constructor = klass.primaryConstructor
-                ?: throw UnsupportedOperationException()
+                ?: error("class $klass does not have a primary constructor")
 
             val parameter = constructor.parameters.first { it.name == property.name }
-            val column = (parameter.findAnnotation<Column>() ?: throw UnsupportedOperationException()).value
+            val column = (parameter.findAnnotation<Column>() ?: error("parameter $parameter is not a column")).value
 
             val name = column.ifEmpty { parameter.name!! }
 
@@ -771,7 +771,7 @@ inline fun <reified T : Any> SQL.insert(value: T): SQL {
                 val dst = type.withNullability(false)
 
                 val converter = provider[src to dst]
-                    ?: throw UnsupportedOperationException("conversion from $src to $dst")
+                    ?: error("conversion from $src to $dst")
 
                 converter.convert(x)
             } else x
@@ -802,8 +802,9 @@ inline fun <reified T : Any> SQL.update(value: T, condition: Condition): SQL {
 
 context(provider: Provider)
 inline fun <reified T : Any> SQL.query(): List<T> {
-    val constructor = T::class.primaryConstructor
-        ?: throw UnsupportedOperationException()
+    val klass = T::class
+    val constructor = klass.primaryConstructor
+        ?: error("class $klass does not have a primary constructor")
 
     val columns = columns<T>()
 
@@ -822,7 +823,7 @@ inline fun <reified T : Any> SQL.query(): List<T> {
                         val dst = parameter.type.withNullability(false)
 
                         val converter = provider[src to dst]
-                            ?: throw UnsupportedOperationException("conversion from $src to $dst")
+                            ?: error("conversion from $src to $dst")
 
                         converter.convert(value)
                     } else value
@@ -851,7 +852,7 @@ inline fun <reified T : Any> SQL.batch(noinline callback: ((T) -> Unit) -> Unit)
                     val dst = type.withNullability(false)
 
                     val converter = provider[src to dst]
-                        ?: throw UnsupportedOperationException("conversion from $src to $dst")
+                        ?: error("conversion from $src to $dst")
 
                     converter.convert(value)
                 } else value
@@ -867,8 +868,9 @@ inline fun <reified T : Any> SQL.batch(noinline callback: ((T) -> Unit) -> Unit)
 }
 
 inline fun <reified T : Any> tableOf(): TableRef {
-    val table = T::class.findAnnotation<Table>()
-        ?: throw UnsupportedOperationException()
+    val klass = T::class
+    val table = klass.findAnnotation<Table>()
+        ?: error("class $klass is not a table")
 
     return TableRef(table.value)
 }
@@ -879,8 +881,9 @@ inline fun <reified T : Any> columnOf(property: KProperty1<T, *>): ColumnRef = c
 )
 
 inline fun <reified T : Any> columnOf(table: TableRef, property: KProperty1<T, *>): ColumnRef {
-    val constructor = T::class.primaryConstructor
-        ?: throw UnsupportedOperationException()
+    val klass = T::class
+    val constructor = klass.primaryConstructor
+        ?: error("class $klass does not have a primary constructor")
 
     val parameter = constructor.parameters.first { it.name == property.name }
     val column = parameter.findAnnotation<Column>()!!
@@ -899,9 +902,10 @@ data class ColumnData<T : Any>(
 )
 
 inline fun <reified T : Any> columns(): List<ColumnData<T>> {
-    val constructor = T::class.primaryConstructor
-        ?: throw UnsupportedOperationException()
-    val properties = T::class.memberProperties
+    val klass = T::class
+    val constructor = klass.primaryConstructor
+        ?: error("class $klass does not have a primary constructor")
+    val properties = klass.memberProperties
 
     return constructor.parameters
         .map { it.findAnnotation<Column>()!! to it }

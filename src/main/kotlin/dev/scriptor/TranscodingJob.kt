@@ -13,6 +13,13 @@ data class TranscodingJob(
     val variants: List<Variant>,
     val transcoding: Boolean,
 ) {
+    enum class State {
+        CREATED,
+        RUNNING,
+        FINISHED,
+        FAILED,
+    }
+
     private companion object {
         var next = 0L
     }
@@ -21,42 +28,7 @@ data class TranscodingJob(
     private val command = buildCommand()
 
     @Volatile
-    private var process: Process? = null
-
-    @Synchronized
-    context(parent: Logger)
-    fun start() {
-        if (process != null) return
-
-        cache.createDirectories()
-
-        val log = getLogger("transcoding-job-$id", parent)
-
-        log.fine(command.joinToString("' '", "'", "'"))
-
-        val p = ProcessBuilder(command).start()
-
-        p.attach(log)
-
-        process = p
-    }
-
-    context(_: Logger)
-    fun waitFor(path: Path): Path {
-        start()
-
-        while (path.notExists()) {
-            val p = process!!
-
-            if (!p.isAlive) {
-                error("ffmpeg exited with code ${p.exitValue()}")
-            }
-
-            Thread.sleep(10)
-        }
-
-        return path
-    }
+    private var state: State = State.CREATED
 
     context(_: Logger)
     fun master(): Path = waitFor(cache.resolve("master.m3u8"))
@@ -66,6 +38,46 @@ data class TranscodingJob(
 
     context(_: Logger)
     fun segment(name: String, index: Long): Path = waitFor(cache.resolve(name).resolve("segment$index.ts"))
+
+    @Synchronized
+    context(parent: Logger)
+    private fun start() {
+        if (state == State.RUNNING || state == State.FINISHED) return
+
+        state = State.RUNNING
+
+        cache.createDirectories()
+
+        val log = getLogger("transcoding-job-$id", parent)
+
+        log.fine(command.joinToString("' '", "'", "'"))
+
+        val process = ProcessBuilder(command).start()
+
+        process.attach(log)
+
+        process.onExit().whenComplete { process, throwable ->
+            val value = process.exitValue()
+            state = if (value == 0) State.FINISHED else State.FAILED
+            if (throwable != null) throw throwable
+        }
+    }
+
+    context(_: Logger)
+    private fun waitFor(path: Path): Path {
+        while (true) {
+            when (state) {
+                State.CREATED -> start()
+                State.RUNNING -> Thread.sleep(10)
+                State.FINISHED -> break
+                State.FAILED -> error("transcoding job $id failed")
+            }
+        }
+
+        if (path.notExists()) error("file $path does not exist")
+
+        return path
+    }
 
     private fun buildCommand(): List<String> {
         val transcoded = if (transcoding)

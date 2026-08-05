@@ -32,12 +32,12 @@ fun getMetadata(id: Uuid, path: Path): Metadata {
     val context = avformat_alloc_context()
 
     if (avformat_open_input(context, path.absolutePathString(), null, null) < 0) {
-        throw Error("failed to open file $path")
+        error("failed to open file $path")
     }
 
     try {
         if (avformat_find_stream_info(context, null as AVDictionary?) < 0) {
-            throw Error("failed to read stream information")
+            error("failed to read stream information")
         }
 
         var width = 0
