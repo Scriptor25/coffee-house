@@ -94,8 +94,8 @@ fun main() {
 
     val hostname = env["HOSTNAME"] ?: "0.0.0.0"
     val port = env["PORT"]?.toInt() ?: 8080
-    val data = env["DATA"] ?: "/data"
-    val cache = env["CACHE"] ?: "/cache"
+    val data = Path(env["DATA"] ?: "/data")
+    val cache = Path(env["CACHE"] ?: "/cache")
     val username = env["USERNAME"]
     val password = env["PASSWORD"]
     val transcoding = env["TRANSCODING"].toBoolean()
@@ -116,12 +116,12 @@ fun main() {
 
     provider += log
 
-    val connection = DriverManager.getConnection("jdbc:sqlite:index.db")
+    val connection = DriverManager.getConnection("jdbc:sqlite:${cache.resolve("index.db")}")
 
     provider += connection
 
     val hls = HlsCache(
-        Path(cache),
+        cache,
         transcoding,
     )
 
@@ -162,7 +162,7 @@ fun main() {
                     )
                 }
                 .batch { submit ->
-                    for (path in Path(data).walk()) {
+                    for (path in data.walk()) {
                         if (path.extension !in EXTENSIONS) continue
 
                         entries.add(path.absolute())

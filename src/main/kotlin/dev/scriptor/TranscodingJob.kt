@@ -26,7 +26,7 @@ data class TranscodingJob(
     @Synchronized
     context(parent: Logger)
     fun start() {
-        if (process?.isAlive == true) return
+        if (process != null) return
 
         cache.createDirectories()
 
@@ -35,6 +35,7 @@ data class TranscodingJob(
         log.fine(command.joinToString("' '", "'", "'"))
 
         val p = ProcessBuilder(command).start()
+
         p.attach(log)
 
         process = p
@@ -142,9 +143,10 @@ data class TranscodingJob(
             "-f", "hls",
             "-var_stream_map", map,
             "-master_pl_name", "master.m3u8",
-            "-hls_time", "4",
-            // "-hls_playlist_type", "vod", // TODO: check if this is required
-            "-hls_flags", "independent_segments",
+            "-hls_time", "6",
+            // "-hls_playlist_type", "vod",
+            "-hls_list_size", "0",
+            "-hls_flags", "independent_segments+temp_file",
             "-hls_segment_filename", cache.resolve("%v/segment%d.ts").absolutePathString(),
             cache.resolve("%v/index.m3u8").absolutePathString(),
         )

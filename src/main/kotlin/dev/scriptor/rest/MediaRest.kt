@@ -14,9 +14,11 @@ import dev.scriptor.server.annotation.*
 import dev.scriptor.server.result.ChannelResult
 import dev.scriptor.server.result.Result
 import java.nio.channels.FileChannel
+import java.nio.file.Path
 import java.sql.Connection
 import java.time.Duration.ofMinutes
 import java.util.logging.Logger
+import kotlin.io.path.bufferedReader
 import kotlin.io.path.extension
 import kotlin.time.Clock.System.now
 import kotlin.time.toKotlinDuration
@@ -145,6 +147,25 @@ class MediaRest {
         )
     }
 
+    val hlsUriLine = """^(?!#)(?!\s*$)(.+)$""".toRegex()
+
+    fun appendToken(uri: String, token: String): String {
+        val separator = if ('?' in uri) '&' else '?'
+        return "${uri}${separator}token=${token}"
+    }
+
+    fun appendToken(path: Path, token: String): String {
+        return path
+            .bufferedReader()
+            .useLines { lines ->
+                lines.joinToString("\n") { line ->
+                    hlsUriLine.replace(line) { match ->
+                        appendToken(match.value, token)
+                    }
+                }
+            }
+    }
+
     @Resource("/stream/[id]/master.m3u8", result = "application/vnd.apple.mpegurl")
     context(
         _: Logger,
@@ -158,7 +179,7 @@ class MediaRest {
     fun getMediaStreamMaster(
         @PathParameter id: Uuid,
         @QueryParameter token: String,
-    ): FileChannel {
+    ): String {
         val now = now()
         val session = auth.auth(token, now)
             ?: throw UnauthorizedSignal()
@@ -174,8 +195,7 @@ class MediaRest {
         val job = hls.job(item)
         val path = job.master()
 
-        // TODO: insert token
-        return FileChannel.open(path)
+        return appendToken(path, token)
     }
 
     @Resource("/stream/[id]/[name]/index.m3u8", result = "application/vnd.apple.mpegurl")
@@ -192,7 +212,7 @@ class MediaRest {
         @PathParameter id: Uuid,
         @PathParameter name: String,
         @QueryParameter token: String,
-    ): FileChannel {
+    ): String {
         val now = now()
         val session = auth.auth(token, now)
             ?: throw UnauthorizedSignal()
@@ -208,8 +228,7 @@ class MediaRest {
         val job = hls.job(item)
         val path = job.index(name)
 
-        // TODO: insert token
-        return FileChannel.open(path)
+        return appendToken(path, token)
     }
 
     @Resource("/stream/[id]/[name]/segment[index].ts")

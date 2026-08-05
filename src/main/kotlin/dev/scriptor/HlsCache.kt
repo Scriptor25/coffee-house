@@ -37,19 +37,22 @@ class HlsCache(
 
         if (transcoding) {
             for (variant in definedVariants) {
-                if (variant.name in allowed && variant.width < item.width && variant.height < item.height) {
-                    val aspect = item.width.toDouble() / item.height.toDouble()
-                    val width = (variant.height * aspect).toInt()
-                    val height = variant.height
+                if (variant.name !in allowed) continue
+                if (variant.width > item.width) continue
+                if (variant.height > item.height) continue
+                if (variant.width == item.width && variant.height == item.height) continue
 
-                    result += Variant(
-                        variant.name,
-                        width - (width % 2),
-                        height - (height % 2),
-                        variant.bitrate,
-                        variant.profile,
-                    )
-                }
+                val aspect = item.width.toDouble() / item.height.toDouble()
+                val width = (variant.height * aspect).toInt()
+                val height = variant.height
+
+                result += Variant(
+                    variant.name,
+                    width - (width % 2),
+                    height - (height % 2),
+                    variant.bitrate,
+                    variant.profile,
+                )
             }
         }
 
