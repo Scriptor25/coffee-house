@@ -917,7 +917,6 @@ data class ColumnData<T : Any>(
 
 inline fun <reified T : Any> columns(): List<ColumnData<T>> {
     val klass = T::class
-
     val constructor = klass.primaryConstructor
         ?: error("class $klass does not have a primary constructor")
     val properties = klass.memberProperties

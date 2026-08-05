@@ -28,7 +28,7 @@ data class TranscodingJob(
     private val command = buildCommand()
 
     @Volatile
-    private var state = State.CREATED
+    private var state: State = State.CREATED
 
     context(_: Logger)
     fun master(): Path = waitFor(cache.resolve("master.m3u8"))
