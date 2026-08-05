@@ -14,9 +14,9 @@ data class Session(
     @PrimaryKey
     val id: Uuid,
 
-    @Column("user_id")
-    @ForeignKey
-    val user: User?,
+    @Column("user_id", String::class)
+    @ForeignKey(User::class, "id")
+    val userId: Uuid?,
 
     @Column
     val token: String,

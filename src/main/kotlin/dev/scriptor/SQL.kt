@@ -629,6 +629,9 @@ inline fun <reified T : Any> SQL.create(): SQL {
     val columnDefs = mutableListOf<ColumnDef>()
     val constraintDefs = mutableListOf<ConstraintDef>()
 
+    val primaryKeys = mutableListOf<ColumnRef>()
+    val uniqueKeys = mutableMapOf<String, MutableList<ColumnRef>>()
+
     for ((name, type, parameter) in columns) {
         val primaryKey = parameter.findAnnotation<PrimaryKey>()
         val foreignKey = parameter.findAnnotation<ForeignKey>()
@@ -656,19 +659,29 @@ inline fun <reified T : Any> SQL.create(): SQL {
         val ref = ColumnRef(table, name)
 
         if (primaryKey != null) {
-            constraintDefs += define(primaryKey(ref))
+            primaryKeys.add(ref)
         }
 
         if (foreignKey != null) {
-            val fTable = TableRef(foreignKey.table)
-            val fColumn = ColumnRef(fTable, foreignKey.column)
+            val foreignTable = tableOf(foreignKey.type)
+            val foreignColumn = ColumnRef(foreignTable, foreignKey.name)
 
-            constraintDefs += define(foreignKey(listOf(ref), fTable, listOf(fColumn)))
+            constraintDefs += define(foreignKey(listOf(ref), foreignTable, listOf(foreignColumn)))
         }
 
         if (unique != null) {
-            constraintDefs += define(unique(ref))
+            if (unique.value.isEmpty()) {
+                constraintDefs += define(unique(ref))
+            } else {
+                uniqueKeys.computeIfAbsent(unique.value) { mutableListOf() }.add(ref)
+            }
         }
+    }
+
+    constraintDefs += define(primaryKey(primaryKeys))
+
+    for ((name, values) in uniqueKeys) {
+        constraintDefs += define(name, unique(values))
     }
 
     return this.create(
@@ -870,17 +883,17 @@ inline fun <reified T : Any> SQL.batch(noinline callback: ((T) -> Unit) -> Unit)
 }
 
 inline fun <reified T : Any> tableOf(): TableRef {
-    val klass = T::class
+    return tableOf(T::class)
+}
+
+fun tableOf(klass: KClass<*>): TableRef {
     val table = klass.findAnnotation<Table>()
         ?: error("class $klass is not a table")
 
     return TableRef(table.value)
 }
 
-inline fun <reified T : Any> columnOf(property: KProperty1<T, *>): ColumnRef = columnOf(
-    tableOf<T>(),
-    property,
-)
+inline fun <reified T : Any> columnOf(property: KProperty1<T, *>): ColumnRef = columnOf(tableOf<T>(), property)
 
 inline fun <reified T : Any> columnOf(table: TableRef, property: KProperty1<T, *>): ColumnRef {
     val klass = T::class
@@ -888,12 +901,11 @@ inline fun <reified T : Any> columnOf(table: TableRef, property: KProperty1<T, *
         ?: error("class $klass does not have a primary constructor")
 
     val parameter = constructor.parameters.first { it.name == property.name }
-    val column = parameter.findAnnotation<Column>()!!
 
-    return ColumnRef(
-        table,
-        column.value.ifEmpty { parameter.name!! },
-    )
+    val column = parameter.findAnnotation<Column>()
+        ?: error("parameter $parameter is not a column")
+
+    return ColumnRef(table, column.value.ifEmpty { parameter.name!! })
 }
 
 data class ColumnData<T : Any>(
@@ -988,13 +1000,20 @@ operator fun Condition.not(): Condition =
         this.condition
     else ConditionNot(this)
 
+fun primaryKey(columns: List<ColumnRef>): Constraint =
+    ConstraintPrimaryKey(columns)
+
 fun primaryKey(vararg columns: ColumnRef): Constraint =
     ConstraintPrimaryKey(columns.asList())
 
 fun foreignKey(pColumns: List<ColumnRef>, fTable: TableRef, fColumns: List<ColumnRef>): Constraint =
     ConstraintForeignKey(pColumns, fTable, fColumns)
 
-fun unique(vararg columns: ColumnRef): Constraint = ConstraintUnique(columns.asList())
+fun unique(columns: List<ColumnRef>): Constraint =
+    ConstraintUnique(columns)
+
+fun unique(vararg columns: ColumnRef): Constraint =
+    ConstraintUnique(columns.asList())
 
 fun define(constraint: Constraint): ConstraintDef = ConstraintDef(null, constraint)
 fun define(name: String, constraint: Constraint): ConstraintDef = ConstraintDef(name, constraint)

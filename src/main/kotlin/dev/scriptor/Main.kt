@@ -1,12 +1,11 @@
 package dev.scriptor
 
 import dev.scriptor.context.SessionContext
-import dev.scriptor.model.Media
-import dev.scriptor.model.Session
-import dev.scriptor.model.User
+import dev.scriptor.model.*
 import dev.scriptor.server.Provider
 import dev.scriptor.server.http.Server
 import dev.scriptor.server.scan
+import org.json.JSONObject
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
@@ -28,8 +27,6 @@ context(parent: Logger)
 fun getMetadata(
     id: Uuid,
     path: Path,
-    size: Long,
-    title: String,
     createdAt: Instant,
     modifiedAt: Instant,
 ): Media {
@@ -59,21 +56,110 @@ fun getMetadata(
 
     log.info(json)
 
-    TODO()
+    val data = JSONObject(json)
 
-    // val data = JSONObject(json)
-    // return Media(
-    //     id,
-    //     path,
-    //     size,
-    //     title,
-    //     createdAt,
-    //     modifiedAt,
-    //     duration,
-    //     video,
-    //     audio,
-    //     subtitles,
-    // )
+    val format = data.getJSONObject("format")
+    val size = format.getString("size").toLong()
+    val duration = format.getString("duration").toDouble()
+    val bitRate = format.getString("bit_rate").toLong()
+
+    val tags = format.getJSONObject("tags")
+    val title = tags.getString("title")
+
+    val video = mutableListOf<VideoTrack>()
+    val audio = mutableListOf<AudioTrack>()
+    val subtitles = mutableListOf<SubtitleTrack>()
+
+    val streams = data.getJSONArray("streams")
+    for (i in 0 until streams.length()) {
+        val stream = streams.getJSONObject(i)
+        val codecType = stream.getString("codec_type")
+
+        when (codecType) {
+            "video" -> {
+                val index = stream.getInt("index")
+                val codec = stream.getString("codec_name")
+                val width = stream.getInt("width")
+                val height = stream.getInt("height")
+                val frameRateStr = stream.getString("frame_rate")
+                val profile = stream.getString("profile")
+                val level = stream.getInt("level")
+                val hdr = false // TODO
+                val language = null // TODO
+                val title = null // TODO
+
+                val disposition = stream.getJSONObject("disposition")
+                val default = disposition.getInt("default") == 1
+
+                val frameRateParts = frameRateStr.split("/").map { it.toDouble() }
+                val frameRate = frameRateParts[0] / frameRateParts[1]
+
+                video += VideoTrack(
+                    id,
+                    index,
+                    codec,
+                    width,
+                    height,
+                    bitRate,
+                    frameRate,
+                    profile,
+                    level,
+                    hdr,
+                    language,
+                    title,
+                    default,
+                )
+            }
+
+            "audio" -> {
+                val index = stream.getInt("index")
+                val codec = stream.getString("codec_name")
+                val sampleRate = stream.getString("sample_rate").toLong()
+                val channels = stream.getInt("channels")
+                val language = null // TODO
+                val title = null // TODO
+
+                val disposition = stream.getJSONObject("disposition")
+                val default = disposition.getInt("default") == 1
+
+                audio += AudioTrack(
+                    id,
+                    index,
+                    codec,
+                    bitRate,
+                    sampleRate,
+                    channels,
+                    language,
+                    title,
+                    default,
+                )
+            }
+
+            "subtitle" -> {
+                // TODO
+            }
+
+            "attachment" -> {
+                // TODO
+            }
+        }
+    }
+
+    val chapters = data.getJSONArray("chapters")
+    // TODO
+
+    return Media(
+        id,
+        path,
+        size,
+        title,
+        createdAt,
+        modifiedAt,
+        duration,
+        video,
+        audio,
+        subtitles,
+    )
 }
 
 @OptIn(ExperimentalUuidApi::class)
@@ -98,7 +184,7 @@ fun main() {
     provider["password"] = password
     provider["transcoding"] = transcoding
 
-    val log = getLogger("dev.scriptor")
+    val log = getLogger("coffee-house")
 
     log.level = Level.ALL
 
@@ -138,7 +224,6 @@ fun main() {
             SQL(connection).create<User>().execute()
             SQL(connection).create<Session>().execute()
             SQL(connection).create<Media>().execute()
-            SQL(connection).create<Metadata>().execute()
 
             val entries = mutableListOf<Path>()
 
@@ -155,16 +240,12 @@ fun main() {
 
                         val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
 
-                        val size = attributes.size()
-
                         val createdAt = attributes.creationTime()
                         val modifiedAt = attributes.lastModifiedTime()
 
                         val media = getMetadata(
                             id,
                             path,
-                            size,
-                            path.nameWithoutExtension,
                             createdAt.toInstant().toKotlinInstant(),
                             modifiedAt.toInstant().toKotlinInstant(),
                         )

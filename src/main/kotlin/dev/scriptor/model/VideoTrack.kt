@@ -4,14 +4,15 @@ import dev.scriptor.annotation.Column
 import dev.scriptor.annotation.ForeignKey
 import dev.scriptor.annotation.PrimaryKey
 import dev.scriptor.annotation.Table
+import kotlin.uuid.Uuid
 
 @Table("video_track")
 data class VideoTrack(
 
     @Column("media_id")
     @PrimaryKey
-    @ForeignKey
-    val media: Media,
+    @ForeignKey(Media::class, "id")
+    val mediaId: Uuid,
 
     @Column
     @PrimaryKey
@@ -49,8 +50,4 @@ data class VideoTrack(
 
     @Column
     override val default: Boolean,
-) : Track {
-
-    override val type: String
-        get() = "v"
-}
+) : Track
