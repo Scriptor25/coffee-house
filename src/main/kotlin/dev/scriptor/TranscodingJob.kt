@@ -62,7 +62,7 @@ data class TranscodingJob(
 
     context(_: Logger)
     private fun waitFor(path: Path): Path {
-        while (true) {
+        while (path.notExists()) {
             if (state == State.RUNNING && !process.isAlive) {
                 state =
                     if (process.exitValue() == 0)
