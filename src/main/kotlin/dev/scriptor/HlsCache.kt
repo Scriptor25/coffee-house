@@ -40,7 +40,6 @@ class HlsCache(
                 if (variant.name !in allowed) continue
                 if (variant.width > item.width) continue
                 if (variant.height > item.height) continue
-                if (variant.width == item.width && variant.height == item.height) continue
 
                 val aspect = item.width.toDouble() / item.height.toDouble()
                 val width = (variant.height * aspect).toInt()
