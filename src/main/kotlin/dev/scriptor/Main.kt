@@ -17,7 +17,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
 import java.sql.DriverManager
-import java.util.logging.*
+import java.util.logging.Level
 import kotlin.io.path.*
 import kotlin.reflect.full.starProjectedType
 import kotlin.time.toKotlinInstant
@@ -94,8 +94,8 @@ fun main() {
 
     val hostname = env["HOSTNAME"] ?: "0.0.0.0"
     val port = env["PORT"]?.toInt() ?: 8080
-    val data = env["DATA"] ?: "/data"
-    val cache = env["CACHE"] ?: "/cache"
+    val data = Path(env["DATA"] ?: "/data")
+    val cache = Path(env["CACHE"] ?: "/cache")
     val username = env["USERNAME"]
     val password = env["PASSWORD"]
     val transcoding = env["TRANSCODING"].toBoolean()
@@ -110,36 +110,23 @@ fun main() {
     provider["password"] = password
     provider["transcoding"] = transcoding
 
-    val log = Logger.getLogger("dev.scriptor")
+    val log = getLogger("dev.scriptor")
 
     log.level = Level.ALL
 
-    val handler = ConsoleHandler()
-    handler.level = log.level
-    handler.formatter = object : Formatter() {
-
-        override fun format(record: LogRecord?): String? {
-            if (record == null) return null
-
-            return "[${record.level}][${record.instant}] ${record.message}\n"
-        }
-    }
-
-    log.useParentHandlers = false
-    log.addHandler(handler)
-
     provider += log
 
-    val connection = DriverManager.getConnection("jdbc:sqlite:index.db")
+    val db = cache.resolve("index.db")
+    db.createParentDirectories()
+
+    val connection = DriverManager.getConnection("jdbc:sqlite:$db")
 
     provider += connection
 
     val hls = HlsCache(
-        Path(cache),
-        !transcoding,
+        cache,
+        transcoding,
     )
-
-    Thread({ do while (hls.next()) }, "HLS").start()
 
     provider += hls
 
@@ -153,7 +140,6 @@ fun main() {
             log.warning(e.stackTraceToString())
         }
 
-        hls.stop()
         connection.close()
     })
 
@@ -179,7 +165,7 @@ fun main() {
                     )
                 }
                 .batch { submit ->
-                    for (path in Path(data).walk()) {
+                    for (path in data.walk()) {
                         if (path.extension !in EXTENSIONS) continue
 
                         entries.add(path.absolute())
@@ -233,7 +219,9 @@ fun main() {
                     for ((id, path) in items) {
                         log.info("get metadata for $id : $path")
 
-                        submit(getMetadata(id, path))
+                        val metadata = getMetadata(id, path)
+
+                        submit(metadata)
                     }
                 }
         }
@@ -246,6 +234,5 @@ fun main() {
         server.start()
     }
 
-    hls.stop()
     connection.close()
 }
