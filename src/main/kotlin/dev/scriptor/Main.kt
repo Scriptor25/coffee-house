@@ -136,10 +136,8 @@ fun main() {
 
     val hls = HlsCache(
         Path(cache),
-        !transcoding,
+        transcoding,
     )
-
-    Thread({ do while (hls.next()) }, "HLS").start()
 
     provider += hls
 
@@ -153,7 +151,6 @@ fun main() {
             log.warning(e.stackTraceToString())
         }
 
-        hls.stop()
         connection.close()
     })
 
@@ -246,6 +243,5 @@ fun main() {
         server.start()
     }
 
-    hls.stop()
     connection.close()
 }

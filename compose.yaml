@@ -1,6 +1,6 @@
 services:
   coffee-house-service:
-    # image: docker.io/jiflabs/coffee-house:latest
+    image: localhost/coffee-house:latest
 
     build:
       context: .
@@ -23,7 +23,7 @@ services:
     volumes:
       - coffee-house-data:/app
       - coffee-house-cache:/cache
-      - /home/felix/remote:/data:ro
+      - /home/felix/Videos:/data:ro
 
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
