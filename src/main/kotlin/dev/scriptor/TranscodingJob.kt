@@ -109,14 +109,14 @@ data class TranscodingJob(
         }
 
         command += listOf(
-            "-map", "0:v",
-            "-map", "0:a",
+            "-map", "0:v:0",
+            "-map", "0:a:0",
         )
 
         transcoded.forEachIndexed { index, _ ->
             command += listOf(
                 "-map", "[s$index]",
-                "-map", "0:a",
+                "-map", "0:a:0",
             )
         }
 

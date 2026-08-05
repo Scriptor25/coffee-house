@@ -22,7 +22,7 @@ services:
 
     volumes:
       - coffee-house-cache:/cache
-      - /home/felix/Videos:/data:ro
+      - /home/felix/remote:/data:ro
 
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
