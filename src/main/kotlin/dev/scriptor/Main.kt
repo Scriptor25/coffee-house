@@ -2,24 +2,20 @@ package dev.scriptor
 
 import dev.scriptor.context.SessionContext
 import dev.scriptor.model.Media
-import dev.scriptor.model.Metadata
 import dev.scriptor.model.Session
 import dev.scriptor.model.User
 import dev.scriptor.server.Provider
 import dev.scriptor.server.http.Server
 import dev.scriptor.server.scan
-import org.bytedeco.ffmpeg.avutil.AVDictionary
-import org.bytedeco.ffmpeg.avutil.AVRational
-import org.bytedeco.ffmpeg.global.avcodec.avcodec_get_name
-import org.bytedeco.ffmpeg.global.avformat.*
-import org.bytedeco.ffmpeg.global.avutil.*
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
 import java.sql.DriverManager
 import java.util.logging.Level
+import java.util.logging.Logger
 import kotlin.io.path.*
 import kotlin.reflect.full.starProjectedType
+import kotlin.time.Instant
 import kotlin.time.toKotlinInstant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -28,64 +24,56 @@ fun getEnvironment(): Map<String, String> = System.getenv()
 
 val EXTENSIONS = arrayOf("mkv", "mp4")
 
-fun getMetadata(id: Uuid, path: Path): Metadata {
-    val context = avformat_alloc_context()
+context(parent: Logger)
+fun getMetadata(
+    id: Uuid,
+    path: Path,
+    size: Long,
+    title: String,
+    createdAt: Instant,
+    modifiedAt: Instant,
+): Media {
 
-    if (avformat_open_input(context, path.absolutePathString(), null, null) < 0) {
-        throw Error("failed to open file $path")
-    }
+    val command = listOf(
+        "ffprobe",
+        "-v", "quiet",
+        "-print_format", "json",
+        "-show_format",
+        "-show_streams",
+        "-show_chapters",
+        path.absolutePathString(),
+    )
 
-    try {
-        if (avformat_find_stream_info(context, null as AVDictionary?) < 0) {
-            throw Error("failed to read stream information")
-        }
+    val log = getLogger("ffprobe", parent)
 
-        var width = 0
-        var height = 0
-        var fps = 0.0
-        var videoCodec: String? = null
-        var audioCodec: String? = null
+    log.fine(command.joinToString("' '", "'", "'"))
 
-        for (i in 0 until context.nb_streams()) {
-            val stream = context.streams(i)
-            val codec = stream.codecpar()
+    val process = ProcessBuilder(command).start()
 
-            when (codec.codec_type()) {
-                AVMEDIA_TYPE_VIDEO -> {
-                    width = codec.width()
-                    height = codec.height()
+    process.attach(log)
 
-                    val rate: AVRational = stream.avg_frame_rate()
-                    if (rate.den() != 0) {
-                        fps = rate.num().toDouble() / rate.den()
-                    }
+    val value = process.waitFor()
+    if (value != 0) error("failed to get metadata for $path")
 
-                    videoCodec = avcodec_get_name(codec.codec_id()).string
-                }
+    val json = process.inputStream.reader().readText()
 
-                AVMEDIA_TYPE_AUDIO -> {
-                    audioCodec = avcodec_get_name(codec.codec_id()).string
-                }
-            }
-        }
+    log.info(json)
 
-        return Metadata(
-            id,
+    TODO()
 
-            context.duration() * 1000L / AV_TIME_BASE,
-            context.bit_rate(),
-
-            width,
-            height,
-
-            fps,
-
-            videoCodec,
-            audioCodec,
-        )
-    } finally {
-        avformat_close_input(context)
-    }
+    // val data = JSONObject(json)
+    // return Media(
+    //     id,
+    //     path,
+    //     size,
+    //     title,
+    //     createdAt,
+    //     modifiedAt,
+    //     duration,
+    //     video,
+    //     audio,
+    //     subtitles,
+    // )
 }
 
 @OptIn(ExperimentalUuidApi::class)
@@ -146,7 +134,7 @@ fun main() {
     server.use { server ->
         scan(server, "dev.scriptor")
 
-        context(provider) {
+        context(log, provider) {
             SQL(connection).create<User>().execute()
             SQL(connection).create<Session>().execute()
             SQL(connection).create<Media>().execute()
@@ -156,14 +144,7 @@ fun main() {
 
             SQL(connection)
                 .insert<Media>()
-                .conflict(Media::path) { sql ->
-                    sql.update(
-                        Media::size to excluded("size"),
-                        Media::title to excluded("title"),
-                        Media::createdAt to excluded("created_at"),
-                        Media::modifiedAt to excluded("modified_at"),
-                    )
-                }
+                .conflict(Media::path) { it.updateExcluded(Media::id, Media::path) }
                 .batch { submit ->
                     for (path in data.walk()) {
                         if (path.extension !in EXTENSIONS) continue
@@ -179,16 +160,16 @@ fun main() {
                         val createdAt = attributes.creationTime()
                         val modifiedAt = attributes.lastModifiedTime()
 
-                        submit(
-                            Media(
-                                id,
-                                path,
-                                size,
-                                path.nameWithoutExtension,
-                                createdAt.toInstant().toKotlinInstant(),
-                                modifiedAt.toInstant().toKotlinInstant(),
-                            ),
+                        val media = getMetadata(
+                            id,
+                            path,
+                            size,
+                            path.nameWithoutExtension,
+                            createdAt.toInstant().toKotlinInstant(),
+                            modifiedAt.toInstant().toKotlinInstant(),
                         )
+
+                        submit(media)
                     }
                 }
 
@@ -197,33 +178,6 @@ fun main() {
                 .from<Media>()
                 .where(!(Media::path `in` entries))
                 .execute()
-
-            val items = SQL(connection)
-                .selectFrom<Media>()
-                .query<Media>()
-
-            SQL(connection)
-                .insert<Metadata>()
-                .conflict(Metadata::id) { sql ->
-                    sql.update(
-                        Metadata::duration to excluded("duration"),
-                        Metadata::bitrate to excluded("bitrate"),
-                        Metadata::width to excluded("width"),
-                        Metadata::height to excluded("height"),
-                        Metadata::framerate to excluded("framerate"),
-                        Metadata::videoCodec to excluded("video_codec"),
-                        Metadata::audioCodec to excluded("audio_codec"),
-                    )
-                }
-                .batch { submit ->
-                    for ((id, path) in items) {
-                        log.info("get metadata for $id : $path")
-
-                        val metadata = getMetadata(id, path)
-
-                        submit(metadata)
-                    }
-                }
         }
 
         server.register("session-reaper", 0L, 10L * 60L * 1000L) {

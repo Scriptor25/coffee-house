@@ -184,7 +184,7 @@ class MediaRest {
         val session = auth.auth(token, now)
             ?: throw UnauthorizedSignal()
 
-        val item = media.getMediaMetadataById(id)
+        val item = media.getMediaById(id)
             ?: throw NotFoundSignal()
 
         session.access = now
@@ -217,7 +217,7 @@ class MediaRest {
         val session = auth.auth(token, now)
             ?: throw UnauthorizedSignal()
 
-        val item = media.getMediaMetadataById(id)
+        val item = media.getMediaById(id)
             ?: throw NotFoundSignal()
 
         session.access = now
@@ -252,7 +252,7 @@ class MediaRest {
         val session = auth.auth(token, now)
             ?: throw UnauthorizedSignal()
 
-        val item = media.getMediaMetadataById(id)
+        val item = media.getMediaById(id)
             ?: throw NotFoundSignal()
 
         session.access = now

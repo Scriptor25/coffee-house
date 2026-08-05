@@ -1,9 +1,6 @@
 package dev.scriptor.model
 
-import dev.scriptor.annotation.Column
-import dev.scriptor.annotation.PrimaryKey
-import dev.scriptor.annotation.Table
-import dev.scriptor.annotation.Unique
+import dev.scriptor.annotation.*
 import java.nio.file.Path
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
@@ -30,4 +27,19 @@ data class Media(
 
     @Column("modified_at", String::class)
     val modifiedAt: Instant,
+
+    @Column
+    val duration: Long,
+
+    @Column
+    @ForeignKey
+    val video: List<VideoTrack>,
+
+    @Column
+    @ForeignKey
+    val audio: List<AudioTrack>,
+
+    @Column
+    @ForeignKey
+    val subtitles: List<SubtitleTrack>,
 )

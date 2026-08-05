@@ -1,6 +1,7 @@
 package dev.scriptor
 
-import dev.scriptor.model.MediaMetadata
+import dev.scriptor.model.Media
+import dev.scriptor.model.VideoTrack
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.uuid.Uuid
@@ -22,15 +23,13 @@ class HlsCache(
 
     private val jobs: MutableMap<Uuid, TranscodingJob> = ConcurrentHashMap()
 
-    fun variants(item: MediaMetadata): List<Variant> {
+    fun variants(item: VideoTrack): List<Variant> {
         val result = mutableListOf(
             Variant(
                 "original",
                 item.width - (item.width % 2),
                 item.height - (item.height % 2),
-                if (item.bitrate == 0L)
-                    item.size * 8L * 1000L / item.duration
-                else item.bitrate,
+                item.bitRate,
                 Profile.LOSSLESS,
             )
         )
@@ -47,8 +46,7 @@ class HlsCache(
                 // only re-encode same size if wrong video or audio codec
                 if (variant.width == item.width
                     && variant.height == item.height
-                    && item.videoCodec == "h264"
-                    && item.audioCodec == "aac"
+                    && item.codec == "h264"
                 ) continue
 
                 val aspect = item.width.toDouble() / item.height.toDouble()
@@ -68,12 +66,12 @@ class HlsCache(
         return result
     }
 
-    fun job(item: MediaMetadata): TranscodingJob =
+    fun job(item: Media): TranscodingJob =
         jobs.computeIfAbsent(item.id) {
             TranscodingJob(
                 item,
                 base.resolve(item.id.toHexDashString()),
-                variants(item),
+                variants(item.video.first()),
                 transcoding,
             )
         }

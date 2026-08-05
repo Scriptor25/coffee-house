@@ -7,5 +7,4 @@ import kotlin.reflect.KClass
 annotation class Column(
     val value: String = "",
     val type: KClass<*> = Unit::class,
-    val table: String = "",
 )
