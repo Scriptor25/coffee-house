@@ -38,8 +38,18 @@ class HlsCache(
         if (transcoding) {
             for (variant in definedVariants) {
                 if (variant.name !in allowed) continue
-                if (variant.width > item.width) continue
-                if (variant.height > item.height) continue
+
+                // no upscaling
+                if (variant.width > item.width
+                    || variant.height > item.height
+                ) continue
+
+                // only re-encode same size if wrong video or audio codec
+                if (variant.width == item.width
+                    && variant.height == item.height
+                    && item.videoCodec == "h264"
+                    && item.audioCodec == "aac"
+                ) continue
 
                 val aspect = item.width.toDouble() / item.height.toDouble()
                 val width = (variant.height * aspect).toInt()

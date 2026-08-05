@@ -116,7 +116,10 @@ fun main() {
 
     provider += log
 
-    val connection = DriverManager.getConnection("jdbc:sqlite:${cache.resolve("index.db")}")
+    val db = cache.resolve("index.db")
+    db.createParentDirectories()
+
+    val connection = DriverManager.getConnection("jdbc:sqlite:$db")
 
     provider += connection
 
@@ -216,7 +219,9 @@ fun main() {
                     for ((id, path) in items) {
                         log.info("get metadata for $id : $path")
 
-                        submit(getMetadata(id, path))
+                        val metadata = getMetadata(id, path)
+
+                        submit(metadata)
                     }
                 }
         }
