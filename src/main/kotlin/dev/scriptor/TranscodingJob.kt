@@ -13,7 +13,7 @@ data class TranscodingJob(
     val variants: List<Variant>,
     val transcoding: Boolean,
 ) {
-    enum class State {
+    private enum class State {
         CREATED,
         RUNNING,
         FINISHED,
@@ -160,7 +160,6 @@ data class TranscodingJob(
             "-var_stream_map", map,
             "-master_pl_name", "master.m3u8",
             "-hls_time", "6",
-            // "-hls_playlist_type", "vod",
             "-hls_list_size", "0",
             "-hls_flags", "independent_segments+temp_file",
             "-hls_segment_filename", cache.resolve("%v/segment%d.ts").absolutePathString(),
