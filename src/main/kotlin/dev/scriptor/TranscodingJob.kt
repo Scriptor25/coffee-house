@@ -30,6 +30,9 @@ data class TranscodingJob(
     @Volatile
     private var state: State = State.CREATED
 
+    @Volatile
+    private lateinit var process: Process
+
     context(_: Logger)
     fun master(): Path = waitFor(cache.resolve("master.m3u8"))
 
@@ -52,20 +55,21 @@ data class TranscodingJob(
 
         log.fine(command.joinToString("' '", "'", "'"))
 
-        val process = ProcessBuilder(command).start()
+        process = ProcessBuilder(command).start()
 
         process.attach(log)
-
-        process.onExit().whenComplete { process, throwable ->
-            val value = process.exitValue()
-            state = if (value == 0) State.FINISHED else State.FAILED
-            if (throwable != null) throw throwable
-        }
     }
 
     context(_: Logger)
     private fun waitFor(path: Path): Path {
-        while (true) {
+        while (path.notExists()) {
+            if (state == State.RUNNING && !process.isAlive) {
+                state =
+                    if (process.exitValue() == 0)
+                        State.FINISHED
+                    else State.FAILED
+            }
+
             when (state) {
                 State.CREATED -> start()
                 State.RUNNING -> Thread.sleep(10)
