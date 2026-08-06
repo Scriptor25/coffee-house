@@ -1,8 +1,7 @@
 package dev.scriptor.model
 
+import dev.scriptor.Entity
 import dev.scriptor.annotation.Column
-import dev.scriptor.annotation.ForeignKey
-import dev.scriptor.annotation.PrimaryKey
 import dev.scriptor.annotation.Table
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
@@ -10,27 +9,25 @@ import kotlin.uuid.Uuid
 @Table("session")
 data class Session(
 
-    @Column(type = String::class)
-    @PrimaryKey
-    val id: Uuid,
-
-    @Column("user_id", String::class)
-    @ForeignKey(User::class, "id")
-    val userId: Uuid?,
-
     @Column
+    override val id: Uuid,
+
+    @Column("user_id")
+    val user: User?,
+
+    @Column(unique = true)
     val token: String,
 
-    @Column("created_at", String::class)
+    @Column("created_at")
     val createdAt: Instant,
 
-    @Column("expires_at", String::class)
+    @Column("expires_at")
     var expiresAt: Instant,
 
     @Column
     val agent: String?,
 
-    @Column(type = String::class)
+    @Column
     var access: Instant? = null,
 
     @Column
@@ -38,4 +35,4 @@ data class Session(
 
     @Column
     var next: Long = 0L,
-)
+) : Entity

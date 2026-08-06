@@ -1,5 +1,6 @@
 package dev.scriptor
 
+import dev.scriptor.ConflictMode.REPLACE
 import dev.scriptor.context.SessionContext
 import dev.scriptor.model.*
 import dev.scriptor.server.Provider
@@ -10,10 +11,13 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
 import java.sql.DriverManager
+import java.sql.JDBCType.TIMESTAMP
+import java.sql.JDBCType.VARCHAR
 import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.io.path.*
 import kotlin.reflect.full.starProjectedType
+import kotlin.reflect.typeOf
 import kotlin.time.Instant
 import kotlin.time.toKotlinInstant
 import kotlin.uuid.ExperimentalUuidApi
@@ -70,6 +74,19 @@ fun getMetadata(
     val audio = mutableListOf<AudioTrack>()
     val subtitles = mutableListOf<SubtitleTrack>()
 
+    val media = Media(
+        id,
+        path,
+        size,
+        title,
+        createdAt,
+        modifiedAt,
+        duration,
+        video,
+        audio,
+        subtitles,
+    )
+
     val streams = data.getJSONArray("streams")
     for (i in 0 until streams.length()) {
         val stream = streams.getJSONObject(i)
@@ -81,7 +98,7 @@ fun getMetadata(
                 val codec = stream.getString("codec_name")
                 val width = stream.getInt("width")
                 val height = stream.getInt("height")
-                val frameRateStr = stream.getString("frame_rate")
+                val frameRateStr = stream.optString("frame_rate").ifEmpty { "0/1" }
                 val profile = stream.getString("profile")
                 val level = stream.getInt("level")
                 val hdr = false // TODO
@@ -96,6 +113,7 @@ fun getMetadata(
 
                 video += VideoTrack(
                     id,
+                    media,
                     index,
                     codec,
                     width,
@@ -124,6 +142,7 @@ fun getMetadata(
 
                 audio += AudioTrack(
                     id,
+                    media,
                     index,
                     codec,
                     bitRate,
@@ -145,21 +164,10 @@ fun getMetadata(
         }
     }
 
-    val chapters = data.getJSONArray("chapters")
     // TODO
+    val chapters = data.getJSONArray("chapters")
 
-    return Media(
-        id,
-        path,
-        size,
-        title,
-        createdAt,
-        modifiedAt,
-        duration,
-        video,
-        audio,
-        subtitles,
-    )
+    return media
 }
 
 @OptIn(ExperimentalUuidApi::class)
@@ -185,23 +193,28 @@ fun main() {
     provider["transcoding"] = transcoding
 
     val log = getLogger("coffee-house")
-
     log.level = Level.ALL
-
     provider += log
 
     val db = cache.resolve("index.db")
     db.createParentDirectories()
 
     val connection = DriverManager.getConnection("jdbc:sqlite:$db")
-
     provider += connection
 
-    val hls = HlsCache(
-        cache,
-        transcoding,
+    val entities = EntityConnection(
+        provider,
+        connection,
+        mapOf(
+            typeOf<Uuid>() to VARCHAR,
+            typeOf<Path>() to VARCHAR,
+            typeOf<UserRole>() to VARCHAR,
+            typeOf<Instant>() to TIMESTAMP,
+        ),
     )
+    provider += entities
 
+    val hls = HlsCache(cache, transcoding)
     provider += hls
 
     val server = Server(log, provider, hostname, port)
@@ -221,49 +234,45 @@ fun main() {
         scan(server, "dev.scriptor")
 
         context(log, provider) {
-            SQL(connection).create<User>().execute()
-            SQL(connection).create<Session>().execute()
-            SQL(connection).create<Media>().execute()
+            entities.createTable<User>()
+            entities.createTable<Session>()
+            entities.createTable<Media>()
+            entities.createTable<VideoTrack>()
+            entities.createTable<AudioTrack>()
+            entities.createTable<SubtitleTrack>()
 
-            val entries = mutableListOf<Path>()
+            val paths = mutableListOf<Path>()
 
-            SQL(connection)
-                .insert<Media>()
-                .conflict(Media::path) { it.updateExcluded(Media::id, Media::path) }
-                .batch { submit ->
-                    for (path in data.walk()) {
-                        if (path.extension !in EXTENSIONS) continue
+            entities.create(REPLACE) { submit ->
+                for (path in data.walk()) {
+                    if (path.extension !in EXTENSIONS) continue
 
-                        entries.add(path.absolute())
+                    paths.add(path.absolute())
 
-                        val id = Uuid.generateV7()
+                    val id = Uuid.generateV7()
 
-                        val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
+                    val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
 
-                        val createdAt = attributes.creationTime()
-                        val modifiedAt = attributes.lastModifiedTime()
+                    val createdAt = attributes.creationTime()
+                    val modifiedAt = attributes.lastModifiedTime()
 
-                        val media = getMetadata(
-                            id,
-                            path,
-                            createdAt.toInstant().toKotlinInstant(),
-                            modifiedAt.toInstant().toKotlinInstant(),
-                        )
+                    val media = getMetadata(
+                        id,
+                        path,
+                        createdAt.toInstant().toKotlinInstant(),
+                        modifiedAt.toInstant().toKotlinInstant(),
+                    )
 
-                        submit(media)
-                    }
+                    submit(media)
                 }
+            }
 
-            SQL(connection)
-                .delete()
-                .from<Media>()
-                .where(!(Media::path `in` entries))
-                .execute()
+            entities.deleteAll<Media>(!("path" `in` paths))
         }
 
         server.register("session-reaper", 0L, 10L * 60L * 1000L) {
             val sessions = provider[SessionContext::class.starProjectedType] as SessionContext
-            context(provider, connection) { sessions.deleteExpiredSessions() }
+            context(provider, entities) { sessions.deleteExpiredSessions() }
         }
 
         server.start()

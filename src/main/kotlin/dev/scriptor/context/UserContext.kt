@@ -1,25 +1,19 @@
 package dev.scriptor.context
 
-import dev.scriptor.SQL
+import dev.scriptor.EntityConnection
 import dev.scriptor.eq
+import dev.scriptor.get
 import dev.scriptor.model.User
-import dev.scriptor.query
-import dev.scriptor.selectFrom
 import dev.scriptor.server.Provider
 import dev.scriptor.server.annotation.Context
-import java.sql.Connection
 
 @Context
 class UserContext {
 
     context(
         _: Provider,
-        connection: Connection,
+        connection: EntityConnection,
     )
-    fun getUserByName(name: String): User? = SQL(connection)
-        .selectFrom<User>()
-        .where(User::name eq name)
-        .limit(1)
-        .query<User>()
-        .firstOrNull()
+    fun getUserByName(name: String): User? =
+        connection.get<User>("name" eq name)
 }

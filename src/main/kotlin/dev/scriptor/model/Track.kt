@@ -1,6 +1,8 @@
 package dev.scriptor.model
 
-interface Track {
+import dev.scriptor.Entity
+
+interface Track : Entity {
     val index: Int
     val codec: String
 

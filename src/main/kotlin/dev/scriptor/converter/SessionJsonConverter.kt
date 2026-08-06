@@ -11,7 +11,7 @@ class SessionJsonConverter : Converter<Session, JSONObject> {
     override fun convert(value: Session): JSONObject {
         val json = JSONObject()
         json.put("id", value.id)
-        json.put("user_id", value.userId)
+        json.put("user_id", value.user?.id)
         json.put("token", value.token)
         json.put("created_at", value.createdAt)
         json.put("expires_at", value.expiresAt)

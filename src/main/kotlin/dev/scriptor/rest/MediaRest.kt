@@ -1,5 +1,6 @@
 package dev.scriptor.rest
 
+import dev.scriptor.EntityConnection
 import dev.scriptor.HlsCache
 import dev.scriptor.context.AuthContext
 import dev.scriptor.context.MediaContext
@@ -15,7 +16,6 @@ import dev.scriptor.server.result.ChannelResult
 import dev.scriptor.server.result.Result
 import java.nio.channels.FileChannel
 import java.nio.file.Path
-import java.sql.Connection
 import java.time.Duration.ofMinutes
 import java.util.logging.Logger
 import kotlin.io.path.bufferedReader
@@ -30,7 +30,7 @@ class MediaRest {
     @Resource("/", result = "application/json")
     context(
         _: Provider,
-        _: Connection,
+        _: EntityConnection,
         auth: AuthContext,
         _: SessionContext,
         media: MediaContext,
@@ -45,7 +45,7 @@ class MediaRest {
     @Resource("/[id]", result = "application/json")
     context(
         _: Provider,
-        _: Connection,
+        _: EntityConnection,
         auth: AuthContext,
         _: SessionContext,
         media: MediaContext,
@@ -61,7 +61,7 @@ class MediaRest {
     @Resource("/stream/[id]")
     context(
         _: Provider,
-        _: Connection,
+        _: EntityConnection,
         auth: AuthContext,
         sessions: SessionContext,
         media: MediaContext,
@@ -170,7 +170,7 @@ class MediaRest {
     context(
         _: Logger,
         _: Provider,
-        _: Connection,
+        _: EntityConnection,
         hls: HlsCache,
         auth: AuthContext,
         sessions: SessionContext,
@@ -202,7 +202,7 @@ class MediaRest {
     context(
         _: Logger,
         _: Provider,
-        _: Connection,
+        _: EntityConnection,
         hls: HlsCache,
         auth: AuthContext,
         sessions: SessionContext,
@@ -235,7 +235,7 @@ class MediaRest {
     context(
         _: Logger,
         _: Provider,
-        _: Connection,
+        _: EntityConnection,
         hls: HlsCache,
         auth: AuthContext,
         sessions: SessionContext,

@@ -1,21 +1,19 @@
 package dev.scriptor.model
 
 import dev.scriptor.annotation.Column
-import dev.scriptor.annotation.ForeignKey
-import dev.scriptor.annotation.PrimaryKey
 import dev.scriptor.annotation.Table
 import kotlin.uuid.Uuid
 
 @Table("audio_track")
 data class AudioTrack(
 
+    @Column
+    override val id: Uuid,
+
     @Column("media_id")
-    @PrimaryKey
-    @ForeignKey(Media::class, "id")
-    val mediaId: Uuid,
+    val media: Media,
 
     @Column
-    @PrimaryKey
     override val index: Int,
 
     @Column

@@ -1,9 +1,11 @@
 package dev.scriptor.rest
 
+import dev.scriptor.EntityConnection
 import dev.scriptor.context.SessionContext
 import dev.scriptor.context.UserContext
 import dev.scriptor.model.Bearer
 import dev.scriptor.model.Session
+import dev.scriptor.model.User
 import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.Provider
 import dev.scriptor.server.UnauthorizedSignal
@@ -15,7 +17,6 @@ import dev.scriptor.server.http.Method.DELETE
 import dev.scriptor.server.http.Method.POST
 import org.json.JSONObject
 import java.security.SecureRandom
-import java.sql.Connection
 import java.time.Duration.ofMinutes
 import java.util.logging.Logger
 import kotlin.io.encoding.Base64
@@ -39,7 +40,7 @@ class SessionRest {
     context(
         log: Logger,
         provider: Provider,
-        _: Connection,
+        _: EntityConnection,
         users: UserContext,
         sessions: SessionContext,
     )
@@ -50,20 +51,18 @@ class SessionRest {
         val rootUsername: String? = provider["username"]
         val rootPassword: String? = provider["password"]
 
-        val userId: Uuid?
+        val user: User?
         if (rootUsername != null && rootPassword != null && username == rootUsername) {
+            user = null
+
             if (password != rootPassword) {
                 throw UnauthorizedSignal()
             }
-
-            userId = null
         } else {
-            val user = users.getUserByName(username)
+            user = users.getUserByName(username)
                 ?: throw UnauthorizedSignal()
 
             // TODO: check password hash
-
-            userId = user.id
         }
 
         val bytes = ByteArray(24) { 0 }
@@ -77,15 +76,15 @@ class SessionRest {
         val id = Uuid.generateV7()
         val session = Session(
             id,
-            userId,
+            user,
             token,
             createdAt,
             expiresAt,
             agent,
         )
 
-        sessions.createSession(session)
-        return session
+        return sessions.createSession(session)
+            ?: error("failed to create session")
     }
 
     @Resource(
@@ -94,7 +93,7 @@ class SessionRest {
     )
     context(
         _: Provider,
-        _: Connection,
+        _: EntityConnection,
         sessions: SessionContext,
     )
     fun getCurrentSession(@Header authorization: Bearer): Session {
@@ -109,13 +108,13 @@ class SessionRest {
     )
     context(
         _: Provider,
-        _: Connection,
+        _: EntityConnection,
         sessions: SessionContext,
     )
     fun deleteSessionById(@Header authorization: Bearer): Session {
         val session = sessions.getSessionByToken(authorization.token)
             ?: throw NotFoundSignal()
-        sessions.deleteSession(session)
-        return session
+        return sessions.deleteSession(session)
+            ?: error("failed to delete session")
     }
 }

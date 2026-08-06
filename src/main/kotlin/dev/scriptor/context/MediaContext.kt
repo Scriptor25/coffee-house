@@ -1,13 +1,11 @@
 package dev.scriptor.context
 
-import dev.scriptor.SQL
-import dev.scriptor.eq
+import dev.scriptor.EntityConnection
+import dev.scriptor.get
+import dev.scriptor.getAll
 import dev.scriptor.model.Media
-import dev.scriptor.query
-import dev.scriptor.selectFrom
 import dev.scriptor.server.Provider
 import dev.scriptor.server.annotation.Context
-import java.sql.Connection
 import kotlin.uuid.Uuid
 
 @Context
@@ -15,20 +13,15 @@ class MediaContext {
 
     context(
         _: Provider,
-        connection: Connection,
+        connection: EntityConnection,
     )
-    fun getAllMedia(): List<Media> = SQL(connection)
-        .selectFrom<Media>()
-        .query<Media>()
+    fun getAllMedia(): List<Media> =
+        connection.getAll<Media>()
 
     context(
         _: Provider,
-        connection: Connection,
+        connection: EntityConnection,
     )
-    fun getMediaById(id: Uuid): Media? = SQL(connection)
-        .selectFrom<Media>()
-        .where(Media::id eq id)
-        .limit(1)
-        .query<Media>()
-        .firstOrNull()
+    fun getMediaById(id: Uuid): Media? =
+        connection.get<Media>(id)
 }
