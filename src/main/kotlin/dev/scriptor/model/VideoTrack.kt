@@ -10,10 +10,10 @@ data class VideoTrack(
     @Column
     override val id: Uuid,
 
-    @Column("media_id")
+    @Column("media_id", unique = "cnt_media_index")
     val media: Media,
 
-    @Column
+    @Column(unique = "cnt_media_index")
     override val index: Int,
 
     @Column

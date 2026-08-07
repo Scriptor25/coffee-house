@@ -13,14 +13,14 @@ data class Media(
     @Column
     override val id: Uuid,
 
-    @Column(unique = true)
+    @Column(unique = "cnt_path")
     val path: Path,
 
     @Column
     val size: Long,
 
     @Column
-    val title: String,
+    val title: String?,
 
     @Column("created_at")
     val createdAt: Instant,
@@ -30,33 +30,4 @@ data class Media(
 
     @Column
     val duration: Double,
-) : Entity {
-    lateinit var video: List<VideoTrack>
-    lateinit var audio: List<AudioTrack>
-    lateinit var subtitles: List<SubtitleTrack>
-
-    constructor(
-        id: Uuid,
-        path: Path,
-        size: Long,
-        title: String,
-        createdAt: Instant,
-        modifiedAt: Instant,
-        duration: Double,
-        video: List<VideoTrack>,
-        audio: List<AudioTrack>,
-        subtitles: List<SubtitleTrack>,
-    ) : this(
-        id,
-        path,
-        size,
-        title,
-        createdAt,
-        modifiedAt,
-        duration,
-    ) {
-        this.video = video
-        this.audio = audio
-        this.subtitles = subtitles
-    }
-}
+) : Entity

@@ -7,9 +7,9 @@ import java.sql.*
 import java.sql.JDBCType.*
 import kotlin.reflect.KClass
 import kotlin.reflect.KFunction
+import kotlin.reflect.KParameter
 import kotlin.reflect.KType
 import kotlin.reflect.full.*
-import kotlin.reflect.typeOf
 import kotlin.uuid.Uuid
 
 interface Entity {
@@ -18,22 +18,34 @@ interface Entity {
 }
 
 private data class ColumnMetadata(
+    val parameter: KParameter,
     val name: String,
     val type: JDBCType,
+    val typeClass: KClass<*>,
     val notnull: Boolean,
     val primary: Boolean,
-    val unique: Boolean,
+    val unique: String,
+    val index: Int,
     val get: (Entity) -> Any?,
     val references: KClass<*>?,
     val serialize: (Any?) -> Any?,
     val deserialize: (Any?) -> Any?,
-)
+) {
+    override fun toString(): String {
+        return name
+    }
+}
 
 private data class TableMetadata(
+    val klass: KClass<*>,
     val name: String,
     val columns: List<ColumnMetadata>,
     val constructor: KFunction<*>,
-)
+) {
+    override fun toString(): String {
+        return name
+    }
+}
 
 enum class ConflictMode {
     DEFAULT,
@@ -140,16 +152,16 @@ class EntityConnection(
 
     private fun table(klass: KClass<*>): TableMetadata {
         return metadata.computeIfAbsent(klass) {
-            val table = klass.findAnnotation<Table>() ?: error("class $klass is not a table")
-            val name = table.value.lowercase()
+            val table = klass.findAnnotation<Table>() ?: error("$klass is not a table")
+            val name = table.name.lowercase()
 
-            val constructor = klass.primaryConstructor ?: error("class $klass does not have a primary constructor")
+            val constructor = klass.primaryConstructor ?: error("$klass does not have a primary constructor")
             val parameters = constructor.parameters
             val properties = klass.memberProperties
 
-            val columns = parameters.map { parameter ->
-                val column = parameter.findAnnotation<Column>() ?: error("parameter $parameter is not a column")
-                val name = column.value.ifEmpty { parameter.name ?: error("parameter $parameter does not have a name") }
+            val columns = parameters.filter { it.hasAnnotation<Column>() }.map { parameter ->
+                val column = parameter.findAnnotation<Column>()!!
+                val name = column.name.ifEmpty { parameter.name ?: error("$parameter does not have a name") }
                 val unique = column.unique
 
                 val type = parameter.type
@@ -160,18 +172,21 @@ class EntityConnection(
 
                 if (classifier is KClass<*> && classifier.isSubclassOf(Entity::class)) {
                     ColumnMetadata(
+                        parameter,
                         name,
                         VARCHAR,
+                        String::class,
                         notnull,
                         name == "id",
                         unique,
+                        parameter.index,
                         { property.getter.call(it) },
                         classifier,
                         { if (it == null) null else (it as Entity).id },
-                        { if (it == null) null else (it as Entity).id },
+                        { if (it == null) null else get(classifier, Uuid.parseHexDash(it as String)) },
                     )
                 } else {
-                    val deserialized = type.withNullability(false)
+                    val dataType = type.withNullability(false)
 
                     val jdbcType = when (classifier) {
                         Byte::class -> TINYINT
@@ -187,39 +202,44 @@ class EntityConnection(
                         ByteArray::class -> VARBINARY
                         Boolean::class -> BOOLEAN
                         else -> when {
-                            deserialized in typeMap -> typeMap[deserialized]!!
+                            dataType in typeMap -> typeMap[dataType]!!
 
-                            else -> error("no jdbc type for $deserialized")
+                            else -> error("no jdbc type for $dataType")
                         }
                     }
 
-                    val serialized = when (jdbcType) {
-                        TINYINT -> typeOf<Byte>()
-                        SMALLINT -> typeOf<Short>()
-                        INTEGER -> typeOf<Int>()
-                        BIGINT -> typeOf<Long>()
-                        FLOAT -> typeOf<Float>()
-                        DOUBLE -> typeOf<Double>()
-                        VARCHAR -> typeOf<String>()
-                        DATE -> typeOf<Date>()
-                        TIME -> typeOf<Time>()
-                        TIMESTAMP -> typeOf<Timestamp>()
-                        VARBINARY -> typeOf<ByteArray>()
-                        BOOLEAN -> typeOf<Boolean>()
+                    val typeClass = when (jdbcType) {
+                        TINYINT -> Byte::class
+                        SMALLINT -> Short::class
+                        INTEGER -> Int::class
+                        BIGINT -> Long::class
+                        FLOAT -> Float::class
+                        DOUBLE -> Double::class
+                        VARCHAR -> String::class
+                        DATE -> Date::class
+                        TIME -> Time::class
+                        TIMESTAMP -> Timestamp::class
+                        VARBINARY -> ByteArray::class
+                        BOOLEAN -> Boolean::class
                         else -> error("unsupported jdbc type $jdbcType")
                     }
 
-                    val serialize = provider[deserialized to serialized]
-                        ?: error("unsupported conversion from $deserialized to $serialized")
-                    val deserialize = provider[serialized to deserialized]
-                        ?: error("unsupported conversion from $serialized to $deserialized")
+                    val serialType = typeClass.createType()
+
+                    val serialize = provider[dataType to serialType]
+                        ?: error("unsupported conversion from $dataType to $serialType")
+                    val deserialize = provider[serialType to dataType]
+                        ?: error("unsupported conversion from $serialType to $dataType")
 
                     ColumnMetadata(
+                        parameter,
                         name,
                         jdbcType,
+                        typeClass,
                         notnull,
                         name == "id",
                         unique,
+                        parameter.index,
                         { property.getter.call(it) },
                         null,
                         { if (it == null) null else context(provider) { serialize(it) } },
@@ -229,6 +249,7 @@ class EntityConnection(
             }
 
             TableMetadata(
+                klass,
                 name,
                 columns,
                 constructor,
@@ -239,44 +260,53 @@ class EntityConnection(
     private fun createTableStatement(table: TableMetadata): PreparedStatement {
         val constraints = mutableListOf<String>()
 
+        val unique = mutableMapOf<String, MutableList<String>>()
+
         val columns = table.columns.map {
             buildString {
-                append(""""${it.name}"""")
+                append(""""$it"""")
                 append(" ")
                 append(it.type)
 
                 if (it.notnull) append(" not null")
 
-                if (it.primary) constraints.add("""primary key ("${it.name}")""")
-                if (it.unique) constraints.add("""unique ("${it.name}")""")
+                if (it.primary) constraints.add("""primary key ("$it")""")
+
+                if (it.unique.isNotEmpty()) {
+                    unique.computeIfAbsent(it.unique) { mutableListOf() }.add(it.name)
+                }
 
                 if (it.references != null) {
                     val foreignTable = table(it.references)
 
-                    constraints.add("""foreign key ("${it.name}") references "${foreignTable.name}" (id)""")
+                    constraints.add("""foreign key ("$it") references "$foreignTable" (id)""")
                 }
             }
         }
 
-        val definition = listOf(columns, constraints).flatten().joinToString(", ")
+        unique.forEach { (name, columns) ->
+            constraints.add("""constraint "$name" unique ${columns.joinToString(", ", "(", ")") { """"$it"""" }}""")
+        }
 
-        return connection.prepareStatement("""create table if not exists "${table.name}" ($definition)""")
+        val definition = listOf(columns, constraints).flatten().joinToString(", ", "(", ")")
+
+        return connection.prepareStatement("""create table if not exists "$table" $definition""")
     }
 
     private fun getStatement(table: TableMetadata): PreparedStatement {
-        val columns = table.columns.joinToString(", ") { """"${it.name}"""" }
+        val columns = table.columns.joinToString(", ") { """"$it"""" }
 
-        return connection.prepareStatement("""select $columns from "${table.name}" where id = ? limit 1""")
+        return connection.prepareStatement("""select $columns from "$table" where id = ? limit 1""")
     }
 
     private fun getAllStatement(table: TableMetadata): PreparedStatement {
-        val columns = table.columns.joinToString(", ") { """"${it.name}"""" }
+        val columns = table.columns.joinToString(", ") { """"$it"""" }
 
-        return connection.prepareStatement("""select $columns from "${table.name}"""")
+        return connection.prepareStatement("""select $columns from "$table"""")
     }
 
     private fun createStatement(table: TableMetadata, mode: ConflictMode): PreparedStatement {
-        val columns = table.columns.joinToString(", ") { """"${it.name}"""" }
+        val columns = table.columns.joinToString(", ") { """"$it"""" }
         val placeholders = table.columns.joinToString(", ") { "?" }
 
         val conflict = when (mode) {
@@ -285,29 +315,34 @@ class EntityConnection(
             ConflictMode.IGNORE -> "or ignore"
         }
 
-        return connection.prepareStatement("""insert $conflict into "${table.name}" ($columns) values ($placeholders)""")
+        return connection.prepareStatement("""insert $conflict into "$table" ($columns) values ($placeholders)""")
     }
 
     private fun updateStatement(table: TableMetadata): PreparedStatement {
-        val columns = table.columns.joinToString(", ") { column -> """"${column.name}" = ?""" }
+        val columns = table.columns.joinToString(", ") { column -> """"$column" = ?""" }
 
-        return connection.prepareStatement("""update "${table.name}" where id = ? set $columns limit 1""")
+        return connection.prepareStatement("""update "$table" where id = ? set $columns limit 1""")
     }
 
     private fun deleteStatement(table: TableMetadata): PreparedStatement {
-        return connection.prepareStatement("""delete from "${table.name}" where id = ? limit 1""")
+        return connection.prepareStatement("""delete from "$table" where id = ? limit 1""")
     }
 
     private fun next(result: ResultSet, table: TableMetadata, block: (Entity) -> Unit): Boolean {
         if (!result.next()) return false
 
-        val args = table.columns
-            .mapIndexed { index, column ->
-                val value = result.getObject(index + 1)
+        var id: Uuid? = null
+        val args = Array<Any?>(table.constructor.parameters.size) { null }
 
-                column.deserialize(value)
-            }
-            .toTypedArray()
+        table.columns.forEach { column ->
+            val value = result.getObject(column.name, column.typeClass.javaObjectType)
+
+            val x = column.deserialize(value)
+
+            if (column.primary) id = x as Uuid
+
+            args[column.index] = x
+        }
 
         val entity = table.constructor.call(*args) as Entity
 
@@ -317,12 +352,11 @@ class EntityConnection(
     }
 
     private fun put(statement: PreparedStatement, table: TableMetadata, entity: Entity, offset: Int = 0) {
-        table.columns
-            .forEachIndexed { index, column ->
-                val value = column.get(entity)
+        table.columns.forEachIndexed { index, column ->
+            val value = column.get(entity)
 
-                statement.setObject(index + offset + 1, column.serialize(value))
-            }
+            statement.setObject(index + offset + 1, column.serialize(value))
+        }
     }
 
     fun createTable(klass: KClass<*>) {
@@ -450,12 +484,12 @@ class EntityConnection(
     fun get(klass: KClass<*>, node: QueryNode): Entity? {
         val table = table(klass)
 
-        val columns = table.columns.joinToString(", ") { """"${it.name}"""" }
+        val columns = table.columns.joinToString(", ") { """"$it"""" }
 
         val parameters = mutableListOf<Any?>()
         val condition = node.build(parameters)
 
-        return connection.prepareStatement("""select $columns from "${table.name}" where $condition limit 1""")
+        return connection.prepareStatement("""select $columns from "$table" where $condition limit 1""")
             .use { statement ->
                 parameters.forEachIndexed { index, value -> statement.setObject(index + 1, value) }
 
@@ -475,12 +509,12 @@ class EntityConnection(
     fun getAll(klass: KClass<*>, node: QueryNode): List<Entity> {
         val table = table(klass)
 
-        val columns = table.columns.joinToString(", ") { """"${it.name}"""" }
+        val columns = table.columns.joinToString(", ") { """"$it"""" }
 
         val parameters = mutableListOf<Any?>()
         val condition = node.build(parameters)
 
-        return connection.prepareStatement("""select $columns from "${table.name}" where $condition""")
+        return connection.prepareStatement("""select $columns from "$table" where $condition""")
             .use { statement ->
                 parameters.forEachIndexed { index, value -> statement.setObject(index + 1, value) }
 
@@ -502,12 +536,12 @@ class EntityConnection(
     fun deleteAll(klass: KClass<*>, node: QueryNode): List<Entity> {
         val table = table(klass)
 
-        val columns = table.columns.joinToString(", ") { """"${it.name}"""" }
+        val columns = table.columns.joinToString(", ") { """"$it"""" }
 
         val parameters = mutableListOf<Any?>()
         val condition = node.build(parameters)
 
-        return connection.prepareStatement("""delete from "${table.name}" where $condition returning $columns""")
+        return connection.prepareStatement("""delete from "$table" where $condition returning $columns""")
             .use { statement ->
                 parameters.forEachIndexed { index, value -> statement.setObject(index + 1, value) }
 

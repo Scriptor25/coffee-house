@@ -19,12 +19,18 @@ import kotlin.reflect.full.starProjectedType
 import kotlin.reflect.typeOf
 import kotlin.time.Instant
 import kotlin.time.toKotlinInstant
-import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 fun getEnvironment(): Map<String, String> = System.getenv()
 
 val EXTENSIONS = arrayOf("mkv", "mp4")
+
+data class Metadata(
+    val media: Media,
+    val video: List<VideoTrack>,
+    val audio: List<AudioTrack>,
+    val subtitles: List<SubtitleTrack>,
+)
 
 context(parent: Logger)
 fun getMetadata(
@@ -32,7 +38,7 @@ fun getMetadata(
     path: Path,
     createdAt: Instant,
     modifiedAt: Instant,
-): Media {
+): Metadata {
 
     val command = listOf(
         "ffprobe",
@@ -67,7 +73,7 @@ fun getMetadata(
     val bitRate = format["bit_rate"].get<String>().toLong()
 
     val tags = format["tags"]
-    val title = tags["title"].get<String>()
+    val title = tags["title"].get<String?>()
 
     val video = mutableListOf<VideoTrack>()
     val audio = mutableListOf<AudioTrack>()
@@ -81,9 +87,6 @@ fun getMetadata(
         createdAt,
         modifiedAt,
         duration,
-        video,
-        audio,
-        subtitles,
     )
 
     val streams = data["streams"]
@@ -92,25 +95,25 @@ fun getMetadata(
 
         when (codecType) {
             "video" -> {
-                val index = stream["index"].get<Int>()
+                val index = stream["index"].get<Number>().toInt()
                 val codec = stream["codec_name"].get<String>()
-                val width = stream["width"].get<Int>()
-                val height = stream["height"].get<Int>()
+                val width = stream["width"].get<Number>().toInt()
+                val height = stream["height"].get<Number>().toInt()
                 val frameRateStr = stream["frame_rate"].get<String?>()?.ifEmpty { "0/1" } ?: "0/1"
                 val profile = stream["profile"].get<String>()
-                val level = stream["level"].get<Int>()
+                val level = stream["level"].get<Number>().toInt()
                 val hdr = false // TODO
                 val language = null // TODO
                 val title = null // TODO
 
                 val disposition = stream["disposition"]
-                val default = disposition["default"].get<Int>() == 1
+                val default = disposition["default"].get<Number>() == 1
 
                 val frameRateParts = frameRateStr.split("/").map { it.toDouble() }
                 val frameRate = frameRateParts[0] / frameRateParts[1]
 
                 video += VideoTrack(
-                    id,
+                    Uuid.random(),
                     media,
                     index,
                     codec,
@@ -128,18 +131,18 @@ fun getMetadata(
             }
 
             "audio" -> {
-                val index = stream["index"].get<Int>()
+                val index = stream["index"].get<Number>().toInt()
                 val codec = stream["codec_name"].get<String>()
                 val sampleRate = stream["sample_rate"].get<String>().toLong()
-                val channels = stream["channels"].get<Int>()
+                val channels = stream["channels"].get<Number>().toInt()
                 val language = null // TODO
                 val title = null // TODO
 
                 val disposition = stream["disposition"]
-                val default = disposition["default"].get<Int>() == 1
+                val default = disposition["default"].get<Number>() == 1
 
                 audio += AudioTrack(
-                    id,
+                    Uuid.random(),
                     media,
                     index,
                     codec,
@@ -165,10 +168,14 @@ fun getMetadata(
     // TODO
     val chapters = data["chapters"]
 
-    return media
+    return Metadata(
+        media,
+        video,
+        audio,
+        subtitles,
+    )
 }
 
-@OptIn(ExperimentalUuidApi::class)
 fun main() {
     val env = getEnvironment()
 
@@ -241,29 +248,41 @@ fun main() {
 
             val paths = mutableListOf<Path>()
 
+            val video = mutableListOf<VideoTrack>()
+            val audio = mutableListOf<AudioTrack>()
+            val subtitles = mutableListOf<SubtitleTrack>()
+
             entities.create(REPLACE) { submit ->
                 for (path in data.walk()) {
                     if (path.extension !in EXTENSIONS) continue
 
                     paths.add(path.absolute())
 
-                    val id = Uuid.generateV7()
+                    val id = Uuid.random()
 
                     val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
 
                     val createdAt = attributes.creationTime()
                     val modifiedAt = attributes.lastModifiedTime()
 
-                    val media = getMetadata(
+                    val metadata = getMetadata(
                         id,
                         path,
                         createdAt.toInstant().toKotlinInstant(),
                         modifiedAt.toInstant().toKotlinInstant(),
                     )
 
-                    submit(media)
+                    video += metadata.video
+                    audio += metadata.audio
+                    subtitles += metadata.subtitles
+
+                    submit(metadata.media)
                 }
             }
+
+            entities.create(REPLACE) { submit -> video.forEach(submit) }
+            entities.create(REPLACE) { submit -> audio.forEach(submit) }
+            entities.create(REPLACE) { submit -> subtitles.forEach(submit) }
 
             entities.deleteAll<Media>(!("path" `in` paths))
         }

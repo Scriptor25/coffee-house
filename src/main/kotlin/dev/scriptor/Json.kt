@@ -197,6 +197,14 @@ private class MutableJsonValueNode(
     override fun toMutable(): MutableJsonNode = this
 }
 
+fun emptyJsonObject(): JsonNode {
+    return JsonObjectNode()
+}
+
+fun emptyJsonArray(): JsonNode {
+    return JsonArrayNode()
+}
+
 fun jsonOf(vararg entries: Pair<String, JsonNode>): JsonNode {
     return JsonObjectNode(mapOf(*entries))
 }

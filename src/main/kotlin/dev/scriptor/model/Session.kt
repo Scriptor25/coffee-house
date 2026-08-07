@@ -15,7 +15,7 @@ data class Session(
     @Column("user_id")
     val user: User?,
 
-    @Column(unique = true)
+    @Column(unique = "cnt_token")
     val token: String,
 
     @Column("created_at")
