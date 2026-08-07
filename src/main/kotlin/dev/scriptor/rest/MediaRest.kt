@@ -1,19 +1,17 @@
 package dev.scriptor.rest
 
-import dev.scriptor.EntityConnection
 import dev.scriptor.HlsCache
 import dev.scriptor.context.AuthContext
-import dev.scriptor.context.MediaContext
-import dev.scriptor.context.SessionContext
 import dev.scriptor.model.Bearer
 import dev.scriptor.model.Media
 import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.ParameterList
-import dev.scriptor.server.Provider
 import dev.scriptor.server.UnauthorizedSignal
 import dev.scriptor.server.annotation.*
 import dev.scriptor.server.result.ChannelResult
 import dev.scriptor.server.result.Result
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.nio.channels.FileChannel
 import java.nio.file.Path
 import java.time.Duration.ofMinutes
@@ -28,54 +26,39 @@ import kotlin.uuid.Uuid
 class MediaRest {
 
     @Resource("/", result = "application/json")
-    context(
-        _: Provider,
-        _: EntityConnection,
-        auth: AuthContext,
-        _: SessionContext,
-        media: MediaContext,
-    )
-    fun getMediaList(@Header authorization: Bearer): List<Media> {
+    context(database: Database, auth: AuthContext)
+    fun getMediaList(@Header authorization: Bearer): List<Media> = transaction(database) {
         auth.auth(authorization.token)
             ?: throw UnauthorizedSignal()
 
-        return media.getAllMedia()
+        Media.all().toList()
     }
 
     @Resource("/[id]", result = "application/json")
-    context(
-        _: Provider,
-        _: EntityConnection,
-        auth: AuthContext,
-        _: SessionContext,
-        media: MediaContext,
-    )
-    fun getMedia(@PathParameter id: Uuid, @Header authorization: Bearer): Media {
+    context(database: Database, auth: AuthContext)
+    fun getMedia(
+        @PathParameter id: Uuid,
+        @Header authorization: Bearer,
+    ): Media = transaction(database) {
         auth.auth(authorization.token)
             ?: throw UnauthorizedSignal()
 
-        return media.getMediaById(id)
+        Media.findById(id)
             ?: throw NotFoundSignal()
     }
 
     @Resource("/stream/[id]")
-    context(
-        _: Provider,
-        _: EntityConnection,
-        auth: AuthContext,
-        sessions: SessionContext,
-        media: MediaContext,
-    )
+    context(database: Database, auth: AuthContext)
     fun getMediaStream(
         @PathParameter id: Uuid,
         @QueryParameter token: String,
         @Header range: String?,
-    ): Result {
+    ): Result = transaction(database) {
         val now = now()
         val session = auth.auth(token, now)
             ?: throw UnauthorizedSignal()
 
-        val item = media.getMediaById(id)
+        val item = Media.findById(id)
             ?: throw NotFoundSignal()
 
         val channel = FileChannel.open(item.path)
@@ -123,16 +106,13 @@ class MediaRest {
         session.expiresAt = now + ofMinutes(60).toKotlinDuration()
         session.sequence = sequence
         session.next = begin + count
-
-        sessions.updateSession(session)
-
         val limit = begin + count - 1
 
         val headers = ParameterList()
         headers["accept-ranges"] = "bytes"
         headers["content-range"] = "bytes $begin-$limit/$total"
 
-        return ChannelResult(
+        ChannelResult(
             206,
             "Partial Content",
             when (item.path.extension) {
@@ -169,77 +149,64 @@ class MediaRest {
     @Resource("/stream/[id]/master.m3u8", result = "application/vnd.apple.mpegurl")
     context(
         _: Logger,
-        _: Provider,
-        _: EntityConnection,
+        database: Database,
         hls: HlsCache,
         auth: AuthContext,
-        sessions: SessionContext,
-        media: MediaContext,
     )
     fun getMediaStreamMaster(
         @PathParameter id: Uuid,
         @QueryParameter token: String,
-    ): String {
+    ): String = transaction(database) {
         val now = now()
         val session = auth.auth(token, now)
             ?: throw UnauthorizedSignal()
 
-        val item = media.getMediaById(id)
+        val item = Media.findById(id)
             ?: throw NotFoundSignal()
 
         session.access = now
         session.expiresAt = now + ofMinutes(60).toKotlinDuration()
 
-        sessions.updateSession(session)
-
         val job = hls.job(item)
         val path = job.master()
 
-        return appendToken(path, token)
+        appendToken(path, token)
     }
 
     @Resource("/stream/[id]/[name]/index.m3u8", result = "application/vnd.apple.mpegurl")
     context(
         _: Logger,
-        _: Provider,
-        _: EntityConnection,
+        database: Database,
         hls: HlsCache,
         auth: AuthContext,
-        sessions: SessionContext,
-        media: MediaContext,
     )
     fun getMediaStreamIndex(
         @PathParameter id: Uuid,
         @PathParameter name: String,
         @QueryParameter token: String,
-    ): String {
+    ): String = transaction(database) {
         val now = now()
         val session = auth.auth(token, now)
             ?: throw UnauthorizedSignal()
 
-        val item = media.getMediaById(id)
+        val item = Media.findById(id)
             ?: throw NotFoundSignal()
 
         session.access = now
         session.expiresAt = now + ofMinutes(60).toKotlinDuration()
 
-        sessions.updateSession(session)
-
         val job = hls.job(item)
         val path = job.index(name)
 
-        return appendToken(path, token)
+        appendToken(path, token)
     }
 
     @Resource("/stream/[id]/[name]/segment[index].ts")
     context(
         _: Logger,
-        _: Provider,
-        _: EntityConnection,
+        database: Database,
         hls: HlsCache,
         auth: AuthContext,
-        sessions: SessionContext,
-        media: MediaContext,
     )
     fun getMediaStreamSegment(
         @PathParameter id: Uuid,
@@ -247,18 +214,16 @@ class MediaRest {
         @PathParameter index: Long,
         @QueryParameter token: String,
         @Header range: String?,
-    ): Result {
+    ): Result = transaction(database) {
         val now = now()
         val session = auth.auth(token, now)
             ?: throw UnauthorizedSignal()
 
-        val item = media.getMediaById(id)
+        val item = Media.findById(id)
             ?: throw NotFoundSignal()
 
         session.access = now
         session.expiresAt = now + ofMinutes(60).toKotlinDuration()
-
-        sessions.updateSession(session)
 
         val job = hls.job(item)
         val path = job.segment(name, index)
@@ -267,7 +232,7 @@ class MediaRest {
         val total = channel.size()
 
         if (range.isNullOrBlank()) {
-            return ChannelResult(
+            ChannelResult(
                 200,
                 "OK",
                 "video/mp2t",
@@ -300,7 +265,7 @@ class MediaRest {
             headers["accept-ranges"] = "bytes"
             headers["content-range"] = "bytes $begin-$limit/$total"
 
-            return ChannelResult(
+            ChannelResult(
                 206,
                 "Partial Content",
                 "video/mp2t",

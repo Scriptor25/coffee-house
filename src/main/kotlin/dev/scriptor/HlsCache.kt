@@ -67,10 +67,10 @@ class HlsCache(
     }
 
     fun job(item: Media): TranscodingJob =
-        jobs.computeIfAbsent(item.id) {
+        jobs.computeIfAbsent(item.id.value) {
             TranscodingJob(
                 item,
-                base.resolve(item.id.toHexDashString()),
+                base.resolve(item.id.value.toHexDashString()),
                 variants(item.video.first()),
                 transcoding,
             )

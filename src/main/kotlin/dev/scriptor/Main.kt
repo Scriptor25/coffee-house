@@ -1,44 +1,70 @@
 package dev.scriptor
 
-import dev.scriptor.ConflictMode.REPLACE
-import dev.scriptor.context.SessionContext
 import dev.scriptor.model.*
 import dev.scriptor.server.Provider
 import dev.scriptor.server.http.Server
 import dev.scriptor.server.scan
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
 import java.sql.DriverManager
-import java.sql.JDBCType.TIMESTAMP
-import java.sql.JDBCType.VARCHAR
+import java.sql.Timestamp
 import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.io.path.*
-import kotlin.reflect.typeOf
+import kotlin.time.Clock.System.now
 import kotlin.time.Instant
 import kotlin.time.toKotlinInstant
-import kotlin.uuid.Uuid
+
+fun Table.instant(name: String): Column<Instant> = registerColumn(
+    name,
+    object : IColumnType<Instant> {
+        override var nullable: Boolean = false
+
+        override fun sqlType(): String {
+            return "TIMESTAMP"
+        }
+
+        override fun valueFromDB(value: Any): Instant? = when (value) {
+            is Instant -> value
+            is Timestamp -> value.toInstant().toKotlinInstant()
+            is String -> Instant.parse(value)
+            else -> error("unexpected value of type ${value::class}")
+        }
+    },
+)
+
+fun Table.path(name: String): Column<Path> = registerColumn(
+    name,
+    object : IColumnType<Path> {
+        override var nullable: Boolean = false
+
+        override fun sqlType(): String {
+            return "TEXT"
+        }
+
+        override fun valueFromDB(value: Any): Path? = when (value) {
+            is Path -> value
+            is String -> Path(value)
+            else -> error("unexpected value of type ${value::class}")
+        }
+    },
+)
 
 fun getEnvironment(): Map<String, String> = System.getenv()
 
 val EXTENSIONS = arrayOf("mkv", "mp4")
 
-data class Metadata(
-    val media: Media,
-    val video: List<VideoTrack>,
-    val audio: List<AudioTrack>,
-    val subtitles: List<SubtitleTrack>,
-)
-
-context(parent: Logger)
 fun getMetadata(
-    id: Uuid,
+    parent: Logger,
     path: Path,
     createdAt: Instant,
     modifiedAt: Instant,
-): Metadata {
-
+) {
     val command = listOf(
         "ffprobe",
         "-v", "quiet",
@@ -74,19 +100,20 @@ fun getMetadata(
     val tags = format["tags"]
     val title = tags["title"].get<String?>()
 
-    val video = mutableListOf<VideoTrack>()
-    val audio = mutableListOf<AudioTrack>()
-    val subtitles = mutableListOf<SubtitleTrack>()
-
-    val media = Media(
-        id,
-        path,
-        size,
-        title,
-        createdAt,
-        modifiedAt,
-        duration,
-    )
+    val media = Media.findSingleByAndUpdate(MediaTable.path eq path) {
+        it.size = size
+        it.title = title
+        it.createdAt = createdAt
+        it.modifiedAt = createdAt
+        it.duration = duration
+    } ?: Media.new {
+        this.path = path
+        this.size = size
+        this.title = title
+        this.createdAt = createdAt
+        this.modifiedAt = modifiedAt
+        this.duration = duration
+    }
 
     val streams = data["streams"]
     for (stream in streams) {
@@ -111,22 +138,33 @@ fun getMetadata(
                 val frameRateParts = frameRateStr.split("/").map { it.toDouble() }
                 val frameRate = frameRateParts[0] / frameRateParts[1]
 
-                video += VideoTrack(
-                    Uuid.random(),
-                    media,
-                    index,
-                    codec,
-                    width,
-                    height,
-                    bitRate,
-                    frameRate,
-                    profile,
-                    level,
-                    hdr,
-                    language,
-                    title,
-                    default,
-                )
+                VideoTrack.findSingleByAndUpdate((VideoTrackTable.media eq media.id) and (VideoTrackTable.index eq index)) {
+                    it.codec = codec
+                    it.width = width
+                    it.height = height
+                    it.bitRate = bitRate
+                    it.frameRate = frameRate
+                    it.profile = profile
+                    it.level = level
+                    it.hdr = hdr
+                    it.language = language
+                    it.title = title
+                    it.default = default
+                } ?: VideoTrack.new {
+                    this.media = media.id
+                    this.index = index
+                    this.codec = codec
+                    this.width = width
+                    this.height = height
+                    this.bitRate = bitRate
+                    this.frameRate = frameRate
+                    this.profile = profile
+                    this.level = level
+                    this.hdr = hdr
+                    this.language = language
+                    this.title = title
+                    this.default = default
+                }
             }
 
             "audio" -> {
@@ -140,18 +178,25 @@ fun getMetadata(
                 val disposition = stream["disposition"]
                 val default = disposition["default"].get<Number>() == 1
 
-                audio += AudioTrack(
-                    Uuid.random(),
-                    media,
-                    index,
-                    codec,
-                    bitRate,
-                    sampleRate,
-                    channels,
-                    language,
-                    title,
-                    default,
-                )
+                AudioTrack.findSingleByAndUpdate((AudioTrackTable.media eq media.id) and (AudioTrackTable.index eq index)) {
+                    it.codec = codec
+                    it.bitRate = bitRate
+                    it.sampleRate = sampleRate
+                    it.channels = channels
+                    it.language = language
+                    it.title = title
+                    it.default = default
+                } ?: AudioTrack.new {
+                    this.media = media.id
+                    this.index = index
+                    this.codec = codec
+                    this.bitRate = bitRate
+                    this.sampleRate = sampleRate
+                    this.channels = channels
+                    this.language = language
+                    this.title = title
+                    this.default = default
+                }
             }
 
             "subtitle" -> {
@@ -166,13 +211,6 @@ fun getMetadata(
 
     // TODO
     val chapters = data["chapters"]
-
-    return Metadata(
-        media,
-        video,
-        audio,
-        subtitles,
-    )
 }
 
 fun main() {
@@ -200,23 +238,11 @@ fun main() {
     log.level = Level.ALL
     provider += log
 
-    val db = cache.resolve("index.db")
-    db.createParentDirectories()
+    val databasePath = cache.resolve("index.db")
+    databasePath.createParentDirectories()
 
-    val connection = DriverManager.getConnection("jdbc:sqlite:$db")
-    provider += connection
-
-    val entities = EntityConnection(
-        provider,
-        connection,
-        mapOf(
-            typeOf<Uuid>() to VARCHAR,
-            typeOf<Path>() to VARCHAR,
-            typeOf<UserRole>() to VARCHAR,
-            typeOf<Instant>() to TIMESTAMP,
-        ),
-    )
-    provider += entities
+    val database = Database.connect({ DriverManager.getConnection("jdbc:sqlite:$databasePath") })
+    provider += database
 
     val hls = HlsCache(cache, transcoding)
     provider += hls
@@ -230,69 +256,55 @@ fun main() {
         } catch (e: Throwable) {
             log.warning(e.stackTraceToString())
         }
-
-        connection.close()
     })
+
+    transaction(database) {
+        SchemaUtils.create(
+            MediaTable,
+            VideoTrackTable,
+            AudioTrackTable,
+            SubtitleTrackTable,
+            UserTable,
+            SessionTable,
+        )
+
+        val paths = mutableListOf<Path>()
+
+        for (path in data.walk()) {
+            if (path.extension !in EXTENSIONS) continue
+
+            paths.add(path)
+
+            val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
+
+            val createdAt = attributes.creationTime()
+            val modifiedAt = attributes.lastModifiedTime()
+
+            getMetadata(
+                log,
+                path,
+                createdAt.toInstant().toKotlinInstant(),
+                modifiedAt.toInstant().toKotlinInstant(),
+            )
+        }
+
+        Media
+            .find { MediaTable.path notInList paths }
+            .forEach { it.delete() }
+    }
 
     server.use { server ->
         scan(server, "dev.scriptor")
 
-        context(log, provider) {
-            entities.createTable<User>()
-            entities.createTable<Session>()
-            entities.createTable<Media>()
-            entities.createTable<VideoTrack>()
-            entities.createTable<AudioTrack>()
-            entities.createTable<SubtitleTrack>()
-
-            val paths = mutableListOf<Path>()
-
-            val video = mutableListOf<VideoTrack>()
-            val audio = mutableListOf<AudioTrack>()
-            val subtitles = mutableListOf<SubtitleTrack>()
-
-            entities.create(REPLACE) { submit ->
-                for (path in data.walk()) {
-                    if (path.extension !in EXTENSIONS) continue
-
-                    paths.add(path.absolute())
-
-                    val id = Uuid.random()
-
-                    val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
-
-                    val createdAt = attributes.creationTime()
-                    val modifiedAt = attributes.lastModifiedTime()
-
-                    val metadata = getMetadata(
-                        id,
-                        path,
-                        createdAt.toInstant().toKotlinInstant(),
-                        modifiedAt.toInstant().toKotlinInstant(),
-                    )
-
-                    video += metadata.video
-                    audio += metadata.audio
-                    subtitles += metadata.subtitles
-
-                    submit(metadata.media)
-                }
-            }
-
-            entities.create(REPLACE) { submit -> video.forEach(submit) }
-            entities.create(REPLACE) { submit -> audio.forEach(submit) }
-            entities.create(REPLACE) { submit -> subtitles.forEach(submit) }
-
-            entities.deleteAll<Media>(!("path" `in` paths))
-        }
-
         server.register("session-reaper", 0L, 10L * 60L * 1000L) {
-            val sessions = provider[typeOf<SessionContext>()] as SessionContext
-            context(provider, entities) { sessions.deleteExpiredSessions() }
+            transaction(database) {
+                val now = now()
+                Session
+                    .find { SessionTable.expiresAt lessEq now }
+                    .forEach { it.delete() }
+            }
         }
 
         server.start()
     }
-
-    connection.close()
 }

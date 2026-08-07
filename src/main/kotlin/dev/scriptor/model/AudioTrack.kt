@@ -1,39 +1,41 @@
 package dev.scriptor.model
 
-import dev.scriptor.annotation.Column
-import dev.scriptor.annotation.Table
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.core.dao.id.UuidTable
+import org.jetbrains.exposed.v1.dao.UuidEntity
+import org.jetbrains.exposed.v1.dao.UuidEntityClass
 import kotlin.uuid.Uuid
 
-@Table("audio_track")
-data class AudioTrack(
+object AudioTrackTable : UuidTable("audio_track") {
+    val media = reference("media_id", MediaTable)
+    val index = integer("index")
+    val codec = text("codec")
+    val bitRate = long("bit_rate")
+    val sampleRate = long("sample_rate")
+    val channels = integer("channels")
+    val language = text("language").nullable()
+    val title = text("title").nullable()
+    val default = bool("default")
 
-    @Column
-    override val id: Uuid,
+    init {
+        uniqueIndex("audio_track_media_index", media, index)
+    }
+}
 
-    @Column("media_id", unique = "cnt_media_index")
-    val media: Media,
+class AudioTrack(id: EntityID<Uuid>) : UuidEntity(id) {
+    companion object : UuidEntityClass<AudioTrack>(AudioTrackTable)
 
-    @Column(unique = "cnt_media_index")
-    override val index: Int,
+    var media by AudioTrackTable.media
+    var index by AudioTrackTable.index
+    var codec by AudioTrackTable.codec
+    var bitRate by AudioTrackTable.bitRate
+    var sampleRate by AudioTrackTable.sampleRate
+    var channels by AudioTrackTable.channels
+    var language by AudioTrackTable.language
+    var title by AudioTrackTable.title
+    var default by AudioTrackTable.default
 
-    @Column
-    override val codec: String,
-
-    @Column("bit_rate")
-    val bitRate: Long,
-
-    @Column("sample_rate")
-    val sampleRate: Long,
-
-    @Column
-    val channels: Int,
-
-    @Column
-    override val language: String?,
-
-    @Column
-    override val title: String?,
-
-    @Column
-    override val default: Boolean,
-) : Track
+    override fun toString(): String {
+        return "AudioTrack(id=$id, media=$media, index=$index, codec=$codec, bitRate=$bitRate, sampleRate=$sampleRate, channels=$channels, language=$language, title=$title, default=$default)"
+    }
+}

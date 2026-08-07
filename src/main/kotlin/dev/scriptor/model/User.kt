@@ -1,22 +1,27 @@
 package dev.scriptor.model
 
-import dev.scriptor.Entity
-import dev.scriptor.annotation.Column
-import dev.scriptor.annotation.Table
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.core.dao.id.UuidTable
+import org.jetbrains.exposed.v1.dao.UuidEntity
+import org.jetbrains.exposed.v1.dao.UuidEntityClass
 import kotlin.uuid.Uuid
 
-@Table("user")
-data class User(
+object UserTable : UuidTable("user") {
+    val name = text("name")
+    val hash = text("hash")
+    val role = enumeration("role", UserRole::class)
+}
 
-    @Column
-    override val id: Uuid,
+class User(id: EntityID<Uuid>) : UuidEntity(id) {
+    companion object : UuidEntityClass<User>(UserTable)
 
-    @Column
-    val name: String,
+    var name by UserTable.name
+    var hash by UserTable.hash
+    var role by UserTable.role
 
-    @Column
-    val hash: String,
+    val sessions by Session optionalReferrersOn SessionTable.user
 
-    @Column
-    val role: UserRole,
-) : Entity
+    override fun toString(): String {
+        return "User(id=$id, name=$name, hash=$hash, role=$role)"
+    }
+}

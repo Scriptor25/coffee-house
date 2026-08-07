@@ -14,8 +14,11 @@ class ListJsonConverter : Converter<List<*>, JsonNode> {
     override fun convert(value: List<*>): JsonNode {
         return jsonOf(*value.map {
             if (it == null) jsonOf(null) else {
-                val type = it::class.starProjectedType
-                val converter = provider[type to typeOf<JsonNode>()]!! as ConversionPath<Any, JsonNode>
+                val src = it::class.starProjectedType
+                val dst = typeOf<JsonNode>()
+
+                val converter = provider[src to dst] as? ConversionPath<Any, JsonNode>
+                    ?: error("unsupported conversion from $src to $dst")
 
                 converter(it)
             }

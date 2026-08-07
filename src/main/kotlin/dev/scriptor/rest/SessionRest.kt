@@ -1,13 +1,12 @@
 package dev.scriptor.rest
 
-import dev.scriptor.EntityConnection
 import dev.scriptor.JsonNode
-import dev.scriptor.context.SessionContext
-import dev.scriptor.context.UserContext
+import dev.scriptor.context.AuthContext
 import dev.scriptor.get
 import dev.scriptor.model.Bearer
 import dev.scriptor.model.Session
 import dev.scriptor.model.User
+import dev.scriptor.model.UserTable
 import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.Provider
 import dev.scriptor.server.UnauthorizedSignal
@@ -17,14 +16,14 @@ import dev.scriptor.server.annotation.Header
 import dev.scriptor.server.annotation.Resource
 import dev.scriptor.server.http.Method.DELETE
 import dev.scriptor.server.http.Method.POST
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.security.SecureRandom
 import java.time.Duration.ofMinutes
-import java.util.logging.Logger
 import kotlin.io.encoding.Base64
 import kotlin.time.Clock.System.now
 import kotlin.time.toKotlinDuration
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 
 @Endpoint("/session")
 class SessionRest {
@@ -37,15 +36,11 @@ class SessionRest {
         "application/json",
         "application/json",
     )
-    @OptIn(ExperimentalUuidApi::class)
-    context(
-        log: Logger,
-        provider: Provider,
-        _: EntityConnection,
-        users: UserContext,
-        sessions: SessionContext,
-    )
-    fun createSession(@Body body: JsonNode, @Header("user-agent") agent: String?): Session {
+    context(provider: Provider, database: Database)
+    fun createSession(
+        @Body body: JsonNode,
+        @Header("user-agent") agent: String?,
+    ): Session = transaction(database) {
         val username = body["username"].get<String>()
         val password = body["password"].get<String>()
 
@@ -60,7 +55,10 @@ class SessionRest {
                 throw UnauthorizedSignal()
             }
         } else {
-            user = users.getUserByName(username)
+            user = User
+                .find { UserTable.name eq username }
+                .limit(1)
+                .firstOrNull()
                 ?: throw UnauthorizedSignal()
 
             // TODO: check password hash
@@ -74,31 +72,22 @@ class SessionRest {
         val createdAt = now()
         val expiresAt = createdAt + ofMinutes(60).toKotlinDuration()
 
-        val id = Uuid.generateV7()
-        val session = Session(
-            id,
-            user,
-            token,
-            createdAt,
-            expiresAt,
-            agent,
-        )
-
-        return sessions.createSession(session)
-            ?: error("failed to create session")
+        Session.new {
+            this.user = user?.id
+            this.token = token
+            this.createdAt = createdAt
+            this.expiresAt = expiresAt
+            this.agent = agent
+        }
     }
 
     @Resource(
         "/",
         result = "application/json",
     )
-    context(
-        _: Provider,
-        _: EntityConnection,
-        sessions: SessionContext,
-    )
-    fun getCurrentSession(@Header authorization: Bearer): Session {
-        return sessions.getSessionByToken(authorization.token)
+    context(auth: AuthContext, database: Database)
+    fun getCurrentSession(@Header authorization: Bearer): Session = transaction(database) {
+        auth.auth(authorization.token)
             ?: throw NotFoundSignal()
     }
 
@@ -107,15 +96,13 @@ class SessionRest {
         DELETE,
         result = "application/json",
     )
-    context(
-        _: Provider,
-        _: EntityConnection,
-        sessions: SessionContext,
-    )
-    fun deleteSessionById(@Header authorization: Bearer): Session {
-        val session = sessions.getSessionByToken(authorization.token)
+    context(auth: AuthContext, database: Database)
+    fun deleteCurrentSession(@Header authorization: Bearer): Session = transaction(database) {
+        val session = auth.auth(authorization.token)
             ?: throw NotFoundSignal()
-        return sessions.deleteSession(session)
-            ?: error("failed to delete session")
+
+        session.delete()
+
+        session
     }
 }
