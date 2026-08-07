@@ -1,22 +1,18 @@
 package dev.scriptor.converter
 
+import dev.scriptor.JsonNode
+import dev.scriptor.jsonOf
 import dev.scriptor.model.Media
 import dev.scriptor.server.Provider
 import dev.scriptor.server.convert
 import dev.scriptor.server.converter.Converter
-import org.json.JSONArray
-import org.json.JSONObject
 
-class MediaListJsonConverter : Converter<List<Media>, JSONArray> {
+class MediaListJsonConverter : Converter<List<Media>, JsonNode> {
 
     context(provider: Provider)
-    override fun convert(value: List<Media>): JSONArray {
-        val converter = provider.convert<Media, JSONObject>()!!
+    override fun convert(value: List<Media>): JsonNode {
+        val converter = provider.convert<Media, JsonNode>()!!
 
-        val json = JSONArray()
-        for (entry in value) {
-            json.put(converter.convert(entry))
-        }
-        return json
+        return jsonOf(value.map { converter(it) })
     }
 }

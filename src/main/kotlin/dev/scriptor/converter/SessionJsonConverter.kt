@@ -1,24 +1,25 @@
 package dev.scriptor.converter
 
+import dev.scriptor.JsonNode
+import dev.scriptor.jsonOf
 import dev.scriptor.model.Session
 import dev.scriptor.server.Provider
 import dev.scriptor.server.converter.Converter
-import org.json.JSONObject
 
-class SessionJsonConverter : Converter<Session, JSONObject> {
+class SessionJsonConverter : Converter<Session, JsonNode> {
 
     context(provider: Provider)
-    override fun convert(value: Session): JSONObject {
-        val json = JSONObject()
-        json.put("id", value.id)
-        json.put("user_id", value.userId)
-        json.put("token", value.token)
-        json.put("created_at", value.createdAt)
-        json.put("expires_at", value.expiresAt)
-        json.put("access", value.access)
-        json.put("agent", value.agent)
-        json.put("sequence", value.sequence)
-        json.put("next", value.next)
-        return json
+    override fun convert(value: Session): JsonNode {
+        return jsonOf(
+            "id" to jsonOf(value.id),
+            "user_id" to jsonOf(value.userId),
+            "token" to jsonOf(value.token),
+            "created_at" to jsonOf(value.createdAt),
+            "expires_at" to jsonOf(value.expiresAt),
+            "access" to jsonOf(value.access),
+            "agent" to jsonOf(value.agent),
+            "sequence" to jsonOf(value.sequence),
+            "next" to jsonOf(value.next),
+        )
     }
 }
