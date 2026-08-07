@@ -19,9 +19,8 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.sql.DriverManager
 import java.util.logging.Level
 import kotlin.io.path.*
-import kotlin.reflect.full.starProjectedType
+import kotlin.reflect.typeOf
 import kotlin.time.toKotlinInstant
-import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 fun getEnvironment(): Map<String, String> = System.getenv()
@@ -88,7 +87,6 @@ fun getMetadata(id: Uuid, path: Path): Metadata {
     }
 }
 
-@OptIn(ExperimentalUuidApi::class)
 fun main() {
     val env = getEnvironment()
 
@@ -170,7 +168,7 @@ fun main() {
 
                         entries.add(path.absolute())
 
-                        val id = Uuid.generateV7()
+                        val id = Uuid.random()
 
                         val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
 
@@ -227,7 +225,7 @@ fun main() {
         }
 
         server.register("session-reaper", 0L, 10L * 60L * 1000L) {
-            val sessions = provider[SessionContext::class.starProjectedType] as SessionContext
+            val sessions = provider[typeOf<SessionContext>()] as SessionContext
             context(provider, connection) { sessions.deleteExpiredSessions() }
         }
 
