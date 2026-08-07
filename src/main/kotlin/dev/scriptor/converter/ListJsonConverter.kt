@@ -1,21 +1,17 @@
 package dev.scriptor.converter
 
+import dev.scriptor.JsonNode
+import dev.scriptor.jsonOf
 import dev.scriptor.server.Provider
 import dev.scriptor.server.convert
 import dev.scriptor.server.converter.Converter
-import org.json.JSONArray
-import org.json.JSONObject
 
-class ListJsonConverter : Converter<List<*>, JSONArray> {
+class ListJsonConverter : Converter<List<*>, JsonNode> {
 
     context(provider: Provider)
-    override fun convert(value: List<*>): JSONArray {
-        val converter = provider.convert<Any, JSONObject>()!!
+    override fun convert(value: List<*>): JsonNode {
+        val converter = provider.convert<Any?, JsonNode>()!!
 
-        val json = JSONArray()
-        for (entry in value) {
-            json.put(converter.convert(entry!!))
-        }
-        return json
+        return jsonOf(*value.map { converter(it) }.toTypedArray())
     }
 }

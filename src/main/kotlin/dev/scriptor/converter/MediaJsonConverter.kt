@@ -1,5 +1,7 @@
 package dev.scriptor.converter
 
+import dev.scriptor.JsonNode
+import dev.scriptor.jsonOf
 import dev.scriptor.model.AudioTrack
 import dev.scriptor.model.Media
 import dev.scriptor.model.SubtitleTrack
@@ -7,28 +9,26 @@ import dev.scriptor.model.VideoTrack
 import dev.scriptor.server.Provider
 import dev.scriptor.server.convert
 import dev.scriptor.server.converter.Converter
-import org.json.JSONObject
-import kotlin.io.path.absolutePathString
 
-class MediaJsonConverter : Converter<Media, JSONObject> {
+class MediaJsonConverter : Converter<Media, JsonNode> {
 
     context(provider: Provider)
-    override fun convert(value: Media): JSONObject {
-        val videoConverter = provider.convert<List<VideoTrack>, JSONObject>()!!
-        val audioConverter = provider.convert<List<AudioTrack>, JSONObject>()!!
-        val subtitlesConverter = provider.convert<List<SubtitleTrack>, JSONObject>()!!
+    override fun convert(value: Media): JsonNode {
+        val videoConverter = provider.convert<List<VideoTrack>, JsonNode>()!!
+        val audioConverter = provider.convert<List<AudioTrack>, JsonNode>()!!
+        val subtitlesConverter = provider.convert<List<SubtitleTrack>, JsonNode>()!!
 
-        val json = JSONObject()
-        json.put("id", value.id.toHexDashString())
-        json.put("path", value.path.absolutePathString())
-        json.put("size", value.size)
-        json.put("title", value.title)
-        json.put("created_at", value.createdAt.toString())
-        json.put("modified_at", value.modifiedAt.toString())
-        json.put("duration", value.duration.toString())
-        json.put("video", videoConverter.convert(value.video))
-        json.put("audio", audioConverter.convert(value.audio))
-        json.put("subtitles", subtitlesConverter.convert(value.subtitles))
-        return json
+        return jsonOf(
+            "id" to jsonOf(value.id),
+            "path" to jsonOf(value.path),
+            "size" to jsonOf(value.size),
+            "title" to jsonOf(value.title),
+            "created_at" to jsonOf(value.createdAt),
+            "modified_at" to jsonOf(value.modifiedAt),
+            "duration" to jsonOf(value.duration),
+            "video" to videoConverter.convert(value.video),
+            "audio" to audioConverter.convert(value.audio),
+            "subtitles" to subtitlesConverter.convert(value.subtitles),
+        )
     }
 }

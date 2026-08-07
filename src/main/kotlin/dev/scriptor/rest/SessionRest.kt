@@ -1,8 +1,10 @@
 package dev.scriptor.rest
 
 import dev.scriptor.EntityConnection
+import dev.scriptor.JsonNode
 import dev.scriptor.context.SessionContext
 import dev.scriptor.context.UserContext
+import dev.scriptor.get
 import dev.scriptor.model.Bearer
 import dev.scriptor.model.Session
 import dev.scriptor.model.User
@@ -15,7 +17,6 @@ import dev.scriptor.server.annotation.Header
 import dev.scriptor.server.annotation.Resource
 import dev.scriptor.server.http.Method.DELETE
 import dev.scriptor.server.http.Method.POST
-import org.json.JSONObject
 import java.security.SecureRandom
 import java.time.Duration.ofMinutes
 import java.util.logging.Logger
@@ -44,9 +45,9 @@ class SessionRest {
         users: UserContext,
         sessions: SessionContext,
     )
-    fun createSession(@Body body: JSONObject, @Header("user-agent") agent: String?): Session {
-        val username = body.getString("username")
-        val password = body.getString("password")
+    fun createSession(@Body body: JsonNode, @Header("user-agent") agent: String?): Session {
+        val username = body["username"].get<String>()
+        val password = body["password"].get<String>()
 
         val rootUsername: String? = provider["username"]
         val rootPassword: String? = provider["password"]
