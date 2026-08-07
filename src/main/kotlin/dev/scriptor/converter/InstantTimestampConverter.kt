@@ -9,5 +9,5 @@ import kotlin.time.toJavaInstant
 class InstantTimestampConverter : Converter<Instant, Timestamp> {
 
     context(provider: Provider)
-    override fun convert(value: Instant) = Timestamp.from(value.toJavaInstant())!!
+    override fun convert(value: Instant): Timestamp = Timestamp.from(value.toJavaInstant())
 }
