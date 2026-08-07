@@ -6,7 +6,6 @@ import dev.scriptor.model.*
 import dev.scriptor.server.Provider
 import dev.scriptor.server.http.Server
 import dev.scriptor.server.scan
-import org.json.JSONObject
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
@@ -60,15 +59,15 @@ fun getMetadata(
 
     log.info(json)
 
-    val data = JSONObject(json)
+    val data = parseJson(json)
 
-    val format = data.getJSONObject("format")
-    val size = format.getString("size").toLong()
-    val duration = format.getString("duration").toDouble()
-    val bitRate = format.getString("bit_rate").toLong()
+    val format = data["format"]
+    val size = format["size"].get<String>().toLong()
+    val duration = format["duration"].get<String>().toDouble()
+    val bitRate = format["bit_rate"].get<String>().toLong()
 
-    val tags = format.getJSONObject("tags")
-    val title = tags.getString("title")
+    val tags = format["tags"]
+    val title = tags["title"].get<String>()
 
     val video = mutableListOf<VideoTrack>()
     val audio = mutableListOf<AudioTrack>()
@@ -87,26 +86,25 @@ fun getMetadata(
         subtitles,
     )
 
-    val streams = data.getJSONArray("streams")
-    for (i in 0 until streams.length()) {
-        val stream = streams.getJSONObject(i)
-        val codecType = stream.getString("codec_type")
+    val streams = data["streams"]
+    for (stream in streams) {
+        val codecType = stream["codec_type"].get<String>()
 
         when (codecType) {
             "video" -> {
-                val index = stream.getInt("index")
-                val codec = stream.getString("codec_name")
-                val width = stream.getInt("width")
-                val height = stream.getInt("height")
-                val frameRateStr = stream.optString("frame_rate").ifEmpty { "0/1" }
-                val profile = stream.getString("profile")
-                val level = stream.getInt("level")
+                val index = stream["index"].get<Int>()
+                val codec = stream["codec_name"].get<String>()
+                val width = stream["width"].get<Int>()
+                val height = stream["height"].get<Int>()
+                val frameRateStr = stream["frame_rate"].get<String?>()?.ifEmpty { "0/1" } ?: "0/1"
+                val profile = stream["profile"].get<String>()
+                val level = stream["level"].get<Int>()
                 val hdr = false // TODO
                 val language = null // TODO
                 val title = null // TODO
 
-                val disposition = stream.getJSONObject("disposition")
-                val default = disposition.getInt("default") == 1
+                val disposition = stream["disposition"]
+                val default = disposition["default"].get<Int>() == 1
 
                 val frameRateParts = frameRateStr.split("/").map { it.toDouble() }
                 val frameRate = frameRateParts[0] / frameRateParts[1]
@@ -130,15 +128,15 @@ fun getMetadata(
             }
 
             "audio" -> {
-                val index = stream.getInt("index")
-                val codec = stream.getString("codec_name")
-                val sampleRate = stream.getString("sample_rate").toLong()
-                val channels = stream.getInt("channels")
+                val index = stream["index"].get<Int>()
+                val codec = stream["codec_name"].get<String>()
+                val sampleRate = stream["sample_rate"].get<String>().toLong()
+                val channels = stream["channels"].get<Int>()
                 val language = null // TODO
                 val title = null // TODO
 
-                val disposition = stream.getJSONObject("disposition")
-                val default = disposition.getInt("default") == 1
+                val disposition = stream["disposition"]
+                val default = disposition["default"].get<Int>() == 1
 
                 audio += AudioTrack(
                     id,
@@ -165,7 +163,7 @@ fun getMetadata(
     }
 
     // TODO
-    val chapters = data.getJSONArray("chapters")
+    val chapters = data["chapters"]
 
     return media
 }

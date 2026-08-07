@@ -3,7 +3,6 @@ package dev.scriptor
 import dev.scriptor.annotation.Column
 import dev.scriptor.annotation.Table
 import dev.scriptor.server.Provider
-import dev.scriptor.server.converter.ConversionPath
 import java.sql.*
 import java.sql.JDBCType.*
 import kotlin.reflect.KClass
@@ -131,9 +130,6 @@ infix fun String.ge(value: Any?): QueryNode = QueryNodeCompare(this, CompareMode
 
 infix fun String.`in`(values: Iterable<Any?>): QueryNode = QueryNodeIn(this, values)
 
-private operator fun <S : Any, D : Any> ConversionPath<S, D>.invoke(provider: Provider, value: S): D =
-    context(provider) { this.convert(value) }
-
 class EntityConnection(
     val provider: Provider,
     val connection: Connection,
@@ -226,8 +222,8 @@ class EntityConnection(
                         unique,
                         { property.getter.call(it) },
                         null,
-                        { if (it == null) null else serialize(provider, it) },
-                        { if (it == null) null else deserialize(provider, it) },
+                        { if (it == null) null else context(provider) { serialize(it) } },
+                        { if (it == null) null else context(provider) { deserialize(it) } },
                     )
                 }
             }
