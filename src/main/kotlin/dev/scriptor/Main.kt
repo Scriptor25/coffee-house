@@ -15,6 +15,7 @@ import java.sql.JDBCType.VARCHAR
 import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.io.path.*
+import kotlin.reflect.typeOf
 import kotlin.reflect.full.starProjectedType
 import kotlin.reflect.typeOf
 import kotlin.time.Instant
@@ -288,7 +289,7 @@ fun main() {
         }
 
         server.register("session-reaper", 0L, 10L * 60L * 1000L) {
-            val sessions = provider[SessionContext::class.starProjectedType] as SessionContext
+            val sessions = provider[typeOf<SessionContext>()] as SessionContext
             context(provider, entities) { sessions.deleteExpiredSessions() }
         }
 
