@@ -59,7 +59,7 @@ private open class JsonObjectNode(
     }
 
     override fun toString(): String {
-        return nodes.entries.joinToString(",", "{", "}") { (key, value) -> """"$key":$value""" }
+        return nodes.entries.joinToString(",", "{", "}") { (key, value) -> """${escape(key)}:$value""" }
     }
 }
 
@@ -128,6 +128,31 @@ private class MutableJsonArrayNode(
     override fun toMutable(): MutableJsonNode = this
 }
 
+private fun escape(value: String): String {
+    val sanitized = StringBuilder()
+
+    for (c in value) {
+        val x = when (c) {
+            '\"' -> "\\\""
+            '\\' -> "\\\\"
+            '/' -> "\\/"
+            '\b' -> "\\b"
+            0x0C.toChar() -> "\\f"
+            '\n' -> "\\n"
+            '\r' -> "\\r"
+            '\t' -> "\\t"
+
+            else -> if (c.code !in 0x20..0xFF) {
+                "\\u${c.code.toHexString().padStart(4, '0')}"
+            } else c.toString()
+        }
+
+        sanitized.append(x)
+    }
+
+    return """"$sanitized""""
+}
+
 private open class JsonValueNode(
     private val value: Any? = null,
 ) : JsonNode {
@@ -141,7 +166,7 @@ private open class JsonValueNode(
             null -> "null"
             is Boolean -> value.toString()
             is Number -> value.toString()
-            else -> "\"$value\""
+            else -> escape(value.toString())
         }
     }
 
@@ -165,7 +190,7 @@ private class MutableJsonValueNode(
             null -> "null"
             is Boolean -> value.toString()
             is Number -> value.toString()
-            else -> "\"$value\""
+            else -> escape(value.toString())
         }
     }
 

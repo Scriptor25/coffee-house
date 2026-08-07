@@ -13,6 +13,6 @@ class MediaListJsonConverter : Converter<List<Media>, JsonNode> {
     override fun convert(value: List<Media>): JsonNode {
         val converter = provider.convert<Media, JsonNode>()!!
 
-        return jsonOf(value.map { converter(it) })
+        return jsonOf(*value.map { converter(it) }.toTypedArray())
     }
 }
