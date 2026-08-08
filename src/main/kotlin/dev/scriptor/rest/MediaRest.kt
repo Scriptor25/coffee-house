@@ -274,7 +274,7 @@ class MediaRest {
             session.expiresAt = now + ofMinutes(60).toKotlinDuration()
         }
 
-        val chapters = transaction(database) { item.chapters }
+        val chapters = transaction(database) { item.chapters.toList() }
 
         return jsonOf(
             *chapters
