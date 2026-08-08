@@ -223,6 +223,7 @@ class MediaRest {
         return appendToken(path, token).joinToString("\n")
     }
 
+    // TODO: differentiate between video and audio
     @Resource("/stream/[id]/[name]/[segment].mp4", result = "video/mp4")
     context(
         _: Logger,

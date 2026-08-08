@@ -79,7 +79,6 @@ fun getMetadata(
 ) {
     val command = listOf(
         "ffprobe",
-        "-v", "error",
         "-print_format", "json",
         "-show_format",
         "-show_streams",
@@ -93,7 +92,7 @@ fun getMetadata(
 
     val process = ProcessBuilder(command).start()
 
-    process.attach(log)
+    process.attach(log, Level.FINEST)
 
     val json = process.inputStream.reader().readText()
 

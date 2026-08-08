@@ -12,7 +12,6 @@ class Ffmpeg(
         buildList {
             this += listOf(
                 "ffmpeg",
-                "-v", "error",
                 "-y", // allow overriding existing files
                 "-i", input.absolutePathString(),
             )

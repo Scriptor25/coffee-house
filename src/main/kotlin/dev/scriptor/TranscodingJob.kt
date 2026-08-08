@@ -2,6 +2,7 @@ package dev.scriptor
 
 import dev.scriptor.model.Media
 import java.nio.file.Path
+import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.io.path.createDirectories
 import kotlin.io.path.notExists
@@ -59,7 +60,7 @@ data class TranscodingJob(
 
         process = ProcessBuilder(command).start()
 
-        process.attach(log)
+        process.attach(log, Level.FINEST)
     }
 
     context(_: Logger)
@@ -86,30 +87,27 @@ data class TranscodingJob(
     }
 
     private fun buildCommand(): List<String> {
+        val original = variants.filterIsInstance<OriginalVariant>()
         val scale = variants.filterIsInstance<ScaleVariant>()
 
         val outputs = outputs(metadata) {
             video(0) {
-                if (transcoding) {
-                    originalH264()
-                    scale.forEach {
-                        scaleH264(
-                            it.name,
-                            it.width,
-                            it.height,
-                            it.profile,
-                            it.bitrate,
-                        )
+                original.forEach {
+                    if (transcoding) {
+                        originalH264(it.name)
+                    } else {
+                        originalCopy(it.name)
                     }
-                } else {
-                    originalCopy()
-                    scale.forEach {
-                        scaleCopy(
-                            it.name,
-                            it.width,
-                            it.height,
-                        )
-                    }
+                }
+
+                scale.forEach {
+                    scaleH264(
+                        it.name,
+                        it.width,
+                        it.height,
+                        it.profile,
+                        it.bitrate,
+                    )
                 }
             }
 
@@ -124,7 +122,7 @@ data class TranscodingJob(
             }
 
             metadata.subtitles.filter {
-                // HLS does not support bitmap subtitles
+                // HLS does not support bitmap subtitles?
                 when (it.codec) {
                     "subrip",
                     "ass",

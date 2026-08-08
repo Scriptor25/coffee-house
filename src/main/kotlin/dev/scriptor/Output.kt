@@ -159,21 +159,6 @@ class VideoQuery(
         )
     }
 
-    fun scaleCopy(
-        name: String,
-        width: Int,
-        height: Int,
-    ) {
-        outputs += VideoOutput(
-            name,
-            true,
-            source,
-            width,
-            height,
-            VideoCodec.Copy,
-        )
-    }
-
     fun scaleH264(
         name: String,
         width: Int,

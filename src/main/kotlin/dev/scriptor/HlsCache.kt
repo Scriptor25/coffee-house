@@ -30,7 +30,7 @@ class HlsCache(
         val sourceHeight = item.height - (item.height % 2)
 
         val result = mutableListOf(
-            if (sourceWidth != item.width || sourceHeight != item.height)
+            if (transcoding && (sourceWidth != item.width || sourceHeight != item.height))
                 ScaleVariant(
                     "original",
                     sourceWidth,
@@ -42,25 +42,27 @@ class HlsCache(
                 OriginalVariant()
         )
 
-        for (variant in definedVariants) {
-            if (variant.name !in allowed) continue
-            if (variant !is ScaleVariant) continue
+        if (transcoding) {
+            for (variant in definedVariants) {
+                if (variant.name !in allowed) continue
+                if (variant !is ScaleVariant) continue
 
-            // no upscaling
-            if (variant.width > item.width || variant.height > item.height) continue
-            if (variant.width == item.width && variant.height == item.height) continue
+                // no upscaling
+                if (variant.width > item.width || variant.height > item.height) continue
+                if (variant.width == item.width && variant.height == item.height) continue
 
-            val aspect = item.width.toDouble() / item.height.toDouble()
-            val width = (variant.height * aspect).toInt()
-            val height = variant.height
+                val aspect = item.width.toDouble() / item.height.toDouble()
+                val width = (variant.height * aspect).toInt()
+                val height = variant.height
 
-            result += ScaleVariant(
-                variant.name,
-                width - (width % 2),
-                height - (height % 2),
-                variant.bitrate,
-                variant.profile,
-            )
+                result += ScaleVariant(
+                    variant.name,
+                    width - (width % 2),
+                    height - (height % 2),
+                    variant.bitrate,
+                    variant.profile,
+                )
+            }
         }
 
         return result
