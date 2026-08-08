@@ -5,6 +5,7 @@ import dev.scriptor.JsonNode
 import dev.scriptor.context.AuthContext
 import dev.scriptor.jsonOf
 import dev.scriptor.model.Bearer
+import dev.scriptor.model.Chapter
 import dev.scriptor.model.Media
 import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.ParameterList
@@ -278,9 +279,10 @@ class MediaRest {
 
         return jsonOf(
             *chapters
+                .sortedBy(Chapter::index)
                 .mapIndexed { index, chapter ->
                     jsonOf(
-                        "chapter" to jsonOf(index + 1),
+                        "chapter" to jsonOf(chapter.index + 1),
                         "start-time" to jsonOf(chapter.start),
                         "duration" to jsonOf(chapter.end - chapter.start),
                         "titles" to jsonOf(

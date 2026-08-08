@@ -8,7 +8,7 @@ import kotlin.uuid.Uuid
 
 object ChapterTable : UuidTable("chapter") {
     val media = reference("media_id", MediaTable.id)
-    val index = text("index")
+    val index = integer("index")
     val start = double("start")
     val end = double("end")
     val language = text("language").nullable()

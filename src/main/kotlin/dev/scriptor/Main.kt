@@ -239,8 +239,10 @@ fun getMetadata(
 
     val chapters = data["chapters"]
 
+    var i = 0
     for (chapter in chapters) {
-        val index = chapter["id"].get<Number>().toLong().toString()
+        val index = i++
+
         val start = chapter["start_time"].get<String>().toDouble()
         val end = chapter["end_time"].get<String>().toDouble()
 
