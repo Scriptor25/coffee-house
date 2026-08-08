@@ -224,7 +224,7 @@ class MediaRest {
     }
 
     // TODO: differentiate between video and audio
-    @Resource("/stream/[id]/[name]/[segment].mp4", result = "video/mp4")
+    @Resource("/stream/[id]/[name]/[segment].ts", result = "video/mp2t")
     context(
         _: Logger,
         database: Database,
