@@ -185,7 +185,7 @@ class AudioQuery(
 ) {
     private var output: AudioOutput? = null
 
-    fun copy(name: String = metadata.language ?: "audio$source") {
+    fun copy(name: String = "audio$source") {
         output = AudioOutput(
             name,
             source,
@@ -196,7 +196,7 @@ class AudioQuery(
         )
     }
 
-    fun aac(name: String = metadata.language ?: "audio$source") {
+    fun aac(name: String = "audio$source") {
         output = AudioOutput(
             name,
             source,
@@ -216,7 +216,7 @@ class SubtitleQuery(
 ) {
     private var output: SubtitleOutput? = null
 
-    fun copy(name: String = metadata.language ?: "subtitle$source") {
+    fun copy(name: String = "subtitle$source") {
         output = SubtitleOutput(
             name,
             source,
@@ -227,7 +227,7 @@ class SubtitleQuery(
         )
     }
 
-    fun webVtt(name: String = metadata.language ?: "subtitle$source") {
+    fun webVtt(name: String = "subtitle$source") {
         output = SubtitleOutput(
             name,
             source,
