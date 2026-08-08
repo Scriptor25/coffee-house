@@ -43,7 +43,7 @@ data class TranscodingJob(
 
     context(_: Logger)
     fun segment(name: String, segment: String): Path =
-        waitFor(cache.resolve(name).resolve("$segment.ts"))
+        waitFor(cache.resolve(name).resolve("$segment.mp4"))
 
     @Synchronized
     context(parent: Logger)

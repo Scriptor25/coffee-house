@@ -298,17 +298,6 @@ fun main() {
     val hls = HlsCache(cache, transcoding)
     provider += hls
 
-    val server = Server(log, provider, hostname, port)
-
-    Runtime.getRuntime().addShutdownHook(Thread {
-        try {
-            server.stop()
-            server.close()
-        } catch (e: Throwable) {
-            log.warning(e.stackTraceToString())
-        }
-    })
-
     val paths = data
         .walk()
         .filter { it.extension in EXTENSIONS }
@@ -357,6 +346,17 @@ fun main() {
             modifiedAt,
         )
     }
+
+    val server = Server(log, provider, hostname, port)
+
+    Runtime.getRuntime().addShutdownHook(Thread {
+        try {
+            server.stop()
+            server.close()
+        } catch (e: Throwable) {
+            log.warning(e.stackTraceToString())
+        }
+    })
 
     server.use { server ->
         scan(server, "dev.scriptor")

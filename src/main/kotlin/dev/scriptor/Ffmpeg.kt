@@ -177,8 +177,8 @@ class Ffmpeg(
             "-hls_time", "6",
             "-hls_list_size", "0",
             "-hls_flags", "independent_segments+temp_file",
-            "-hls_segment_type", "mpegts",
-            "-hls_segment_filename", cache.resolve("%v/segment%d.ts").absolutePathString(),
+            "-hls_segment_type", "fmp4",
+            "-hls_segment_filename", cache.resolve("%v/segment%d.mp4").absolutePathString(),
             cache.resolve("%v/index.m3u8").absolutePathString(),
         )
     }
