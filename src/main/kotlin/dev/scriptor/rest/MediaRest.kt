@@ -105,15 +105,17 @@ class MediaRest {
         @QueryParameter offset: Long?,
         @QueryParameter limit: Int?,
         @Header authorization: Bearer,
-    ): List<Media> = transaction(database) {
+    ): List<Media> {
         auth.auth(authorization.token)
             ?: throw UnauthorizedSignal()
 
-        Media
-            .all()
-            .offset(offset ?: 0L)
-            .limit(limit ?: Int.MAX_VALUE)
-            .toList()
+        return transaction(database) {
+            Media
+                .all()
+                .offset(offset ?: 0L)
+                .limit(limit ?: Int.MAX_VALUE)
+                .toList()
+        }
     }
 
     @Resource("/[id]", result = "application/json")
@@ -121,11 +123,11 @@ class MediaRest {
     fun getMedia(
         @PathParameter id: Uuid,
         @Header authorization: Bearer,
-    ): Media = transaction(database) {
+    ): Media {
         auth.auth(authorization.token)
             ?: throw UnauthorizedSignal()
 
-        Media.findById(id)
+        return transaction(database) { Media.findById(id) }
             ?: throw NotFoundSignal()
     }
 
@@ -136,22 +138,20 @@ class MediaRest {
         @QueryParameter token: String,
         @Header range: String?,
     ): Result {
-        val path = transaction(database) {
-            val now = now()
+        val now = now()
 
-            val session = auth.auth(token, now)
-                ?: throw UnauthorizedSignal()
+        val session = auth.auth(token, now)
+            ?: throw UnauthorizedSignal()
 
-            val item = Media.findById(id)
-                ?: throw NotFoundSignal()
+        val item = transaction(database) { Media.findById(id) }
+            ?: throw NotFoundSignal()
 
+        transaction(database) {
             session.expiresAt = now + ofMinutes(60).toKotlinDuration()
             session.access = now
-
-            item.path
         }
 
-        return stream(range, path, 2L * 1024L * 1024L)
+        return stream(range, item.path, 2L * 1024L * 1024L)
     }
 
     @Resource("/stream/[id]/master.m3u8", result = "application/vnd.apple.mpegurl")
@@ -165,21 +165,21 @@ class MediaRest {
         @PathParameter id: Uuid,
         @QueryParameter token: String,
     ): String {
-        val path = transaction(database) {
-            val now = now()
-            val session = auth.auth(token, now)
-                ?: throw UnauthorizedSignal()
+        val now = now()
 
-            val item = Media.findById(id)
-                ?: throw NotFoundSignal()
+        val session = auth.auth(token, now)
+            ?: throw UnauthorizedSignal()
 
+        val item = transaction(database) { Media.findById(id) }
+            ?: throw NotFoundSignal()
+
+        transaction(database) {
             session.access = now
             session.expiresAt = now + ofMinutes(60).toKotlinDuration()
-
-            val job = hls.job(item)
-
-            job.master()
         }
+
+        val job = hls.job(item)
+        val path = job.master()
 
         return appendToken(path, token)
     }
@@ -196,21 +196,21 @@ class MediaRest {
         @PathParameter name: String,
         @QueryParameter token: String,
     ): String {
-        val path = transaction(database) {
-            val now = now()
-            val session = auth.auth(token, now)
-                ?: throw UnauthorizedSignal()
+        val now = now()
 
-            val item = Media.findById(id)
-                ?: throw NotFoundSignal()
+        val session = auth.auth(token, now)
+            ?: throw UnauthorizedSignal()
 
+        val item = transaction(database) { Media.findById(id) }
+            ?: throw NotFoundSignal()
+
+        transaction(database) {
             session.access = now
             session.expiresAt = now + ofMinutes(60).toKotlinDuration()
-
-            val job = hls.job(item)
-
-            job.index(name)
         }
+
+        val job = hls.job(item)
+        val path = job.index(name)
 
         return appendToken(path, token)
     }
@@ -229,21 +229,21 @@ class MediaRest {
         @QueryParameter token: String,
         @Header range: String?,
     ): Result {
-        val path = transaction(database) {
-            val now = now()
-            val session = auth.auth(token, now)
-                ?: throw UnauthorizedSignal()
+        val now = now()
 
-            val item = Media.findById(id)
-                ?: throw NotFoundSignal()
+        val session = auth.auth(token, now)
+            ?: throw UnauthorizedSignal()
 
+        val item = transaction(database) { Media.findById(id) }
+            ?: throw NotFoundSignal()
+
+        transaction(database) {
             session.access = now
             session.expiresAt = now + ofMinutes(60).toKotlinDuration()
-
-            val job = hls.job(item)
-
-            job.segment(name, index)
         }
+
+        val job = hls.job(item)
+        val path = job.segment(name, index)
 
         return stream(range, path, 2L * 1024L * 1024L)
     }

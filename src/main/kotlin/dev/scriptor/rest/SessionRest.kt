@@ -40,7 +40,7 @@ class SessionRest {
     fun createSession(
         @Body body: JsonNode,
         @Header("user-agent") agent: String?,
-    ): Session = transaction(database) {
+    ): Session {
         val username = body["username"].get<String>()
         val password = body["password"].get<String>()
 
@@ -55,11 +55,12 @@ class SessionRest {
                 throw UnauthorizedSignal()
             }
         } else {
-            user = User
-                .find { UserTable.name eq username }
-                .limit(1)
-                .firstOrNull()
-                ?: throw UnauthorizedSignal()
+            user = transaction(database) {
+                User
+                    .find { UserTable.name eq username }
+                    .limit(1)
+                    .firstOrNull()
+            } ?: throw UnauthorizedSignal()
 
             // TODO: check password hash
         }
@@ -72,12 +73,14 @@ class SessionRest {
         val createdAt = now()
         val expiresAt = createdAt + ofMinutes(60).toKotlinDuration()
 
-        Session.new {
-            this.user = user?.id
-            this.token = token
-            this.createdAt = createdAt
-            this.expiresAt = expiresAt
-            this.agent = agent
+        return transaction(database) {
+            Session.new {
+                this.user = user?.id
+                this.token = token
+                this.createdAt = createdAt
+                this.expiresAt = expiresAt
+                this.agent = agent
+            }
         }
     }
 
@@ -86,10 +89,9 @@ class SessionRest {
         result = "application/json",
     )
     context(auth: AuthContext, database: Database)
-    fun getCurrentSession(@Header authorization: Bearer): Session = transaction(database) {
+    fun getCurrentSession(@Header authorization: Bearer): Session =
         auth.auth(authorization.token)
             ?: throw NotFoundSignal()
-    }
 
     @Resource(
         "/",
@@ -97,12 +99,11 @@ class SessionRest {
         result = "application/json",
     )
     context(auth: AuthContext, database: Database)
-    fun deleteCurrentSession(@Header authorization: Bearer): Session = transaction(database) {
+    fun deleteCurrentSession(@Header authorization: Bearer): Session {
         val session = auth.auth(authorization.token)
             ?: throw NotFoundSignal()
 
-        session.delete()
-
-        session
+        transaction(database) { session.delete() }
+        return session
     }
 }

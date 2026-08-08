@@ -16,7 +16,7 @@ object SubtitleTrackTable : UuidTable("subtitle_track") {
     val forced = bool("forced")
 
     init {
-        uniqueIndex("subtitle_track_media_index", media, index)
+        uniqueIndex(media, index)
     }
 }
 

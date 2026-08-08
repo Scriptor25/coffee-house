@@ -22,7 +22,7 @@ object VideoTrackTable : UuidTable("video_track") {
     val default = bool("default")
 
     init {
-        uniqueIndex("video_track_media_index", media, index)
+        uniqueIndex(media, index)
     }
 }
 

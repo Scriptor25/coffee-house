@@ -30,6 +30,7 @@ class Media(id: EntityID<Uuid>) : UuidEntity(id) {
     val video by VideoTrack referrersOn VideoTrackTable.media
     val audio by AudioTrack referrersOn AudioTrackTable.media
     val subtitles by SubtitleTrack referrersOn SubtitleTrackTable.media
+    val chapters by Chapter referrersOn ChapterTable.media
 
     override fun toString(): String {
         return "Media(id=$id, path=$path, size=$size, createdAt=$createdAt, modifiedAt=$modifiedAt, duration=$duration)"

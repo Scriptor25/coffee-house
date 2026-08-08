@@ -19,7 +19,7 @@ object AudioTrackTable : UuidTable("audio_track") {
     val forced = bool("forced")
 
     init {
-        uniqueIndex("audio_track_media_index", media, index)
+        uniqueIndex(media, index)
     }
 }
 

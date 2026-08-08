@@ -23,19 +23,25 @@ class MediaJsonConverter : Converter<Media, JsonNode> {
 
         val database = provider[typeOf<Database>()] as Database
 
-        return transaction(database) {
-            jsonOf(
-                "id" to jsonOf(value.id),
-                "path" to jsonOf(value.path),
-                "size" to jsonOf(value.size),
-                "title" to jsonOf(value.title),
-                "created_at" to jsonOf(value.createdAt),
-                "modified_at" to jsonOf(value.modifiedAt),
-                "duration" to jsonOf(value.duration),
-                "video" to videoConverter.convert(value.video.toList()),
-                "audio" to audioConverter.convert(value.audio.toList()),
-                "subtitles" to subtitlesConverter.convert(value.subtitles.toList()),
+        val (video, audio, subtitles) = transaction(database) {
+            Triple(
+                value.video.toList(),
+                value.audio.toList(),
+                value.subtitles.toList(),
             )
         }
+
+        return jsonOf(
+            "id" to jsonOf(value.id),
+            "path" to jsonOf(value.path),
+            "size" to jsonOf(value.size),
+            "title" to jsonOf(value.title),
+            "created_at" to jsonOf(value.createdAt),
+            "modified_at" to jsonOf(value.modifiedAt),
+            "duration" to jsonOf(value.duration),
+            "video" to videoConverter.convert(video),
+            "audio" to audioConverter.convert(audio),
+            "subtitles" to subtitlesConverter.convert(subtitles),
+        )
     }
 }

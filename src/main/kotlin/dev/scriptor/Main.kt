@@ -7,6 +7,7 @@ import dev.scriptor.server.scan
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.nio.file.Files
 import java.nio.file.Path
@@ -71,12 +72,11 @@ fun parseFrameRate(value: String?): Double {
 
 fun getMetadata(
     parent: Logger,
+    database: Database,
     path: Path,
     createdAt: Instant,
     modifiedAt: Instant,
 ) {
-    if (Media.count(MediaTable.path eq path) > 0) return
-
     val command = listOf(
         "ffprobe",
         "-v", "error",
@@ -109,13 +109,15 @@ fun getMetadata(
     val tags = format["tags"]
     val title = tags["title"].get<String?>() ?: path.nameWithoutExtension
 
-    val media = Media.new {
-        this.path = path
-        this.size = size
-        this.title = title
-        this.createdAt = createdAt
-        this.modifiedAt = modifiedAt
-        this.duration = duration
+    val media = transaction(database) {
+        Media.new {
+            this.path = path
+            this.size = size
+            this.title = title
+            this.createdAt = createdAt
+            this.modifiedAt = modifiedAt
+            this.duration = duration
+        }
     }
 
     val streams = data["streams"]
@@ -145,22 +147,24 @@ fun getMetadata(
                 val disposition = stream["disposition"]
                 val default = disposition["default"].get<Number>() == 1
 
-                VideoTrack.new {
-                    this.media = media.id
-                    this.index = index
-                    this.codec = codec
-                    this.width = width
-                    this.height = height
-                    this.bitRate = if (bitRate == 0L)
-                        size * 8L * 1000L / (duration * 1000.0).toLong()
-                    else bitRate
-                    this.frameRate = frameRate
-                    this.profile = profile
-                    this.level = level
-                    this.hdr = hdr
-                    this.language = language
-                    this.title = title
-                    this.default = default
+                transaction(database) {
+                    VideoTrack.new {
+                        this.media = media.id
+                        this.index = index
+                        this.codec = codec
+                        this.width = width
+                        this.height = height
+                        this.bitRate = if (bitRate == 0L)
+                            size * 8L * 1000L / (duration * 1000.0).toLong()
+                        else bitRate
+                        this.frameRate = frameRate
+                        this.profile = profile
+                        this.level = level
+                        this.hdr = hdr
+                        this.language = language
+                        this.title = title
+                        this.default = default
+                    }
                 }
             }
 
@@ -179,17 +183,19 @@ fun getMetadata(
                 val default = disposition["default"].get<Number>() == 1
                 val forced = disposition["forced"].get<Number>() == 1
 
-                AudioTrack.new {
-                    this.media = media.id
-                    this.index = index
-                    this.codec = codec
-                    this.bitRate = bitRate
-                    this.sampleRate = sampleRate
-                    this.channels = channels
-                    this.language = language
-                    this.title = title
-                    this.default = default
-                    this.forced = forced
+                transaction(database) {
+                    AudioTrack.new {
+                        this.media = media.id
+                        this.index = index
+                        this.codec = codec
+                        this.bitRate = bitRate
+                        this.sampleRate = sampleRate
+                        this.channels = channels
+                        this.language = language
+                        this.title = title
+                        this.default = default
+                        this.forced = forced
+                    }
                 }
             }
 
@@ -205,14 +211,16 @@ fun getMetadata(
                 val default = disposition["default"].get<Number>() == 1
                 val forced = disposition["forced"].get<Number>() == 1
 
-                SubtitleTrack.new {
-                    this.media = media.id
-                    this.index = index
-                    this.codec = codec
-                    this.language = language
-                    this.title = title
-                    this.default = default
-                    this.forced = forced
+                transaction(database) {
+                    SubtitleTrack.new {
+                        this.media = media.id
+                        this.index = index
+                        this.codec = codec
+                        this.language = language
+                        this.title = title
+                        this.default = default
+                        this.forced = forced
+                    }
                 }
             }
 
@@ -232,14 +240,24 @@ fun getMetadata(
     val chapters = data["chapters"]
 
     for (chapter in chapters) {
-        val index = chapter["id"].get<Number>().toInt()
+        val index = chapter["id"].get<Number>().toLong().toString()
         val start = chapter["start_time"].get<String>().toDouble()
         val end = chapter["end_time"].get<String>().toDouble()
 
         val tags = chapter["tags"]
+        val language = tags["language"].get<String?>() ?: "en"
         val title = tags["title"].get<String?>() ?: "Chapter ${index + 1}"
 
-        // TODO: Chapter.new { ... }
+        transaction(database) {
+            Chapter.new {
+                this.media = media.id
+                this.index = index
+                this.start = start
+                this.end = end
+                this.language = language
+                this.title = title
+            }
+        }
     }
 }
 
@@ -290,39 +308,53 @@ fun main() {
         }
     })
 
+    val paths = data
+        .walk()
+        .filter { it.extension in EXTENSIONS }
+        .toList()
+
     transaction(database) {
         SchemaUtils.create(
             MediaTable,
             VideoTrackTable,
             AudioTrackTable,
             SubtitleTrackTable,
+            ChapterTable,
             UserTable,
             SessionTable,
         )
+    }
 
-        val paths = mutableListOf<Path>()
-
-        for (path in data.walk()) {
-            if (path.extension !in EXTENSIONS) continue
-
-            paths.add(path)
-
-            val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
-
-            val createdAt = attributes.creationTime()
-            val modifiedAt = attributes.lastModifiedTime()
-
-            getMetadata(
-                log,
-                path,
-                createdAt.toInstant().toKotlinInstant(),
-                modifiedAt.toInstant().toKotlinInstant(),
-            )
-        }
-
+    transaction(database) {
         Media
             .find { MediaTable.path notInList paths }
             .forEach { it.delete() }
+    }
+
+    val existing = transaction {
+        MediaTable
+            .select(MediaTable.path)
+            .map { it[MediaTable.path] }
+            .toSet()
+    }
+
+    val revalidate = paths.filter { it !in existing }
+
+    for ((index, path) in revalidate.withIndex()) {
+        log.info("${index + 1} / ${revalidate.size}")
+
+        val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
+
+        val createdAt = attributes.creationTime().toInstant().toKotlinInstant()
+        val modifiedAt = attributes.lastModifiedTime().toInstant().toKotlinInstant()
+
+        getMetadata(
+            log,
+            database,
+            path,
+            createdAt,
+            modifiedAt,
+        )
     }
 
     server.use { server ->
