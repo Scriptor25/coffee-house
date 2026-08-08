@@ -2,6 +2,8 @@ package dev.scriptor
 
 import dev.scriptor.model.Media
 import dev.scriptor.model.VideoTrack
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.uuid.Uuid
@@ -64,13 +66,16 @@ class HlsCache(
         return result
     }
 
+    context(database: Database)
     fun job(item: Media): TranscodingJob =
         jobs.computeIfAbsent(item.id.value) {
-            TranscodingJob(
-                item,
-                base.resolve(item.id.value.toHexDashString()),
-                variants(item.video.first()),
-                transcoding,
-            )
+            transaction(database) {
+                TranscodingJob(
+                    item,
+                    base.resolve(item.id.value.toHexDashString()),
+                    variants(item.video.first { it.index == 0 }),
+                    transcoding,
+                )
+            }
         }
 }

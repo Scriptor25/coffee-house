@@ -1,7 +1,9 @@
 package dev.scriptor.rest
 
 import dev.scriptor.HlsCache
+import dev.scriptor.JsonNode
 import dev.scriptor.context.AuthContext
+import dev.scriptor.jsonOf
 import dev.scriptor.model.Bearer
 import dev.scriptor.model.Media
 import dev.scriptor.server.NotFoundSignal
@@ -32,26 +34,28 @@ class MediaRest {
         return "${uri}${separator}token=${token}"
     }
 
-    fun appendToken(path: Path, token: String): String = path
+    fun appendToken(path: Path, token: String): List<String> = path
         .bufferedReader()
         .useLines { lines ->
-            lines.joinToString("\n") { line ->
-                when {
-                    hlsUriLine.matches(line) -> hlsUriLine.replace(line) { match ->
-                        appendToken(match.value, token)
-                    }
-
-                    "URI=" in line -> hlsUriTag.replace(line) { match ->
-                        buildString {
-                            append(match.groupValues[1])
-                            append(appendToken(match.groupValues[2], token))
-                            append(match.groupValues[3])
+            lines
+                .map { line ->
+                    when {
+                        hlsUriLine.matches(line) -> hlsUriLine.replace(line) { match ->
+                            appendToken(match.value, token)
                         }
-                    }
 
-                    else -> line
+                        "URI=" in line -> hlsUriTag.replace(line) { match ->
+                            buildString {
+                                append(match.groupValues[1])
+                                append(appendToken(match.groupValues[2], token))
+                                append(match.groupValues[3])
+                            }
+                        }
+
+                        else -> line
+                    }
                 }
-            }
+                .toList()
         }
 
     fun stream(range: String?, path: Path, chunk: Long): Result {
@@ -181,7 +185,10 @@ class MediaRest {
         val job = hls.job(item)
         val path = job.master()
 
-        return appendToken(path, token)
+        val manifest = appendToken(path, token).toMutableList()
+        manifest += """#EXT-X-SESSION-DATA:DATA-ID="com.apple.hls.chapters",URI="chapters.json?token=$token""""
+
+        return manifest.joinToString("\n")
     }
 
     @Resource("/stream/[id]/[name]/index.m3u8", result = "application/vnd.apple.mpegurl")
@@ -212,10 +219,10 @@ class MediaRest {
         val job = hls.job(item)
         val path = job.index(name)
 
-        return appendToken(path, token)
+        return appendToken(path, token).joinToString("\n")
     }
 
-    @Resource("/stream/[id]/[name]/segment[index].ts", result = "video/mp2t")
+    @Resource("/stream/[id]/[name]/[segment].mp4", result = "video/mp4")
     context(
         _: Logger,
         database: Database,
@@ -225,7 +232,7 @@ class MediaRest {
     fun getMediaStreamSegment(
         @PathParameter id: Uuid,
         @PathParameter name: String,
-        @PathParameter index: Long,
+        @PathParameter segment: String,
         @QueryParameter token: String,
         @Header range: String?,
     ): Result {
@@ -243,8 +250,48 @@ class MediaRest {
         }
 
         val job = hls.job(item)
-        val path = job.segment(name, index)
+        val path = job.segment(name, segment)
 
         return stream(range, path, 2L * 1024L * 1024L)
+    }
+
+    @Resource("/stream/[id]/chapters.json", result = "application/json")
+    context(database: Database, auth: AuthContext)
+    fun getMediaStreamChapters(
+        @PathParameter id: Uuid,
+        @QueryParameter token: String,
+    ): JsonNode {
+        val now = now()
+
+        val session = auth.auth(token, now)
+            ?: throw UnauthorizedSignal()
+
+        val item = transaction(database) { Media.findById(id) }
+            ?: throw NotFoundSignal()
+
+        transaction(database) {
+            session.access = now
+            session.expiresAt = now + ofMinutes(60).toKotlinDuration()
+        }
+
+        val chapters = transaction(database) { item.chapters }
+
+        return jsonOf(
+            *chapters
+                .mapIndexed { index, chapter ->
+                    jsonOf(
+                        "chapter" to jsonOf(index + 1),
+                        "start-time" to jsonOf(chapter.start),
+                        "duration" to jsonOf(chapter.end - chapter.start),
+                        "titles" to jsonOf(
+                            jsonOf(
+                                "language" to jsonOf(chapter.language ?: "und"),
+                                "title" to jsonOf(chapter.title ?: "Chapter $index"),
+                            ),
+                        ),
+                    )
+                }
+                .toTypedArray()
+        )
     }
 }

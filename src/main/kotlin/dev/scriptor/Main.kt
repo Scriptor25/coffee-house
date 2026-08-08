@@ -245,8 +245,8 @@ fun getMetadata(
         val end = chapter["end_time"].get<String>().toDouble()
 
         val tags = chapter["tags"]
-        val language = tags["language"].get<String?>() ?: "en"
-        val title = tags["title"].get<String?>() ?: "Chapter ${index + 1}"
+        val language = tags["language"].get<String?>()
+        val title = tags["title"].get<String?>()
 
         transaction(database) {
             Chapter.new {

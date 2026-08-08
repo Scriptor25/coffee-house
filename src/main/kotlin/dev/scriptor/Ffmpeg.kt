@@ -68,7 +68,7 @@ class Ffmpeg(
 
                 is SubtitleOutput -> listOf("-map", "0:${it.source}")
             }
-        } + listOf("-map_chapters", "0")
+        }
     }
 
     private fun buildCodecs(): List<String> {
@@ -134,6 +134,8 @@ class Ffmpeg(
         val hasAudio = outputs.any { it is AudioOutput }
         val hasSubtitles = outputs.any { it is SubtitleOutput }
 
+        val hasDefaultAudio = outputs.filterIsInstance<AudioOutput>().any { it.default }
+
         return outputs.joinToString(" ") {
             val segments = when (it) {
                 is VideoOutput -> listOfNotNull(
@@ -148,7 +150,7 @@ class Ffmpeg(
                     "agroup:audio",
                     if (it.language != null) "language:${it.language}" else null,
                     "name:${it.name}",
-                    "default:${if (it.default) "yes" else "no"}",
+                    "default:${if (it.default || (!hasDefaultAudio && audio == 1)) "yes" else "no"}",
                 )
 
                 is SubtitleOutput -> listOfNotNull(
@@ -176,7 +178,9 @@ class Ffmpeg(
             "-hls_time", "6",
             "-hls_list_size", "0",
             "-hls_flags", "independent_segments+temp_file",
-            "-hls_segment_filename", cache.resolve("%v/segment%d.ts").absolutePathString(),
+            "-hls_segment_type", "fmp4",
+            "-hls_fmp4_init_filename", "init.mp4",
+            "-hls_segment_filename", cache.resolve("%v/segment%d.mp4").absolutePathString(),
             cache.resolve("%v/index.m3u8").absolutePathString(),
         )
     }
