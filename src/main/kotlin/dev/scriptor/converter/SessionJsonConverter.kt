@@ -12,14 +12,12 @@ class SessionJsonConverter : Converter<Session, JsonNode> {
     override fun convert(value: Session): JsonNode {
         return jsonOf(
             "id" to jsonOf(value.id),
-            "user_id" to jsonOf(value.userId),
+            "user_id" to jsonOf(value.user?.value),
             "token" to jsonOf(value.token),
             "created_at" to jsonOf(value.createdAt),
             "expires_at" to jsonOf(value.expiresAt),
             "access" to jsonOf(value.access),
             "agent" to jsonOf(value.agent),
-            "sequence" to jsonOf(value.sequence),
-            "next" to jsonOf(value.next),
         )
     }
 }

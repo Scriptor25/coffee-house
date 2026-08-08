@@ -1,33 +1,38 @@
 package dev.scriptor.model
 
-import dev.scriptor.annotation.Column
-import dev.scriptor.annotation.PrimaryKey
-import dev.scriptor.annotation.Table
-import dev.scriptor.annotation.Unique
-import java.nio.file.Path
-import kotlin.time.Instant
+import dev.scriptor.instant
+import dev.scriptor.path
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.core.dao.id.UuidTable
+import org.jetbrains.exposed.v1.dao.UuidEntity
+import org.jetbrains.exposed.v1.dao.UuidEntityClass
 import kotlin.uuid.Uuid
 
-@Table("media")
-data class Media(
+object MediaTable : UuidTable("media") {
+    val path = path("path").uniqueIndex()
+    val size = long("size")
+    val title = text("title")
+    val createdAt = instant("created_at")
+    val modifiedAt = instant("modified_at")
+    val duration = double("duration")
+}
 
-    @Column(type = String::class)
-    @PrimaryKey
-    val id: Uuid,
+class Media(id: EntityID<Uuid>) : UuidEntity(id) {
+    companion object : UuidEntityClass<Media>(MediaTable)
 
-    @Column(type = String::class)
-    @Unique
-    val path: Path,
+    var path by MediaTable.path
+    var size by MediaTable.size
+    var title by MediaTable.title
+    var createdAt by MediaTable.createdAt
+    var modifiedAt by MediaTable.modifiedAt
+    var duration by MediaTable.duration
 
-    @Column
-    val size: Long,
+    val video by VideoTrack referrersOn VideoTrackTable.media
+    val audio by AudioTrack referrersOn AudioTrackTable.media
+    val subtitles by SubtitleTrack referrersOn SubtitleTrackTable.media
+    val chapters by Chapter referrersOn ChapterTable.media
 
-    @Column
-    val title: String,
-
-    @Column("created_at", String::class)
-    val createdAt: Instant,
-
-    @Column("modified_at", String::class)
-    val modifiedAt: Instant,
-)
+    override fun toString(): String {
+        return "Media(id=$id, path=$path, size=$size, createdAt=$createdAt, modifiedAt=$modifiedAt, duration=$duration)"
+    }
+}

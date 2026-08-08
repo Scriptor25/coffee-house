@@ -1,31 +1,27 @@
 package dev.scriptor.context
 
 import dev.scriptor.model.Session
-import dev.scriptor.server.Provider
+import dev.scriptor.model.SessionTable
 import dev.scriptor.server.annotation.Context
-import java.sql.Connection
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.greaterEq
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.time.Clock.System.now
 import kotlin.time.Instant
 
 @Context
 class AuthContext {
 
-    context(
-        _: Provider,
-        _: Connection,
-        sessions: SessionContext,
-    )
+    context(database: Database)
     fun auth(
         token: String,
         now: Instant = now(),
-    ): Session? {
-        val session = sessions.getSessionByToken(token)
-            ?: return null
-
-        if ((session.expiresAt - now).isNegative()) {
-            return null
-        }
-
-        return session
+    ): Session? = transaction(database) {
+        Session
+            .find { (SessionTable.token eq token) and (SessionTable.expiresAt greaterEq now) }
+            .limit(1)
+            .singleOrNull()
     }
 }

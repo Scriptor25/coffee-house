@@ -1,93 +1,271 @@
 package dev.scriptor
 
-import dev.scriptor.context.SessionContext
-import dev.scriptor.model.Media
-import dev.scriptor.model.Metadata
-import dev.scriptor.model.Session
-import dev.scriptor.model.User
+import dev.scriptor.model.*
 import dev.scriptor.server.Provider
 import dev.scriptor.server.http.Server
 import dev.scriptor.server.scan
-import org.bytedeco.ffmpeg.avutil.AVDictionary
-import org.bytedeco.ffmpeg.avutil.AVRational
-import org.bytedeco.ffmpeg.global.avcodec.avcodec_get_name
-import org.bytedeco.ffmpeg.global.avformat.*
-import org.bytedeco.ffmpeg.global.avutil.*
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.select
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
 import java.sql.DriverManager
+import java.sql.Timestamp
 import java.util.logging.Level
+import java.util.logging.Logger
 import kotlin.io.path.*
-import kotlin.reflect.typeOf
+import kotlin.time.Clock.System.now
+import kotlin.time.Instant
 import kotlin.time.toKotlinInstant
-import kotlin.uuid.Uuid
+
+fun Table.instant(name: String): Column<Instant> = registerColumn(
+    name,
+    object : IColumnType<Instant> {
+        override var nullable: Boolean = false
+
+        override fun sqlType(): String {
+            return "TIMESTAMP"
+        }
+
+        override fun valueFromDB(value: Any): Instant? = when (value) {
+            is Instant -> value
+            is Timestamp -> value.toInstant().toKotlinInstant()
+            is String -> Instant.parse(value)
+            else -> error("unexpected value of type ${value::class}")
+        }
+    },
+)
+
+fun Table.path(name: String): Column<Path> = registerColumn(
+    name,
+    object : IColumnType<Path> {
+        override var nullable: Boolean = false
+
+        override fun sqlType(): String {
+            return "TEXT"
+        }
+
+        override fun valueFromDB(value: Any): Path? = when (value) {
+            is Path -> value
+            is String -> Path(value)
+            else -> error("unexpected value of type ${value::class}")
+        }
+    },
+)
 
 fun getEnvironment(): Map<String, String> = System.getenv()
 
 val EXTENSIONS = arrayOf("mkv", "mp4")
 
-fun getMetadata(id: Uuid, path: Path): Metadata {
-    val context = avformat_alloc_context()
+fun parseFrameRate(value: String?): Double {
+    if (value == null || value == "0/0") return 0.0
 
-    if (avformat_open_input(context, path.absolutePathString(), null, null) < 0) {
-        error("failed to open file $path")
+    val (num, den) = value
+        .split("/")
+        .map(String::toDouble)
+
+    return if (den == 0.0) 0.0 else num / den
+}
+
+fun getMetadata(
+    parent: Logger,
+    database: Database,
+    path: Path,
+    createdAt: Instant,
+    modifiedAt: Instant,
+) {
+    val command = listOf(
+        "ffprobe",
+        "-v", "error",
+        "-print_format", "json",
+        "-show_format",
+        "-show_streams",
+        "-show_chapters",
+        path.absolutePathString(),
+    )
+
+    val log = getLogger("ffprobe", parent)
+
+    log.fine(command.joinToString("' '", "'", "'"))
+
+    val process = ProcessBuilder(command).start()
+
+    process.attach(log)
+
+    val json = process.inputStream.reader().readText()
+
+    val value = process.waitFor()
+    if (value != 0) error("failed to get metadata for $path")
+
+    val data = parseJson(json)
+
+    val format = data["format"]
+    val size = format["size"].get<String>().toLong()
+    val duration = format["duration"].get<String>().toDouble()
+
+    val tags = format["tags"]
+    val title = tags["title"].get<String?>() ?: path.nameWithoutExtension
+
+    val media = transaction(database) {
+        Media.new {
+            this.path = path
+            this.size = size
+            this.title = title
+            this.createdAt = createdAt
+            this.modifiedAt = modifiedAt
+            this.duration = duration
+        }
     }
 
-    try {
-        if (avformat_find_stream_info(context, null as AVDictionary?) < 0) {
-            error("failed to read stream information")
-        }
+    val streams = data["streams"]
+    for (stream in streams) {
+        val codecType = stream["codec_type"].get<String>()
 
-        var width = 0
-        var height = 0
-        var fps = 0.0
-        var videoCodec: String? = null
-        var audioCodec: String? = null
+        when (codecType) {
+            "video" -> {
+                val index = stream["index"].get<Number>().toInt()
+                val codec = stream["codec_name"].get<String>()
+                val width = stream["width"].get<Number>().toInt()
+                val height = stream["height"].get<Number>().toInt()
+                val bitRate = stream["bit_rate"].get<String?>()?.toLongOrNull() ?: 0L
+                val frameRate = parseFrameRate(stream["avg_frame_rate"].get<String?>())
+                val profile = stream["profile"].get<String>()
+                val level = stream["level"].get<Number>().toInt()
 
-        for (i in 0 until context.nb_streams()) {
-            val stream = context.streams(i)
-            val codec = stream.codecpar()
-
-            when (codec.codec_type()) {
-                AVMEDIA_TYPE_VIDEO -> {
-                    width = codec.width()
-                    height = codec.height()
-
-                    val rate: AVRational = stream.avg_frame_rate()
-                    if (rate.den() != 0) {
-                        fps = rate.num().toDouble() / rate.den()
-                    }
-
-                    videoCodec = avcodec_get_name(codec.codec_id()).string
+                val hdr = when (stream["color_transfer"].get<String?>()) {
+                    "smpte2084", "arib-std-b67" -> true
+                    else -> false
                 }
 
-                AVMEDIA_TYPE_AUDIO -> {
-                    audioCodec = avcodec_get_name(codec.codec_id()).string
+                val tags = stream["tags"]
+                val language = tags["language"].get<String?>()
+                val title = tags["title"].get<String?>()
+
+                val disposition = stream["disposition"]
+                val default = disposition["default"].get<Number>() == 1
+
+                transaction(database) {
+                    VideoTrack.new {
+                        this.media = media.id
+                        this.index = index
+                        this.codec = codec
+                        this.width = width
+                        this.height = height
+                        this.bitRate = if (bitRate == 0L)
+                            size * 8L * 1000L / (duration * 1000.0).toLong()
+                        else bitRate
+                        this.frameRate = frameRate
+                        this.profile = profile
+                        this.level = level
+                        this.hdr = hdr
+                        this.language = language
+                        this.title = title
+                        this.default = default
+                    }
                 }
             }
+
+            "audio" -> {
+                val index = stream["index"].get<Number>().toInt()
+                val codec = stream["codec_name"].get<String>()
+                val bitRate = stream["bit_rate"].get<String?>()?.toLongOrNull() ?: 0L
+                val sampleRate = stream["sample_rate"].get<String>().toLong()
+                val channels = stream["channels"].get<Number>().toInt()
+
+                val tags = stream["tags"]
+                val language = tags["language"].get<String?>()
+                val title = tags["title"].get<String?>()
+
+                val disposition = stream["disposition"]
+                val default = disposition["default"].get<Number>() == 1
+                val forced = disposition["forced"].get<Number>() == 1
+
+                transaction(database) {
+                    AudioTrack.new {
+                        this.media = media.id
+                        this.index = index
+                        this.codec = codec
+                        this.bitRate = bitRate
+                        this.sampleRate = sampleRate
+                        this.channels = channels
+                        this.language = language
+                        this.title = title
+                        this.default = default
+                        this.forced = forced
+                    }
+                }
+            }
+
+            "subtitle" -> {
+                val index = stream["index"].get<Number>().toInt()
+                val codec = stream["codec_name"].get<String>()
+
+                val tags = stream["tags"]
+                val language = tags["language"].get<String?>()
+                val title = tags["title"].get<String?>()
+
+                val disposition = stream["disposition"]
+                val default = disposition["default"].get<Number>() == 1
+                val forced = disposition["forced"].get<Number>() == 1
+
+                transaction(database) {
+                    SubtitleTrack.new {
+                        this.media = media.id
+                        this.index = index
+                        this.codec = codec
+                        this.language = language
+                        this.title = title
+                        this.default = default
+                        this.forced = forced
+                    }
+                }
+            }
+
+            "attachment" -> {
+                val index = stream["index"].get<Number>().toInt()
+                val codec = stream["codec_name"].get<String>()
+
+                val tags = stream["tags"]
+                val filename = tags["filename"].get<String?>()
+                val mimetype = tags["mimetype"].get<String?>()
+
+                // TODO: Attachment.new { ... }
+            }
         }
+    }
 
-        return Metadata(
-            id,
+    val chapters = data["chapters"]
 
-            context.duration() * 1000L / AV_TIME_BASE,
-            context.bit_rate(),
+    var i = 0
+    for (chapter in chapters) {
+        val index = i++
 
-            width,
-            height,
+        val start = chapter["start_time"].get<String>().toDouble()
+        val end = chapter["end_time"].get<String>().toDouble()
 
-            fps,
+        val tags = chapter["tags"]
+        val language = tags["language"].get<String?>()
+        val title = tags["title"].get<String?>()
 
-            videoCodec,
-            audioCodec,
-        )
-    } finally {
-        avformat_close_input(context)
+        transaction(database) {
+            Chapter.new {
+                this.media = media.id
+                this.index = index
+                this.start = start
+                this.end = end
+                this.language = language
+                this.title = title
+            }
+        }
     }
 }
 
 fun main() {
+    // TODO: kill timer threads
+
     val env = getEnvironment()
 
     val hostname = env["HOSTNAME"] ?: "0.0.0.0"
@@ -109,23 +287,16 @@ fun main() {
     provider["transcoding"] = transcoding
 
     val log = getLogger("coffee-house")
-
     log.level = Level.ALL
-
     provider += log
 
-    val db = cache.resolve("index.db")
-    db.createParentDirectories()
+    val databasePath = cache.resolve("index.db")
+    databasePath.createParentDirectories()
 
-    val connection = DriverManager.getConnection("jdbc:sqlite:$db")
+    val database = Database.connect({ DriverManager.getConnection("jdbc:sqlite:$databasePath") })
+    provider += database
 
-    provider += connection
-
-    val hls = HlsCache(
-        cache,
-        transcoding,
-    )
-
+    val hls = HlsCache(cache, transcoding)
     provider += hls
 
     val server = Server(log, provider, hostname, port)
@@ -137,100 +308,69 @@ fun main() {
         } catch (e: Throwable) {
             log.warning(e.stackTraceToString())
         }
-
-        connection.close()
     })
+
+    val paths = data
+        .walk()
+        .filter { it.extension in EXTENSIONS }
+        .toList()
+
+    transaction(database) {
+        SchemaUtils.create(
+            MediaTable,
+            VideoTrackTable,
+            AudioTrackTable,
+            SubtitleTrackTable,
+            ChapterTable,
+            UserTable,
+            SessionTable,
+        )
+    }
+
+    transaction(database) {
+        Media
+            .find { MediaTable.path notInList paths }
+            .forEach { it.delete() }
+    }
+
+    val existing = transaction {
+        MediaTable
+            .select(MediaTable.path)
+            .map { it[MediaTable.path] }
+            .toSet()
+    }
+
+    val revalidate = paths.filter { it !in existing }
+
+    for ((index, path) in revalidate.withIndex()) {
+        log.info("${index + 1} / ${revalidate.size}")
+
+        val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
+
+        val createdAt = attributes.creationTime().toInstant().toKotlinInstant()
+        val modifiedAt = attributes.lastModifiedTime().toInstant().toKotlinInstant()
+
+        getMetadata(
+            log,
+            database,
+            path,
+            createdAt,
+            modifiedAt,
+        )
+    }
 
     server.use { server ->
         scan(server, "dev.scriptor")
 
-        context(provider) {
-            SQL(connection).create<User>().execute()
-            SQL(connection).create<Session>().execute()
-            SQL(connection).create<Media>().execute()
-            SQL(connection).create<Metadata>().execute()
-
-            val entries = mutableListOf<Path>()
-
-            SQL(connection)
-                .insert<Media>()
-                .conflict(Media::path) { sql ->
-                    sql.update(
-                        Media::size to excluded("size"),
-                        Media::title to excluded("title"),
-                        Media::createdAt to excluded("created_at"),
-                        Media::modifiedAt to excluded("modified_at"),
-                    )
-                }
-                .batch { submit ->
-                    for (path in data.walk()) {
-                        if (path.extension !in EXTENSIONS) continue
-
-                        entries.add(path.absolute())
-
-                        val id = Uuid.random()
-
-                        val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
-
-                        val size = attributes.size()
-
-                        val createdAt = attributes.creationTime()
-                        val modifiedAt = attributes.lastModifiedTime()
-
-                        submit(
-                            Media(
-                                id,
-                                path,
-                                size,
-                                path.nameWithoutExtension,
-                                createdAt.toInstant().toKotlinInstant(),
-                                modifiedAt.toInstant().toKotlinInstant(),
-                            ),
-                        )
-                    }
-                }
-
-            SQL(connection)
-                .delete()
-                .from<Media>()
-                .where(!(Media::path `in` entries))
-                .execute()
-
-            val items = SQL(connection)
-                .selectFrom<Media>()
-                .query<Media>()
-
-            SQL(connection)
-                .insert<Metadata>()
-                .conflict(Metadata::id) { sql ->
-                    sql.update(
-                        Metadata::duration to excluded("duration"),
-                        Metadata::bitrate to excluded("bitrate"),
-                        Metadata::width to excluded("width"),
-                        Metadata::height to excluded("height"),
-                        Metadata::framerate to excluded("framerate"),
-                        Metadata::videoCodec to excluded("video_codec"),
-                        Metadata::audioCodec to excluded("audio_codec"),
-                    )
-                }
-                .batch { submit ->
-                    for ((id, path) in items) {
-                        log.info("get metadata for $id : $path")
-
-                        val metadata = getMetadata(id, path)
-
-                        submit(metadata)
-                    }
-                }
-        }
-
         server.register("session-reaper", 0L, 10L * 60L * 1000L) {
-            val sessions = provider[typeOf<SessionContext>()] as SessionContext
-            context(provider, connection) { sessions.deleteExpiredSessions() }
+            transaction(database) {
+                val now = now()
+                Session
+                    .find { SessionTable.expiresAt lessEq now }
+                    .forEach { it.delete() }
+            }
         }
 
         server.start()
     }
-
-    connection.close()
 }

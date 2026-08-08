@@ -1,41 +1,32 @@
 package dev.scriptor.model
 
-import dev.scriptor.annotation.Column
-import dev.scriptor.annotation.ForeignKey
-import dev.scriptor.annotation.PrimaryKey
-import dev.scriptor.annotation.Table
-import kotlin.time.Instant
+import dev.scriptor.instant
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.core.dao.id.UuidTable
+import org.jetbrains.exposed.v1.dao.UuidEntity
+import org.jetbrains.exposed.v1.dao.UuidEntityClass
 import kotlin.uuid.Uuid
 
-@Table("session")
-data class Session(
+object SessionTable : UuidTable("session") {
+    val user = reference("user_id", UserTable).nullable()
+    val token = text("token")
+    val createdAt = instant("created_at")
+    val expiresAt = instant("expires_at")
+    val agent = text("agent").nullable().default(null)
+    val access = instant("access").nullable().default(null)
+}
 
-    @Column(type = String::class)
-    @PrimaryKey
-    val id: Uuid,
+class Session(id: EntityID<Uuid>) : UuidEntity(id) {
+    companion object : UuidEntityClass<Session>(SessionTable)
 
-    @Column("user_id", String::class)
-    @ForeignKey("user", "id")
-    val userId: Uuid?,
+    var user by SessionTable.user
+    var token by SessionTable.token
+    var createdAt by SessionTable.createdAt
+    var expiresAt by SessionTable.expiresAt
+    var agent by SessionTable.agent
+    var access by SessionTable.access
 
-    @Column
-    val token: String,
-
-    @Column("created_at", type = String::class)
-    val createdAt: Instant,
-
-    @Column("expires_at", type = String::class)
-    var expiresAt: Instant,
-
-    @Column
-    val agent: String?,
-
-    @Column(type = String::class)
-    var access: Instant? = null,
-
-    @Column
-    var sequence: Long = 0L,
-
-    @Column
-    var next: Long = 0L,
-)
+    override fun toString(): String {
+        return "Session(id=$id, user=$user, token=$token, createdAt=$createdAt, expiresAt=$expiresAt, agent=$agent, access=$access)"
+    }
+}
