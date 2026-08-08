@@ -6,6 +6,7 @@
  * @property {string} title
  * @property {string} created_at
  * @property {string} modified_at
+ * @property {number} duration
  */
 
 /**

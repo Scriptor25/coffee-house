@@ -1,13 +1,12 @@
 import {fetchAPI} from "./api.js"
 import {buildTree, DirectoryNode, getCommonBase, MediaNode, segments} from "./tree.js"
 
-const listItemT = document.getElementById("list-item")
-
 const loginSectionEl = document.getElementById("login")
 const formEl = document.getElementById("form")
 
 const mediaSectionEl = document.getElementById("media")
-const playlistButtonEl = document.getElementById("playlist")
+const playlistDirectButtonEl = document.getElementById("playlist-direct")
+const playlistHLSButtonEl = document.getElementById("playlist-hls")
 const listEl = document.getElementById("list")
 
 /**
@@ -15,14 +14,77 @@ const listEl = document.getElementById("list")
  * @param {string} href
  * @returns {HTMLElement}
  */
-function createListItem(content, href) {
-    const listItemEl = document.importNode(listItemT.content, true)
+function createSimpleListItem(
+    content,
+    href,
+) {
+    const listItemEl = document.createElement("li")
 
-    const anchorEl = listItemEl.querySelector("a")
-    anchorEl.href = href
+    const anchorEl = document.createElement("a")
     anchorEl.innerText = content
+    anchorEl.href = href
+
+    listItemEl.appendChild(anchorEl)
 
     return listItemEl
+}
+
+/**
+ * @param {string} content
+ * @param {string} primaryText
+ * @param {string} primaryHref
+ * @param {string=} secondaryText
+ * @param {string=} secondaryHref
+ * @returns {HTMLElement}
+ */
+function createListItem(
+    content,
+    primaryText,
+    primaryHref,
+    secondaryText,
+    secondaryHref,
+) {
+    const listItemEl = document.createElement("li")
+
+    const spanEl = document.createElement("span")
+    spanEl.innerText = content
+
+    listItemEl.appendChild(spanEl)
+    listItemEl.appendChild(document.createTextNode(" ("))
+
+    const primaryAnchorEl = document.createElement("a")
+    primaryAnchorEl.innerText = primaryText
+    primaryAnchorEl.href = primaryHref
+
+    listItemEl.appendChild(primaryAnchorEl)
+
+    if (secondaryText && secondaryHref) {
+        const secondaryAnchorEl = document.createElement("a")
+        secondaryAnchorEl.innerText = secondaryText
+        secondaryAnchorEl.href = secondaryHref
+
+        listItemEl.appendChild(document.createTextNode(", "))
+        listItemEl.appendChild(secondaryAnchorEl)
+    }
+
+    listItemEl.appendChild(document.createTextNode(")"))
+
+    return listItemEl
+}
+
+/**
+ * @param {Blob} blob
+ * @param {string} name
+ */
+function downloadBlob(blob, name) {
+    const objectURL = URL.createObjectURL(blob)
+
+    const anchorEl = document.createElement("a")
+    anchorEl.href = objectURL
+    anchorEl.download = name
+    anchorEl.click()
+
+    URL.revokeObjectURL(objectURL)
 }
 
 async function render() {
@@ -70,17 +132,27 @@ async function render() {
 
             const listItemEls = sorted
                 .map(node => {
-                    const uri = (node instanceof MediaNode)
-                        ? `/media/stream/${node.item.id}/master.m3u8?token=${session}`
-                        : `/#${slug.length ? "/" + slug.join("/") : ""}/${node.name}`
-                    return createListItem(node.name, encodeURI(uri))
+                    if (node instanceof MediaNode) {
+                        const directUri = `/media/stream/${node.item.id}?token=${session}`
+                        const hlsUri = `/media/stream/${node.item.id}/master.m3u8?token=${session}`
+                        return createListItem(
+                            node.name,
+                            "Direct",
+                            encodeURI(directUri),
+                            "HLS",
+                            encodeURI(hlsUri),
+                        )
+                    } else {
+                        const uri = `/#${slug.length ? "/" + slug.join("/") : ""}/${node.name}`
+                        return createSimpleListItem(node.name, encodeURI(uri))
+                    }
                 })
 
             if (slug.length) {
                 const target = slug.slice(0, -1)
 
                 const uri = `/#${target.length ? "/" + target.join("/") : ""}`
-                const listItemEl = createListItem("..", encodeURI(uri))
+                const listItemEl = createSimpleListItem("..", encodeURI(uri))
                 listItemEls.unshift(listItemEl)
             }
 
@@ -95,25 +167,35 @@ async function render() {
                      */
                     item => item.item)
 
-            const lines = playlist.flatMap(item => {
+            const directLines = playlist.flatMap(item => {
+                const url = new URL(
+                    encodeURI(`/media/stream/${item.id}?token=${session}`),
+                    window.location.origin,
+                )
+                return [`#EXTINF:${item.duration},${item.title}`, url.toString()]
+            })
+
+            const hlsLines = playlist.flatMap(item => {
                 const url = new URL(
                     encodeURI(`/media/stream/${item.id}/master.m3u8?token=${session}`),
                     window.location.origin,
                 )
-                return [`#EXTINF:-1,${item.title}`, url.toString()]
+                return [`#EXTINF:${item.duration},${item.title}`, url.toString()]
             })
 
-            const data = `#EXTM3U\r\n${lines.join("\r\n")}`
+            const directPlaylist = `#EXTM3U\r\n#PLAYLIST:${node.name}\r\n${directLines.join("\r\n")}`
+            const hlsPlaylist = `#EXTM3U\r\n#PLAYLIST:${node.name}\r\n${hlsLines.join("\r\n")}`
 
-            playlistButtonEl.onclick = async () => {
-                const blob = new Blob([data], {type: "application/x-mpegurl"})
-                const objectURL = URL.createObjectURL(blob)
+            playlistDirectButtonEl.onclick = async () => {
+                const blob = new Blob([directPlaylist], {type: "application/x-mpegurl"})
 
-                const anchorEl = document.createElement("a")
-                anchorEl.href = objectURL
-                anchorEl.download = "playlist.m3u8"
-                anchorEl.click()
-                URL.revokeObjectURL(objectURL)
+                downloadBlob(blob, `${node.name}.m3u8`)
+            }
+
+            playlistHLSButtonEl.onclick = async () => {
+                const blob = new Blob([hlsPlaylist], {type: "application/x-mpegurl"})
+
+                downloadBlob(blob, `${node.name}.m3u8`)
             }
         }
 

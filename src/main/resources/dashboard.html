@@ -22,17 +22,9 @@
 </section>
 
 <section id="media" style="display: none">
-    <button id="playlist" type="button">playlist</button>
+    <div>Playlist (<button id="playlist-direct" type="button">Direct</button>, <button id="playlist-hls" type="button">HLS</button>)</div>
     <ul id="list"></ul>
 </section>
-
-<template id="list-item">
-    <li>
-        <a>
-            <slot></slot>
-        </a>
-    </li>
-</template>
 
 <script type="module" src="/script/index.js"></script>
 
