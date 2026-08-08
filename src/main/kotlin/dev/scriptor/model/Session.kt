@@ -14,8 +14,6 @@ object SessionTable : UuidTable("session") {
     val expiresAt = instant("expires_at")
     val agent = text("agent").nullable().default(null)
     val access = instant("access").nullable().default(null)
-    val sequence = long("sequence").default(0L)
-    val next = long("next").default(0L)
 }
 
 class Session(id: EntityID<Uuid>) : UuidEntity(id) {
@@ -27,10 +25,8 @@ class Session(id: EntityID<Uuid>) : UuidEntity(id) {
     var expiresAt by SessionTable.expiresAt
     var agent by SessionTable.agent
     var access by SessionTable.access
-    var sequence by SessionTable.sequence
-    var next by SessionTable.next
 
     override fun toString(): String {
-        return "Session(id=$id, user=$user, token=$token, createdAt=$createdAt, expiresAt=$expiresAt, agent=$agent, access=$access, sequence=$sequence, next=$next)"
+        return "Session(id=$id, user=$user, token=$token, createdAt=$createdAt, expiresAt=$expiresAt, agent=$agent, access=$access)"
     }
 }

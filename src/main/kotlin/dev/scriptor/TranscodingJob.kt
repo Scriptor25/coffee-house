@@ -3,12 +3,11 @@ package dev.scriptor
 import dev.scriptor.model.Media
 import java.nio.file.Path
 import java.util.logging.Logger
-import kotlin.io.path.absolutePathString
 import kotlin.io.path.createDirectories
 import kotlin.io.path.notExists
 
 data class TranscodingJob(
-    val item: Media,
+    val metadata: Media,
     val cache: Path,
     val variants: List<Variant>,
     val transcoding: Boolean,
@@ -34,13 +33,16 @@ data class TranscodingJob(
     private lateinit var process: Process
 
     context(_: Logger)
-    fun master(): Path = waitFor(cache.resolve("master.m3u8"))
+    fun master(): Path =
+        waitFor(cache.resolve("master.m3u8"))
 
     context(_: Logger)
-    fun index(name: String): Path = waitFor(cache.resolve(name).resolve("index.m3u8"))
+    fun index(name: String): Path =
+        waitFor(cache.resolve(name).resolve("index.m3u8"))
 
     context(_: Logger)
-    fun segment(name: String, index: Long): Path = waitFor(cache.resolve(name).resolve("segment$index.ts"))
+    fun segment(name: String, index: Long): Path =
+        waitFor(cache.resolve(name).resolve("segment$index.ts"))
 
     @Synchronized
     context(parent: Logger)
@@ -51,7 +53,7 @@ data class TranscodingJob(
 
         cache.createDirectories()
 
-        val log = getLogger("transcoding-job-$id", parent)
+        val log = getLogger("ffmpeg-$id", parent)
 
         log.fine(command.joinToString("' '", "'", "'"))
 
@@ -84,88 +86,64 @@ data class TranscodingJob(
     }
 
     private fun buildCommand(): List<String> {
-        val transcoded = if (transcoding)
-            variants.filter { it.name != "original" }
-        else emptyList()
+        val scale = variants.filterIsInstance<ScaleVariant>()
 
-        val filter = if (transcoded.isEmpty()) null else {
-            buildString {
-                append("[0:v]split=${transcoded.size}")
-                transcoded.indices.forEach { append("[v$it]") }
+        val outputs = outputs(metadata) {
+            video(0) {
+                if (transcoding) {
+                    originalH264()
+                    scale.forEach {
+                        scaleH264(
+                            it.name,
+                            it.width,
+                            it.height,
+                            it.profile,
+                            it.bitrate,
+                        )
+                    }
+                } else {
+                    originalCopy()
+                    scale.forEach {
+                        scaleCopy(
+                            it.name,
+                            it.width,
+                            it.height,
+                        )
+                    }
+                }
+            }
 
-                transcoded.forEachIndexed { index, variant ->
-                    append(";")
-                    append("[v$index]")
-                    append("scale=${variant.width}:${variant.height}")
-                    append("[s$index]")
+            metadata.audio.forEach {
+                audio(it) {
+                    if (transcoding) {
+                        aac()
+                    } else {
+                        copy()
+                    }
+                }
+            }
+
+            metadata.subtitles.filter {
+                // HLS does not support bitmap subtitles
+                when (it.codec) {
+                    "subrip",
+                    "ass",
+                    "ssa",
+                    "webvtt" -> true
+
+                    else -> false
+                }
+            }.forEach {
+                subtitle(it) {
+                    if (transcoding) {
+                        webVtt()
+                    } else {
+                        copy()
+                    }
                 }
             }
         }
 
-        val command = mutableListOf(
-            "ffmpeg",
-            "-y", // allow overriding existing files
-            "-i", item.path.absolutePathString(),
-        )
-
-        if (filter != null) {
-            command += listOf("-filter_complex", filter)
-        }
-
-        command += listOf(
-            "-map", "0:v:0",
-            "-map", "0:a:0",
-        )
-
-        transcoded.forEachIndexed { index, _ ->
-            command += listOf(
-                "-map", "[s$index]",
-                "-map", "0:a:0",
-            )
-        }
-
-        command += listOf(
-            "-c:v:0", "copy",
-            "-c:a:0", "copy",
-        )
-
-        transcoded.forEachIndexed { index, variant ->
-            val stream = index + 1
-
-            command += listOf(
-                "-c:v:$stream", "libx264",
-                "-preset:v:$stream", variant.profile.preset,
-                "-crf:v:$stream", variant.profile.crf.toString(),
-
-                "-maxrate:v:$stream", variant.bitrate.toString(),
-                "-bufsize:v:$stream", (variant.bitrate * 2).toString(),
-                "-b:v:$stream", variant.bitrate.toString(),
-
-                "-c:a:$stream", "aac",
-            )
-        }
-
-        val map = buildString {
-            append("v:0,a:0,name:original")
-
-            transcoded.forEachIndexed { index, variant ->
-                val stream = index + 1
-
-                append(" v:$stream,a:$stream,name:${variant.name}")
-            }
-        }
-
-        command += listOf(
-            "-f", "hls",
-            "-var_stream_map", map,
-            "-master_pl_name", "master.m3u8",
-            "-hls_time", "6",
-            "-hls_list_size", "0",
-            "-hls_flags", "independent_segments+temp_file",
-            "-hls_segment_filename", cache.resolve("%v/segment%d.ts").absolutePathString(),
-            cache.resolve("%v/index.m3u8").absolutePathString(),
-        )
-
-        return command
+        return ffmpeg(metadata.path, cache, outputs)
     }
 }

@@ -16,6 +16,7 @@ object AudioTrackTable : UuidTable("audio_track") {
     val language = text("language").nullable()
     val title = text("title").nullable()
     val default = bool("default")
+    val forced = bool("forced")
 
     init {
         uniqueIndex("audio_track_media_index", media, index)
@@ -34,6 +35,7 @@ class AudioTrack(id: EntityID<Uuid>) : UuidEntity(id) {
     var language by AudioTrackTable.language
     var title by AudioTrackTable.title
     var default by AudioTrackTable.default
+    var forced by AudioTrackTable.forced
 
     override fun toString(): String {
         return "AudioTrack(id=$id, media=$media, index=$index, codec=$codec, bitRate=$bitRate, sampleRate=$sampleRate, channels=$channels, language=$language, title=$title, default=$default)"

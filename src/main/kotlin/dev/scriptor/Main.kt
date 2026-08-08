@@ -59,15 +59,27 @@ fun getEnvironment(): Map<String, String> = System.getenv()
 
 val EXTENSIONS = arrayOf("mkv", "mp4")
 
+fun parseFrameRate(value: String?): Double {
+    if (value == null || value == "0/0") return 0.0
+
+    val (num, den) = value
+        .split("/")
+        .map(String::toDouble)
+
+    return if (den == 0.0) 0.0 else num / den
+}
+
 fun getMetadata(
     parent: Logger,
     path: Path,
     createdAt: Instant,
     modifiedAt: Instant,
 ) {
+    if (Media.count(MediaTable.path eq path) > 0) return
+
     val command = listOf(
         "ffprobe",
-        "-v", "quiet",
+        "-v", "error",
         "-print_format", "json",
         "-show_format",
         "-show_streams",
@@ -83,30 +95,21 @@ fun getMetadata(
 
     process.attach(log)
 
-    val value = process.waitFor()
-    if (value != 0) error("failed to get metadata for $path")
-
     val json = process.inputStream.reader().readText()
 
-    log.info(json)
+    val value = process.waitFor()
+    if (value != 0) error("failed to get metadata for $path")
 
     val data = parseJson(json)
 
     val format = data["format"]
     val size = format["size"].get<String>().toLong()
     val duration = format["duration"].get<String>().toDouble()
-    val bitRate = format["bit_rate"].get<String>().toLong()
 
     val tags = format["tags"]
-    val title = tags["title"].get<String?>()
+    val title = tags["title"].get<String?>() ?: path.nameWithoutExtension
 
-    val media = Media.findSingleByAndUpdate(MediaTable.path eq path) {
-        it.size = size
-        it.title = title
-        it.createdAt = createdAt
-        it.modifiedAt = createdAt
-        it.duration = duration
-    } ?: Media.new {
+    val media = Media.new {
         this.path = path
         this.size = size
         this.title = title
@@ -125,38 +128,32 @@ fun getMetadata(
                 val codec = stream["codec_name"].get<String>()
                 val width = stream["width"].get<Number>().toInt()
                 val height = stream["height"].get<Number>().toInt()
-                val frameRateStr = stream["frame_rate"].get<String?>()?.ifEmpty { "0/1" } ?: "0/1"
+                val bitRate = stream["bit_rate"].get<String?>()?.toLongOrNull() ?: 0L
+                val frameRate = parseFrameRate(stream["avg_frame_rate"].get<String?>())
                 val profile = stream["profile"].get<String>()
                 val level = stream["level"].get<Number>().toInt()
-                val hdr = false // TODO
-                val language = null // TODO
-                val title = null // TODO
+
+                val hdr = when (stream["color_transfer"].get<String?>()) {
+                    "smpte2084", "arib-std-b67" -> true
+                    else -> false
+                }
+
+                val tags = stream["tags"]
+                val language = tags["language"].get<String?>()
+                val title = tags["title"].get<String?>()
 
                 val disposition = stream["disposition"]
                 val default = disposition["default"].get<Number>() == 1
 
-                val frameRateParts = frameRateStr.split("/").map { it.toDouble() }
-                val frameRate = frameRateParts[0] / frameRateParts[1]
-
-                VideoTrack.findSingleByAndUpdate((VideoTrackTable.media eq media.id) and (VideoTrackTable.index eq index)) {
-                    it.codec = codec
-                    it.width = width
-                    it.height = height
-                    it.bitRate = bitRate
-                    it.frameRate = frameRate
-                    it.profile = profile
-                    it.level = level
-                    it.hdr = hdr
-                    it.language = language
-                    it.title = title
-                    it.default = default
-                } ?: VideoTrack.new {
+                VideoTrack.new {
                     this.media = media.id
                     this.index = index
                     this.codec = codec
                     this.width = width
                     this.height = height
-                    this.bitRate = bitRate
+                    this.bitRate = if (bitRate == 0L)
+                        size * 8L * 1000L / (duration * 1000.0).toLong()
+                    else bitRate
                     this.frameRate = frameRate
                     this.profile = profile
                     this.level = level
@@ -170,23 +167,19 @@ fun getMetadata(
             "audio" -> {
                 val index = stream["index"].get<Number>().toInt()
                 val codec = stream["codec_name"].get<String>()
+                val bitRate = stream["bit_rate"].get<String?>()?.toLongOrNull() ?: 0L
                 val sampleRate = stream["sample_rate"].get<String>().toLong()
                 val channels = stream["channels"].get<Number>().toInt()
-                val language = null // TODO
-                val title = null // TODO
+
+                val tags = stream["tags"]
+                val language = tags["language"].get<String?>()
+                val title = tags["title"].get<String?>()
 
                 val disposition = stream["disposition"]
                 val default = disposition["default"].get<Number>() == 1
+                val forced = disposition["forced"].get<Number>() == 1
 
-                AudioTrack.findSingleByAndUpdate((AudioTrackTable.media eq media.id) and (AudioTrackTable.index eq index)) {
-                    it.codec = codec
-                    it.bitRate = bitRate
-                    it.sampleRate = sampleRate
-                    it.channels = channels
-                    it.language = language
-                    it.title = title
-                    it.default = default
-                } ?: AudioTrack.new {
+                AudioTrack.new {
                     this.media = media.id
                     this.index = index
                     this.codec = codec
@@ -196,24 +189,63 @@ fun getMetadata(
                     this.language = language
                     this.title = title
                     this.default = default
+                    this.forced = forced
                 }
             }
 
             "subtitle" -> {
-                // TODO
+                val index = stream["index"].get<Number>().toInt()
+                val codec = stream["codec_name"].get<String>()
+
+                val tags = stream["tags"]
+                val language = tags["language"].get<String?>()
+                val title = tags["title"].get<String?>()
+
+                val disposition = stream["disposition"]
+                val default = disposition["default"].get<Number>() == 1
+                val forced = disposition["forced"].get<Number>() == 1
+
+                SubtitleTrack.new {
+                    this.media = media.id
+                    this.index = index
+                    this.codec = codec
+                    this.language = language
+                    this.title = title
+                    this.default = default
+                    this.forced = forced
+                }
             }
 
             "attachment" -> {
-                // TODO
+                val index = stream["index"].get<Number>().toInt()
+                val codec = stream["codec_name"].get<String>()
+
+                val tags = stream["tags"]
+                val filename = tags["filename"].get<String?>()
+                val mimetype = tags["mimetype"].get<String?>()
+
+                // TODO: Attachment.new { ... }
             }
         }
     }
 
-    // TODO
     val chapters = data["chapters"]
+
+    for (chapter in chapters) {
+        val index = chapter["id"].get<Number>().toInt()
+        val start = chapter["start_time"].get<String>().toDouble()
+        val end = chapter["end_time"].get<String>().toDouble()
+
+        val tags = chapter["tags"]
+        val title = tags["title"].get<String?>() ?: "Chapter ${index + 1}"
+
+        // TODO: Chapter.new { ... }
+    }
 }
 
 fun main() {
+    // TODO: kill timer threads
+
     val env = getEnvironment()
 
     val hostname = env["HOSTNAME"] ?: "0.0.0.0"

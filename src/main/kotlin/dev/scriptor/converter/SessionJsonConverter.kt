@@ -18,8 +18,6 @@ class SessionJsonConverter : Converter<Session, JsonNode> {
             "expires_at" to jsonOf(value.expiresAt),
             "access" to jsonOf(value.access),
             "agent" to jsonOf(value.agent),
-            "sequence" to jsonOf(value.sequence),
-            "next" to jsonOf(value.next),
         )
     }
 }

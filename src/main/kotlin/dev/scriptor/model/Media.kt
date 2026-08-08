@@ -11,7 +11,7 @@ import kotlin.uuid.Uuid
 object MediaTable : UuidTable("media") {
     val path = path("path").uniqueIndex()
     val size = long("size")
-    val title = text("title").nullable()
+    val title = text("title")
     val createdAt = instant("created_at")
     val modifiedAt = instant("modified_at")
     val duration = double("duration")
