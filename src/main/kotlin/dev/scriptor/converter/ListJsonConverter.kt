@@ -2,11 +2,11 @@ package dev.scriptor.converter
 
 import dev.scriptor.JsonNode
 import dev.scriptor.jsonOf
+import dev.scriptor.reflect.getClass
+import dev.scriptor.reflect.getType
 import dev.scriptor.server.Provider
-import dev.scriptor.server.converter.ConversionPath
 import dev.scriptor.server.converter.Converter
-import kotlin.reflect.full.starProjectedType
-import kotlin.reflect.typeOf
+import dev.scriptor.server.converter.ConverterFn
 
 class ListJsonConverter : Converter<List<*>, JsonNode> {
 
@@ -14,13 +14,13 @@ class ListJsonConverter : Converter<List<*>, JsonNode> {
     override fun convert(value: List<*>): JsonNode {
         return jsonOf(*value.map {
             if (it == null) jsonOf(null) else {
-                val src = it::class.starProjectedType
-                val dst = typeOf<JsonNode>()
+                val src = getClass(it::class).createType()
+                val dst = getType<JsonNode>()
 
-                val converter = provider[src to dst] as? ConversionPath<Any, JsonNode>
+                val convert = provider[src to dst] as? ConverterFn<Any, JsonNode>
                     ?: error("unsupported conversion from $src to $dst")
 
-                converter(it)
+                convert(it)
             }
         }.toTypedArray())
     }

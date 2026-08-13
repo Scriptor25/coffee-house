@@ -44,8 +44,8 @@ class SessionRest {
         val username = body["username"].get<String>()
         val password = body["password"].get<String>()
 
-        val rootUsername: String? = provider["username"]
-        val rootPassword: String? = provider["password"]
+        val rootUsername: String? = provider.getNamedT("username")
+        val rootPassword: String? = provider.getNamedT("password")
 
         val user: User?
         if (rootUsername != null && rootPassword != null && username == rootUsername) {

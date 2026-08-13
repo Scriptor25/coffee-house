@@ -287,16 +287,16 @@ fun main() {
 
     val log = getLogger("coffee-house")
     log.level = Level.ALL
-    provider += log
+    provider.registerT(log)
 
     val databasePath = cache.resolve("index.db")
     databasePath.createParentDirectories()
 
     val database = Database.connect({ DriverManager.getConnection("jdbc:sqlite:$databasePath") })
-    provider += database
+    provider.registerT(database)
 
     val hls = HlsCache(cache, transcoding)
-    provider += hls
+    provider.registerT(hls)
 
     val paths = data
         .walk()
