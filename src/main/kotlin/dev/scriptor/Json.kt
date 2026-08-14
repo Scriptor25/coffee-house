@@ -1,6 +1,6 @@
 package dev.scriptor
 
-interface JsonNode {
+sealed interface JsonNode {
 
     val entries: Set<Map.Entry<String, JsonNode>>
         get() = throw UnsupportedOperationException()
@@ -19,7 +19,7 @@ interface JsonNode {
     fun toMutable(): MutableJsonNode
 }
 
-interface MutableJsonNode : JsonNode {
+sealed interface MutableJsonNode : JsonNode {
 
     override val entries: MutableSet<MutableMap.MutableEntry<String, MutableJsonNode>>
         get() = throw UnsupportedOperationException()

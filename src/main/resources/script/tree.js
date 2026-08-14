@@ -1,5 +1,5 @@
 /**
- * @interface  Media
+ * @interface Media
  * @property {string} id
  * @property {string} path
  * @property {number} size

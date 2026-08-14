@@ -36,7 +36,7 @@ class HlsCache(
                     sourceWidth,
                     sourceHeight,
                     item.bitRate,
-                    Profile.LOSSLESS,
+                    Profile.ARCHIVAL,
                 )
             else
                 OriginalVariant()

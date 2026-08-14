@@ -85,12 +85,12 @@ class Ffmpeg(
     }
 
     private fun buildVideoCodec(index: Int, output: VideoOutput): List<String> =
-        when (val codec = output.codec) {
-            is VideoCodec.Copy -> listOf(
+        when (val codec = output.encoding) {
+            is VideoEncoding.Copy -> listOf(
                 "-c:v:$index", "copy",
             )
 
-            is VideoCodec.H264 -> listOf(
+            is VideoEncoding.H264 -> listOf(
                 "-c:v:$index", "libx264",
 
                 "-preset:v:$index", codec.profile.preset,
@@ -104,23 +104,23 @@ class Ffmpeg(
         }
 
     private fun buildAudioCodec(index: Int, output: AudioOutput): List<String> =
-        when (output.codec) {
-            is AudioCodec.Copy -> listOf(
+        when (output.encoding) {
+            AudioEncoding.COPY -> listOf(
                 "-c:a:$index", "copy",
             )
 
-            is AudioCodec.Aac -> listOf(
+            AudioEncoding.AAC -> listOf(
                 "-c:a:$index", "aac",
             )
         }
 
     private fun buildSubtitleCodec(index: Int, output: SubtitleOutput): List<String> =
-        when (output.codec) {
-            is SubtitleCodec.Copy -> listOf(
+        when (output.encoding) {
+            SubtitleEncoding.COPY -> listOf(
                 "-c:s:$index", "copy",
             )
 
-            is SubtitleCodec.WebVtt -> listOf(
+            SubtitleEncoding.WEBVTT -> listOf(
                 "-c:s:$index", "webvtt",
             )
         }

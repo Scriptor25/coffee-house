@@ -87,27 +87,28 @@ data class TranscodingJob(
     }
 
     private fun buildCommand(): List<String> {
-        val original = variants.filterIsInstance<OriginalVariant>()
-        val scale = variants.filterIsInstance<ScaleVariant>()
-
         val outputs = outputs(metadata) {
             video(0) {
-                original.forEach {
-                    if (transcoding) {
-                        originalH264(it.name)
-                    } else {
-                        originalCopy(it.name)
-                    }
-                }
+                variants.forEach {
+                    when (it) {
+                        is OriginalVariant -> {
+                            if (transcoding) {
+                                originalH264(it.name)
+                            } else {
+                                originalCopy(it.name)
+                            }
+                        }
 
-                scale.forEach {
-                    scaleH264(
-                        it.name,
-                        it.width,
-                        it.height,
-                        it.profile,
-                        it.bitrate,
-                    )
+                        is ScaleVariant -> {
+                            scaleH264(
+                                it.name,
+                                it.width,
+                                it.height,
+                                it.profile,
+                                it.bitrate,
+                            )
+                        }
+                    }
                 }
             }
 

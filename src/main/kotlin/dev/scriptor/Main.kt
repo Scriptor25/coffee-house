@@ -58,7 +58,7 @@ fun Table.path(name: String): Column<Path> = registerColumn(
 
 fun getEnvironment(): Map<String, String> = System.getenv()
 
-val EXTENSIONS = arrayOf("mkv", "mp4")
+val EXTENSIONS = arrayOf("mkv", "mp4", "webm")
 
 fun parseFrameRate(value: String?): Double {
     if (value == null || value == "0/0") return 0.0

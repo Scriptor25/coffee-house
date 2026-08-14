@@ -9,22 +9,26 @@ sealed interface Output {
     val name: String
 }
 
-sealed interface VideoCodec {
-    data object Copy : VideoCodec
-    data class H264(
+sealed interface VideoEncoding {
+
+    val codec: Codec
+
+
+    data class Parameterized(
+        val encoder: Encoder,
         val profile: Profile,
         val bitrate: Long,
-    ) : VideoCodec
+    ) : VideoEncoding
 }
 
-sealed interface AudioCodec {
-    data object Copy : AudioCodec
-    data object Aac : AudioCodec
+enum class AudioEncoding {
+    COPY,
+    AAC,
 }
 
-sealed interface SubtitleCodec {
-    data object Copy : SubtitleCodec
-    data object WebVtt : SubtitleCodec
+enum class SubtitleEncoding {
+    COPY,
+    WEBVTT,
 }
 
 data class VideoOutput(
@@ -34,14 +38,14 @@ data class VideoOutput(
     val source: Int,
     val width: Int,
     val height: Int,
-    val codec: VideoCodec,
+    val encoding: VideoEncoding,
 ) : Output
 
 data class AudioOutput(
     override val name: String,
 
     val source: Int,
-    val codec: AudioCodec,
+    val encoding: AudioEncoding,
     val language: String?,
     val title: String?,
     val default: Boolean,
@@ -51,7 +55,7 @@ data class SubtitleOutput(
     override val name: String,
 
     val source: Int,
-    val codec: SubtitleCodec,
+    val encoding: SubtitleEncoding,
     val language: String?,
     val title: String?,
     val default: Boolean,
@@ -140,13 +144,13 @@ class VideoQuery(
             source,
             metadata.width,
             metadata.height,
-            VideoCodec.Copy,
+            VideoEncoding(Encoder.Copy),
         )
     }
 
     fun originalH264(
         name: String = "original",
-        profile: Profile = Profile.LOSSLESS,
+        profile: Profile = Profile.ARCHIVAL,
         bitrate: Long = metadata.bitRate,
     ) {
         outputs += VideoOutput(
@@ -155,7 +159,7 @@ class VideoQuery(
             source,
             metadata.width,
             metadata.height,
-            VideoCodec.H264(profile, bitrate),
+            VideoEncoding.H264(profile, bitrate),
         )
     }
 
@@ -172,7 +176,7 @@ class VideoQuery(
             source,
             width,
             height,
-            VideoCodec.H264(profile, bitrate),
+            VideoEncoding.H264(profile, bitrate),
         )
     }
 
@@ -189,7 +193,7 @@ class AudioQuery(
         output = AudioOutput(
             name,
             source,
-            AudioCodec.Copy,
+            AudioEncoding.COPY,
             metadata.language,
             metadata.title,
             metadata.default,
@@ -200,7 +204,7 @@ class AudioQuery(
         output = AudioOutput(
             name,
             source,
-            AudioCodec.Aac,
+            AudioEncoding.AAC,
             metadata.language,
             metadata.title,
             metadata.default,
@@ -220,7 +224,7 @@ class SubtitleQuery(
         output = SubtitleOutput(
             name,
             source,
-            SubtitleCodec.Copy,
+            SubtitleEncoding.COPY,
             metadata.language,
             metadata.title,
             metadata.default,
@@ -231,7 +235,7 @@ class SubtitleQuery(
         output = SubtitleOutput(
             name,
             source,
-            SubtitleCodec.WebVtt,
+            SubtitleEncoding.WEBVTT,
             metadata.language,
             metadata.title,
             metadata.default,
