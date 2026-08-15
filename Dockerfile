@@ -1,5 +1,13 @@
 FROM eclipse-temurin:26
-RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get install -y \
+      ffmpeg \
+      vainfo \
+      libva2 \
+      i965-va-driver \
+      intel-media-va-driver \
+      va-driver-all && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

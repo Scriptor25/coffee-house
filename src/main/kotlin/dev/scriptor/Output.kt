@@ -1,47 +1,99 @@
 package dev.scriptor
 
+import dev.scriptor.backend.VideoBackend
+import dev.scriptor.codec.AudioCodec
+import dev.scriptor.codec.SubtitleCodec
+import dev.scriptor.codec.VideoCodec
 import dev.scriptor.model.AudioTrack
 import dev.scriptor.model.Media
 import dev.scriptor.model.SubtitleTrack
 import dev.scriptor.model.VideoTrack
 
-sealed interface Output {
-    val name: String
-}
+sealed interface VideoEncoding {
 
-sealed interface VideoCodec {
-    data object Copy : VideoCodec
-    data class H264(
+    operator fun invoke(index: Int, backend: VideoBackend): List<String>
+
+    data object Copy : VideoEncoding {
+
+        override fun invoke(index: Int, backend: VideoBackend): List<String> =
+            listOf("-c:v:$index", "copy")
+    }
+
+    data class Transcode(
+        val codec: VideoCodec,
         val profile: Profile,
         val bitrate: Long,
-    ) : VideoCodec
+    ) : VideoEncoding {
+
+        override fun invoke(index: Int, backend: VideoBackend): List<String> = buildList {
+            val encoder = backend.encoder(codec)
+
+            this += listOf("-c:v:$index", encoder.name)
+            this += encoder(index, profile, bitrate)
+        }
+    }
 }
 
-sealed interface AudioCodec {
-    data object Copy : AudioCodec
-    data object Aac : AudioCodec
+sealed interface AudioEncoding {
+
+    operator fun invoke(index: Int): List<String>
+
+    data object Copy : AudioEncoding {
+
+        override fun invoke(index: Int): List<String> =
+            listOf("-c:a:$index", "copy")
+    }
+
+    data class Transcode(
+        val codec: AudioCodec,
+    ) : AudioEncoding {
+
+        val encoder = codec.encoder
+
+        override fun invoke(index: Int): List<String> =
+            listOf("-c:a:$index", encoder.name) + encoder(index)
+    }
 }
 
-sealed interface SubtitleCodec {
-    data object Copy : SubtitleCodec
-    data object WebVtt : SubtitleCodec
+sealed interface SubtitleEncoding {
+
+    operator fun invoke(index: Int): List<String>
+
+    data object Copy : SubtitleEncoding {
+
+        override fun invoke(index: Int): List<String> =
+            listOf("-c:s:$index", "copy")
+    }
+
+    data class Transcode(
+        val codec: SubtitleCodec,
+    ) : SubtitleEncoding {
+
+        val encoder = codec.encoder;
+
+        override fun invoke(index: Int): List<String> =
+            listOf("-c:s:$index", encoder.name) + encoder(index)
+    }
+}
+
+sealed interface Output {
+    val name: String
+    val source: Int
 }
 
 data class VideoOutput(
     override val name: String,
-
+    override val source: Int,
+    val encoding: VideoEncoding,
     val scaled: Boolean,
-    val source: Int,
     val width: Int,
     val height: Int,
-    val codec: VideoCodec,
 ) : Output
 
 data class AudioOutput(
     override val name: String,
-
-    val source: Int,
-    val codec: AudioCodec,
+    override val source: Int,
+    val encoding: AudioEncoding,
     val language: String?,
     val title: String?,
     val default: Boolean,
@@ -49,9 +101,8 @@ data class AudioOutput(
 
 data class SubtitleOutput(
     override val name: String,
-
-    val source: Int,
-    val codec: SubtitleCodec,
+    override val source: Int,
+    val encoding: SubtitleEncoding,
     val language: String?,
     val title: String?,
     val default: Boolean,
@@ -133,46 +184,63 @@ class VideoQuery(
 ) {
     private val outputs = mutableListOf<VideoOutput>()
 
-    fun originalCopy(name: String = "original") {
+    fun copy(name: String = "original") {
         outputs += VideoOutput(
             name,
-            false,
             source,
+            VideoEncoding.Copy,
+            false,
             metadata.width,
             metadata.height,
-            VideoCodec.Copy,
         )
     }
 
-    fun originalH264(
+    fun transcode(
         name: String = "original",
-        profile: Profile = Profile.LOSSLESS,
+        codec: VideoCodec,
+        profile: Profile = Profile.ARCHIVAL,
         bitrate: Long = metadata.bitRate,
     ) {
         outputs += VideoOutput(
             name,
-            false,
             source,
+            VideoEncoding.Transcode(codec, profile, bitrate),
+            false,
             metadata.width,
             metadata.height,
-            VideoCodec.H264(profile, bitrate),
         )
     }
 
-    fun scaleH264(
+    fun copy(
         name: String,
         width: Int,
         height: Int,
-        profile: Profile,
-        bitrate: Long,
     ) {
         outputs += VideoOutput(
             name,
-            true,
             source,
+            VideoEncoding.Copy,
+            true,
             width,
             height,
-            VideoCodec.H264(profile, bitrate),
+        )
+    }
+
+    fun transcode(
+        name: String,
+        codec: VideoCodec,
+        profile: Profile,
+        bitrate: Long,
+        width: Int,
+        height: Int,
+    ) {
+        outputs += VideoOutput(
+            name,
+            source,
+            VideoEncoding.Transcode(codec, profile, bitrate),
+            true,
+            width,
+            height,
         )
     }
 
@@ -189,18 +257,18 @@ class AudioQuery(
         output = AudioOutput(
             name,
             source,
-            AudioCodec.Copy,
+            AudioEncoding.Copy,
             metadata.language,
             metadata.title,
             metadata.default,
         )
     }
 
-    fun aac(name: String = "audio$source") {
+    fun transcode(name: String = "audio$source", codec: AudioCodec) {
         output = AudioOutput(
             name,
             source,
-            AudioCodec.Aac,
+            AudioEncoding.Transcode(codec),
             metadata.language,
             metadata.title,
             metadata.default,
@@ -220,18 +288,18 @@ class SubtitleQuery(
         output = SubtitleOutput(
             name,
             source,
-            SubtitleCodec.Copy,
+            SubtitleEncoding.Copy,
             metadata.language,
             metadata.title,
             metadata.default,
         )
     }
 
-    fun webVtt(name: String = "subtitle$source") {
+    fun transcode(name: String = "subtitle$source", codec: SubtitleCodec) {
         output = SubtitleOutput(
             name,
             source,
-            SubtitleCodec.WebVtt,
+            SubtitleEncoding.Transcode(codec),
             metadata.language,
             metadata.title,
             metadata.default,

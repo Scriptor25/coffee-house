@@ -1,5 +1,8 @@
 package dev.scriptor
 
+import dev.scriptor.codec.AudioCodec
+import dev.scriptor.codec.SubtitleCodec
+import dev.scriptor.codec.VideoCodec
 import dev.scriptor.model.*
 import dev.scriptor.server.Provider
 import dev.scriptor.server.http.Server
@@ -58,7 +61,7 @@ fun Table.path(name: String): Column<Path> = registerColumn(
 
 fun getEnvironment(): Map<String, String> = System.getenv()
 
-val EXTENSIONS = arrayOf("mkv", "mp4")
+val EXTENSIONS = arrayOf("mkv", "mp4", "webm")
 
 fun parseFrameRate(value: String?): Double {
     if (value == null || value == "0/0") return 0.0
@@ -70,29 +73,22 @@ fun parseFrameRate(value: String?): Double {
     return if (den == 0.0) 0.0 else num / den
 }
 
+context(parent: Logger)
 fun getMetadata(
-    parent: Logger,
     database: Database,
     path: Path,
     createdAt: Instant,
     modifiedAt: Instant,
 ) {
-    val command = listOf(
+    val process = start(
         "ffprobe",
+        "-hide_banner",
         "-print_format", "json",
         "-show_format",
         "-show_streams",
         "-show_chapters",
         path.absolutePathString(),
     )
-
-    val log = getLogger("ffprobe", parent)
-
-    log.fine(command.joinToString("' '", "'", "'"))
-
-    val process = ProcessBuilder(command).start()
-
-    process.attach(log, Level.FINEST)
 
     val json = process.inputStream.reader().readText()
 
@@ -225,7 +221,7 @@ fun getMetadata(
 
             "attachment" -> {
                 val index = stream["index"].get<Number>().toInt()
-                val codec = stream["codec_name"].get<String>()
+                val codec = stream["codec_name"].get<String?>()
 
                 val tags = stream["tags"]
                 val filename = tags["filename"].get<String?>()
@@ -262,9 +258,133 @@ fun getMetadata(
     }
 }
 
-fun main() {
-    // TODO: kill timer threads
+data class DeviceMetadata(
+    val type: String,
+    val available: Boolean,
+    val message: String?,
+)
 
+private val codecRegex = """^\s*([VASFXBD.]{6})\s+(\S+)\s+(.*)$""".toRegex()
+
+context(parent: Logger)
+fun ffmpeg(vararg command: String): Pair<Int, String> {
+    val process = start("ffmpeg", *command)
+    val output = process.inputStream.bufferedReader().readText()
+    return process.waitFor() to output
+}
+
+context(parent: Logger)
+fun getDeviceTypes(): Set<String> {
+    val (result, output) = ffmpeg("-hide_banner", "-init_hw_device", "list")
+
+    if (result != 0) {
+        return emptySet()
+    }
+
+    return output
+        .lineSequence()
+        .drop(1)
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+        .toSet()
+}
+
+context(parent: Logger)
+fun getDeviceMetadata(types: Set<String>): List<DeviceMetadata> {
+    return types.map {
+        val (result, output) = ffmpeg(
+            "-hide_banner",
+            "-loglevel", "error",
+            "-init_hw_device", it,
+            "-f", "lavfi",
+            "-i", "nullsrc",
+            "-frames:v", "1",
+            "-f", "null",
+            "-",
+        )
+
+        DeviceMetadata(
+            it,
+            result == 0,
+            if (result != 0)
+                output
+                    .trim()
+                    .ifEmpty { null }
+            else null
+        )
+    }
+}
+
+fun parseCodecMetadata(text: String): List<CodecCapabilities> {
+    return text
+        .lineSequence()
+        .map(String::trim)
+        .dropWhile { !it.startsWith("-") }
+        .mapNotNull {
+            val match = codecRegex.matchEntire(it)
+
+            if (match == null) null else {
+                val flags = match.groupValues[1]
+                val name = match.groupValues[2]
+                val description = match.groupValues[3].trim()
+
+                val type = when (flags[0]) {
+                    'V' -> CodecType.VIDEO
+                    'A' -> CodecType.AUDIO
+                    'S' -> CodecType.SUBTITLE
+                    else -> null
+                }
+
+                if (type == null) null else {
+                    CodecCapabilities(
+                        name,
+                        type,
+                        flags[1] == 'F',
+                        flags[2] == 'S',
+                        flags[3] == 'X',
+                        flags[4] == 'B',
+                        flags[5] == 'D',
+                        description,
+                    )
+                }
+            }
+        }
+        .toList()
+}
+
+context(parent: Logger)
+fun getDecoders(): List<CodecCapabilities> {
+    val (result, output) = ffmpeg("-hide_banner", "-decoders")
+
+    if (result != 0) {
+        return emptyList()
+    }
+
+    return parseCodecMetadata(output)
+}
+
+context(parent: Logger)
+fun getEncoders(): List<CodecCapabilities> {
+    val (result, output) = ffmpeg("-hide_banner", "-encoders")
+
+    if (result != 0) {
+        return emptyList()
+    }
+
+    return parseCodecMetadata(output)
+}
+
+fun inferDeviceType(codec: String): String? = when {
+    "_nvenc" in codec -> "cuda"
+    "_cuvid" in codec -> "cuda"
+    "_qsv" in codec -> "qsv"
+    "_amf" in codec -> "amf"
+    "_vaapi" in codec -> "vaapi"
+    "_vulkan" in codec -> "vulkan"
+    else -> null
+}
+
+fun main() {
     val env = getEnvironment()
 
     val hostname = env["HOSTNAME"] ?: "0.0.0.0"
@@ -274,6 +394,40 @@ fun main() {
     val username = env["USERNAME"]
     val password = env["PASSWORD"]
     val transcoding = env["TRANSCODING"].toBoolean()
+    val preferredVideoCodec = env["PREFERRED_VIDEO_CODEC"]?.uppercase()
+    val preferredAudioCodec = env["PREFERRED_AUDIO_CODEC"]?.uppercase()
+    val preferredSubtitleCodec = env["PREFERRED_SUBTITLE_CODEC"]?.uppercase()
+
+    val log = getLogger("coffee-house")
+    log.level = Level.ALL
+
+    val capabilities = context(log) {
+        val types = getDeviceTypes()
+        val devices = getDeviceMetadata(types)
+        val decoders = getDecoders()
+        val encoders = getEncoders()
+
+        val availableDevices = devices
+            .filter(DeviceMetadata::available)
+            .map(DeviceMetadata::type)
+            .toSet()
+
+        val availableDecoders = decoders.filter {
+            val type = inferDeviceType(it.name)
+            type == null || type in availableDevices
+        }
+
+        val availableEncoders = encoders.filter {
+            val type = inferDeviceType(it.name)
+            type == null || type in availableDevices
+        }
+
+        TranscodingCapabilities(
+            availableDevices,
+            availableDecoders,
+            availableEncoders,
+        )
+    }
 
     val provider = Provider()
 
@@ -285,8 +439,6 @@ fun main() {
     provider["password"] = password
     provider["transcoding"] = transcoding
 
-    val log = getLogger("coffee-house")
-    log.level = Level.ALL
     provider.registerT(log)
 
     val databasePath = cache.resolve("index.db")
@@ -295,13 +447,30 @@ fun main() {
     val database = Database.connect({ DriverManager.getConnection("jdbc:sqlite:$databasePath") })
     provider.registerT(database)
 
-    val hls = HlsCache(cache, transcoding)
+    val hls = HlsCache(
+        cache,
+        transcoding,
+        capabilities,
+        if (preferredVideoCodec != null)
+            VideoCodec.valueOf(preferredVideoCodec)
+        else VideoCodec.H264,
+        if (preferredAudioCodec != null)
+            AudioCodec.valueOf(preferredAudioCodec)
+        else AudioCodec.AAC,
+        if (preferredSubtitleCodec != null)
+            SubtitleCodec.valueOf(preferredSubtitleCodec)
+        else SubtitleCodec.WEBVTT,
+    )
     provider.registerT(hls)
+
+    log.info("walking file tree")
 
     val paths = data
         .walk()
         .filter { it.extension in EXTENSIONS }
         .toList()
+
+    log.info("found ${paths.size} files")
 
     transaction(database) {
         SchemaUtils.create(
@@ -338,13 +507,14 @@ fun main() {
         val createdAt = attributes.creationTime().toInstant().toKotlinInstant()
         val modifiedAt = attributes.lastModifiedTime().toInstant().toKotlinInstant()
 
-        getMetadata(
-            log,
-            database,
-            path,
-            createdAt,
-            modifiedAt,
-        )
+        context(log) {
+            getMetadata(
+                database,
+                path,
+                createdAt,
+                modifiedAt,
+            )
+        }
     }
 
     val server = Server(log, provider, hostname, port)

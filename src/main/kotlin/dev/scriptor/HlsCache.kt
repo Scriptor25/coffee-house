@@ -1,5 +1,9 @@
 package dev.scriptor
 
+import dev.scriptor.backend.*
+import dev.scriptor.codec.AudioCodec
+import dev.scriptor.codec.SubtitleCodec
+import dev.scriptor.codec.VideoCodec
 import dev.scriptor.model.Media
 import dev.scriptor.model.VideoTrack
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -11,6 +15,10 @@ import kotlin.uuid.Uuid
 class HlsCache(
     private val base: Path,
     private val transcoding: Boolean,
+    private val capabilities: TranscodingCapabilities,
+    private val preferredVideoCodec: VideoCodec,
+    private val preferredAudioCodec: AudioCodec,
+    private val preferredSubtitleCodec: SubtitleCodec,
     private val allowed: Set<String> = setOf("2160p", "1440p", "1080p", "720p", "480p", "360p", "144p"),
 ) {
     private val definedVariants: List<Variant> = listOf(
@@ -36,7 +44,7 @@ class HlsCache(
                     sourceWidth,
                     sourceHeight,
                     item.bitRate,
-                    Profile.LOSSLESS,
+                    Profile.ARCHIVAL,
                 )
             else
                 OriginalVariant()
@@ -68,15 +76,47 @@ class HlsCache(
         return result
     }
 
+    fun supportsEncoding(name: String, codec: VideoCodec): Boolean {
+        return capabilities.encoders
+            .any { it.type == CodecType.VIDEO && "${codec.name.lowercase()}_$name" in it.name }
+    }
+
+    fun selectBackend(codec: VideoCodec): VideoBackend = when {
+        "cuda" in capabilities.devices && supportsEncoding("nvenc", codec) -> NvidiaVideoBackend
+        "qsv" in capabilities.devices && supportsEncoding("qsv", codec) -> IntelVideoBackend
+        "amf" in capabilities.devices && supportsEncoding("amf", codec) -> AmdVideoBackend
+        "vaapi" in capabilities.devices && supportsEncoding("vaapi", codec) -> VaapiVideoBackend
+        "vulkan" in capabilities.devices && supportsEncoding("vulkan", codec) -> VulkanVideoBackend
+        else -> SoftwareVideoBackend
+    }
+
     context(database: Database)
     fun job(item: Media): TranscodingJob =
         jobs.computeIfAbsent(item.id.value) {
             transaction(database) {
+                val backend = selectBackend(preferredVideoCodec)
+
+                val pipeline = Pipeline(
+                    8,
+                    SoftwareVideoBackend,
+                    backend,
+                    backend,
+                    backend,
+                )
+
+                val configuration = TranscodingConfiguration(
+                    transcoding,
+                    preferredVideoCodec,
+                    preferredAudioCodec,
+                    preferredSubtitleCodec,
+                    pipeline,
+                )
+
                 TranscodingJob(
                     item,
                     base.resolve(item.id.value.toHexDashString()),
                     variants(item.video.first { it.index == 0 }),
-                    transcoding,
+                    configuration,
                 )
             }
         }

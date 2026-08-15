@@ -39,6 +39,12 @@
         </dependency>
 
         <dependency>
+            <groupId>dev.scriptor</groupId>
+            <artifactId>reflect</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
+        <dependency>
             <groupId>org.xerial</groupId>
             <artifactId>sqlite-jdbc</artifactId>
             <version>3.53.2.0</version>
@@ -85,16 +91,25 @@
 
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <version>3.5.0</version>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.6.2</version>
 
-                <configuration>
-                    <archive>
-                        <manifest>
-                            <mainClass>dev.scriptor.MainKt</mainClass>
-                        </manifest>
-                    </archive>
-                </configuration>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <transformers>
+                                <transformer
+                                        implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>dev.scriptor.MainKt</mainClass>
+                                </transformer>
+                            </transformers>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

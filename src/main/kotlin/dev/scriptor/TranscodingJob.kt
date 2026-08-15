@@ -2,7 +2,6 @@ package dev.scriptor
 
 import dev.scriptor.model.Media
 import java.nio.file.Path
-import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.io.path.createDirectories
 import kotlin.io.path.notExists
@@ -11,7 +10,7 @@ data class TranscodingJob(
     val metadata: Media,
     val cache: Path,
     val variants: List<Variant>,
-    val transcoding: Boolean,
+    val configuration: TranscodingConfiguration,
 ) {
     private enum class State {
         CREATED,
@@ -54,13 +53,7 @@ data class TranscodingJob(
 
         cache.createDirectories()
 
-        val log = getLogger("ffmpeg-$id", parent)
-
-        log.fine(command.joinToString("' '", "'", "'"))
-
-        process = ProcessBuilder(command).start()
-
-        process.attach(log, Level.FINEST)
+        process = start(command, "ffmpeg-$id")
     }
 
     context(_: Logger)
@@ -81,40 +74,55 @@ data class TranscodingJob(
             }
         }
 
-        if (path.notExists()) error("file $path does not exist")
+        if (path.notExists()) {
+            error("file $path does not exist")
+        }
 
         return path
     }
 
     private fun buildCommand(): List<String> {
-        val original = variants.filterIsInstance<OriginalVariant>()
-        val scale = variants.filterIsInstance<ScaleVariant>()
-
         val outputs = outputs(metadata) {
             video(0) {
-                original.forEach {
-                    if (transcoding) {
-                        originalH264(it.name)
-                    } else {
-                        originalCopy(it.name)
-                    }
-                }
+                variants.forEach {
+                    when (it) {
+                        is OriginalVariant -> {
+                            if (configuration.enable) {
+                                transcode(
+                                    it.name,
+                                    configuration.video,
+                                )
+                            } else {
+                                copy(it.name)
+                            }
+                        }
 
-                scale.forEach {
-                    scaleH264(
-                        it.name,
-                        it.width,
-                        it.height,
-                        it.profile,
-                        it.bitrate,
-                    )
+                        is ScaleVariant -> {
+                            if (configuration.enable) {
+                                transcode(
+                                    it.name,
+                                    configuration.video,
+                                    it.profile,
+                                    it.bitrate,
+                                    it.width,
+                                    it.height,
+                                )
+                            } else {
+                                copy(
+                                    it.name,
+                                    it.width,
+                                    it.height,
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
             metadata.audio.forEach {
                 audio(it) {
-                    if (transcoding) {
-                        aac()
+                    if (configuration.enable) {
+                        transcode(codec = configuration.audio)
                     } else {
                         copy()
                     }
@@ -122,7 +130,7 @@ data class TranscodingJob(
             }
 
             metadata.subtitles.filter {
-                // HLS does not support bitmap subtitles?
+                // TODO: HLS does not support bitmap subtitles?
                 when (it.codec) {
                     "subrip",
                     "ass",
@@ -133,8 +141,8 @@ data class TranscodingJob(
                 }
             }.forEach {
                 subtitle(it) {
-                    if (transcoding) {
-                        webVtt()
+                    if (configuration.enable) {
+                        transcode(codec = configuration.subtitle)
                     } else {
                         copy()
                     }
@@ -142,6 +150,11 @@ data class TranscodingJob(
             }
         }
 
-        return ffmpeg(metadata.path, cache, outputs)
+        return CommandBuilder(
+            metadata.path,
+            cache,
+            outputs,
+            configuration.pipeline,
+        ).build()
     }
 }
