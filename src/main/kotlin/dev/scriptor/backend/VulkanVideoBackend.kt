@@ -2,6 +2,7 @@ package dev.scriptor.backend
 
 import dev.scriptor.codec.VideoCodec
 import dev.scriptor.encoder.video.VideoEncoder
+import dev.scriptor.encoder.video.VulkanVideoEncoder
 
 data object VulkanVideoBackend : VideoBackend {
 
@@ -20,9 +21,9 @@ data object VulkanVideoBackend : VideoBackend {
     override fun scale(width: Int, height: Int): String = "scale_vulkan=$width:$height"
 
     override fun encoder(codec: VideoCodec): VideoEncoder = when (codec) {
-        VideoCodec.AV1 -> TODO()
-        VideoCodec.H264 -> TODO()
-        VideoCodec.HEVC -> TODO()
+        VideoCodec.AV1 -> VulkanVideoEncoder.AV1
+        VideoCodec.H264 -> VulkanVideoEncoder.H264
+        VideoCodec.HEVC -> VulkanVideoEncoder.HEVC
 
         else -> error("vulkan backend does not support codec $codec")
     }

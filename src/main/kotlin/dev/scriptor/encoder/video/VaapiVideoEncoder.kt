@@ -44,7 +44,20 @@ interface VaapiVideoEncoder : VideoEncoder {
             index: Int,
             profile: Profile,
             bitrate: Long,
-        ): List<String> = TODO()
+        ): List<String> = listOf(
+            "-global_quality:v:$index", quality(profile).toString(),
+            "-b:v:$index", bitrate.toString(),
+            "-maxrate:v:$index", bitrate.toString(),
+            "-bufsize:v:$index", (bitrate * 2).toString(),
+        )
+
+        private fun quality(profile: Profile): Int = when (profile) {
+            Profile.ARCHIVAL -> 18
+            Profile.HIGH -> 30
+            Profile.MEDIUM -> 45
+            Profile.LOW -> 60
+            Profile.POTATO -> 75
+        }
     }
 
     data object VP9 : VaapiVideoEncoder {
@@ -58,7 +71,20 @@ interface VaapiVideoEncoder : VideoEncoder {
             index: Int,
             profile: Profile,
             bitrate: Long,
-        ): List<String> = TODO()
+        ): List<String> = listOf(
+            "-global_quality:v:$index", quality(profile).toString(),
+            "-b:v:$index", bitrate.toString(),
+            "-maxrate:v:$index", bitrate.toString(),
+            "-bufsize:v:$index", (bitrate * 2).toString(),
+        )
+
+        private fun quality(profile: Profile): Int = when (profile) {
+            Profile.ARCHIVAL -> 30
+            Profile.HIGH -> 60
+            Profile.MEDIUM -> 90
+            Profile.LOW -> 120
+            Profile.POTATO -> 150
+        }
     }
 
     data object H264 : VaapiVideoEncoder {
