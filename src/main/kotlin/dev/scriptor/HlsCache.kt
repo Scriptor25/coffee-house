@@ -97,7 +97,7 @@ class HlsCache(
                 val backend = selectBackend(preferredVideoCodec)
 
                 val pipeline = Pipeline(
-                    10,
+                    8,
                     SoftwareVideoBackend,
                     backend,
                     backend,
