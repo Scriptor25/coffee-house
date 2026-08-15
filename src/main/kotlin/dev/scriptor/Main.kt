@@ -1,5 +1,8 @@
 package dev.scriptor
 
+import dev.scriptor.codec.AudioCodec
+import dev.scriptor.codec.SubtitleCodec
+import dev.scriptor.codec.VideoCodec
 import dev.scriptor.model.*
 import dev.scriptor.server.Provider
 import dev.scriptor.server.http.Server
@@ -391,6 +394,9 @@ fun main() {
     val username = env["USERNAME"]
     val password = env["PASSWORD"]
     val transcoding = env["TRANSCODING"].toBoolean()
+    val preferredVideoCodec = env["PREFERRED_VIDEO_CODEC"]?.uppercase()
+    val preferredAudioCodec = env["PREFERRED_AUDIO_CODEC"]?.uppercase()
+    val preferredSubtitleCodec = env["PREFERRED_SUBTITLE_CODEC"]?.uppercase()
 
     val log = getLogger("coffee-house")
     log.level = Level.ALL
@@ -441,7 +447,20 @@ fun main() {
     val database = Database.connect({ DriverManager.getConnection("jdbc:sqlite:$databasePath") })
     provider.registerT(database)
 
-    val hls = HlsCache(cache, transcoding, capabilities)
+    val hls = HlsCache(
+        cache,
+        transcoding,
+        capabilities,
+        if (preferredVideoCodec != null)
+            VideoCodec.valueOf(preferredVideoCodec)
+        else VideoCodec.H264,
+        if (preferredAudioCodec != null)
+            AudioCodec.valueOf(preferredAudioCodec)
+        else AudioCodec.AAC,
+        if (preferredSubtitleCodec != null)
+            SubtitleCodec.valueOf(preferredSubtitleCodec)
+        else SubtitleCodec.WEBVTT,
+    )
     provider.registerT(hls)
 
     log.info("walking file tree")

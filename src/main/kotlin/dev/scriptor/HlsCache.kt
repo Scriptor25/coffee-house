@@ -16,6 +16,9 @@ class HlsCache(
     private val base: Path,
     private val transcoding: Boolean,
     private val capabilities: TranscodingCapabilities,
+    private val preferredVideoCodec: VideoCodec,
+    private val preferredAudioCodec: AudioCodec,
+    private val preferredSubtitleCodec: SubtitleCodec,
     private val allowed: Set<String> = setOf("2160p", "1440p", "1080p", "720p", "480p", "360p", "144p"),
 ) {
     private val definedVariants: List<Variant> = listOf(
@@ -91,11 +94,7 @@ class HlsCache(
     fun job(item: Media): TranscodingJob =
         jobs.computeIfAbsent(item.id.value) {
             transaction(database) {
-                val videoCodec = VideoCodec.AV1
-                val audioCodec = AudioCodec.AAC
-                val subtitleCodec = SubtitleCodec.WEBVTT
-
-                val backend = selectBackend(videoCodec)
+                val backend = selectBackend(preferredVideoCodec)
 
                 val pipeline = Pipeline(
                     10,
@@ -107,9 +106,9 @@ class HlsCache(
 
                 val configuration = TranscodingConfiguration(
                     transcoding,
-                    videoCodec,
-                    audioCodec,
-                    subtitleCodec,
+                    preferredVideoCodec,
+                    preferredAudioCodec,
+                    preferredSubtitleCodec,
                     pipeline,
                 )
 
