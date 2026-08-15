@@ -1,36 +1,27 @@
 package dev.scriptor
 
 import dev.scriptor.backend.SoftwareVideoBackend
-import dev.scriptor.backend.VideoBackend
 import java.nio.file.Path
 import kotlin.io.path.absolutePathString
 
 class Ffmpeg(
-    private val input: Path,
-    private val cache: Path,
-    private val outputs: List<Output>,
-    private val decode: VideoBackend,
-    private val scale: VideoBackend,
-    private val encode: VideoBackend,
+    val input: Path,
+    val cache: Path,
+    val outputs: List<Output>,
+    val pipeline: Pipeline,
 ) {
     fun build(): List<String> = buildList {
         this += listOf("ffmpeg", "-hide_banner")
 
-        val devices = mutableSetOf<String>()
-
-        if (decode !is SoftwareVideoBackend) {
-            devices += decode.name
-        }
-
-        if (encode !is SoftwareVideoBackend) {
-            devices += encode.name
-        }
+        val devices = pipeline.devices
 
         devices.forEach { this += listOf("-init_hw_device", it) }
 
-        if (decode !is SoftwareVideoBackend) {
-            this += listOf("-hwaccel", decode.name)
-            this += listOf("-hwaccel_output_format", decode.name)
+        when (val decode = pipeline.decode) {
+            !is SoftwareVideoBackend -> {
+                this += listOf("-hwaccel", decode.name)
+                this += listOf("-hwaccel_output_format", decode.name)
+            }
         }
 
         this += "-y" // allow overriding existing files
@@ -54,24 +45,17 @@ class Ffmpeg(
 
         val filter = buildString {
             append("[0:$input]")
-            append("split=$count")
+            append(pipeline.buildSplit(count))
 
             video.indices.forEach { append("[v$it]") }
-
-            val pipeline = Pipeline(
-                10, // TODO
-                decode,
-                scale,
-                encode,
-            )
 
             video.forEachIndexed { index, output ->
                 val transform = if (output.scaled) {
                     val width = output.width
                     val height = output.height
 
-                    pipeline.build(width, height)
-                } else pipeline.build()
+                    pipeline.buildScaleEncode(width, height)
+                } else pipeline.buildEncode()
 
                 append(";")
                 append("[v$index]")
@@ -110,7 +94,7 @@ class Ffmpeg(
     }
 
     private fun buildVideoCodec(index: Int, output: VideoOutput): List<String> =
-        output.encoding(index, encode)
+        output.encoding(index, pipeline.encode)
 
     private fun buildAudioCodec(index: Int, output: AudioOutput): List<String> =
         output.encoding(index)
@@ -181,14 +165,10 @@ fun ffmpeg(
     input: Path,
     cache: Path,
     outputs: List<Output>,
-    decode: VideoBackend,
-    scale: VideoBackend,
-    encode: VideoBackend,
+    pipeline: Pipeline,
 ): List<String> = Ffmpeg(
     input,
     cache,
     outputs,
-    decode,
-    scale,
-    encode,
+    pipeline,
 ).build()

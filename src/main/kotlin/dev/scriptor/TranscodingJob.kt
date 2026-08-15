@@ -1,5 +1,6 @@
 package dev.scriptor
 
+import dev.scriptor.backend.SoftwareVideoBackend
 import dev.scriptor.backend.VaapiVideoBackend
 import dev.scriptor.codec.AudioCodec
 import dev.scriptor.codec.SubtitleCodec
@@ -163,9 +164,13 @@ data class TranscodingJob(
             metadata.path,
             cache,
             outputs,
-            VaapiVideoBackend, // TODO: make selectable from outside
-            VaapiVideoBackend, // TODO: make selectable from outside
-            VaapiVideoBackend, // TODO: make selectable from outside
+            Pipeline(
+                10, // TODO: make selectable from outside
+                SoftwareVideoBackend, // TODO: make selectable from outside
+                VaapiVideoBackend, // TODO: make selectable from outside
+                VaapiVideoBackend, // TODO: make selectable from outside
+                VaapiVideoBackend, // TODO: make selectable from outside
+            ),
         )
     }
 }
