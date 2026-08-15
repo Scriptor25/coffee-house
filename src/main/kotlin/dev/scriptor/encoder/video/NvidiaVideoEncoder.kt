@@ -72,12 +72,12 @@ interface NvidiaVideoEncoder : VideoEncoder {
         }
     }
 
-    data object H265 : NvidiaVideoEncoder {
+    data object HEVC : NvidiaVideoEncoder {
 
         override val name = "hevc_nvenc"
 
         override val backend = NvidiaVideoBackend
-        override val codec = VideoCodec.H265
+        override val codec = VideoCodec.HEVC
 
         override fun invoke(
             index: Int,

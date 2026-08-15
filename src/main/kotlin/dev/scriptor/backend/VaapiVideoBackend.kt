@@ -22,9 +22,9 @@ data object VaapiVideoBackend : VideoBackend {
 
     override fun encoder(codec: VideoCodec): VideoEncoder = when (codec) {
         VideoCodec.AV1 -> VaapiVideoEncoder.AV1
+        VideoCodec.VP8 -> VaapiVideoEncoder.VP8
+        VideoCodec.VP9 -> VaapiVideoEncoder.VP9
         VideoCodec.H264 -> VaapiVideoEncoder.H264
-        VideoCodec.H265 -> VaapiVideoEncoder.H265
-
-        else -> error("vaapi backend does not support codec $codec")
+        VideoCodec.HEVC -> VaapiVideoEncoder.HEVC
     }
 }

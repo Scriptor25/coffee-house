@@ -33,6 +33,20 @@ interface IntelVideoEncoder : VideoEncoder {
         }
     }
 
+    data object VP9 : IntelVideoEncoder {
+
+        override val name = "vp9_qsv"
+
+        override val backend = IntelVideoBackend
+        override val codec = VideoCodec.VP9
+
+        override fun invoke(
+            index: Int,
+            profile: Profile,
+            bitrate: Long
+        ): List<String> = TODO()
+    }
+
     data object H264 : IntelVideoEncoder {
 
         override val name = "h264_qsv"
@@ -60,12 +74,12 @@ interface IntelVideoEncoder : VideoEncoder {
         }
     }
 
-    data object H265 : IntelVideoEncoder {
+    data object HEVC : IntelVideoEncoder {
 
         override val name = "hevc_qsv"
 
         override val backend = IntelVideoBackend
-        override val codec = VideoCodec.H265
+        override val codec = VideoCodec.HEVC
 
         override fun invoke(
             index: Int,

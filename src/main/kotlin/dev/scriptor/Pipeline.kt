@@ -14,23 +14,23 @@ data class Pipeline(
     val devices: Set<String>
         get() = buildSet {
             if (decode !is SoftwareVideoBackend) {
-                add(decode.name)
+                this += decode.name
             }
             if (split !is SoftwareVideoBackend) {
-                add(split.name)
+                this += split.name
             }
             if (scale !is SoftwareVideoBackend) {
-                add(scale.name)
+                this += scale.name
             }
             if (encode !is SoftwareVideoBackend) {
-                add(encode.name)
+                this += encode.name
             }
         }
 
     fun buildSplit(count: Int): String =
-        buildList {
-            addAll(transition(decode, split))
-            add("split=$count")
+        buildList<String> {
+            this += transition(decode, split)
+            this += "split=$count"
         }
             .joinToString(",")
 
@@ -43,10 +43,10 @@ data class Pipeline(
         width: Int,
         height: Int,
     ): String =
-        buildList {
-            addAll(transition(split, scale))
-            add(scale.scale(width, height))
-            addAll(transition(scale, encode))
+        buildList<String> {
+            this += transition(split, scale)
+            this += scale.scale(width, height)
+            this += transition(scale, encode)
         }
             .ifEmpty { listOf("null") }
             .joinToString(",")

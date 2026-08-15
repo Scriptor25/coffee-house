@@ -5,5 +5,5 @@ enum class VideoCodec {
     VP8,
     VP9,
     H264,
-    H265,
+    HEVC,
 }

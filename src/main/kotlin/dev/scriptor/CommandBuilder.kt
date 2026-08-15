@@ -4,12 +4,13 @@ import dev.scriptor.backend.SoftwareVideoBackend
 import java.nio.file.Path
 import kotlin.io.path.absolutePathString
 
-class Ffmpeg(
+class CommandBuilder(
     val input: Path,
     val cache: Path,
     val outputs: List<Output>,
     val pipeline: Pipeline,
 ) {
+
     fun build(): List<String> = buildList {
         this += listOf("ffmpeg", "-hide_banner")
 
@@ -24,8 +25,9 @@ class Ffmpeg(
             }
         }
 
-        this += "-y" // allow overriding existing files
         this += listOf("-i", input.absolutePathString())
+
+        this += "-y" // allow overriding existing files
 
         this += buildFilter()
         this += buildMappings()
@@ -160,15 +162,3 @@ class Ffmpeg(
         )
     }
 }
-
-fun ffmpeg(
-    input: Path,
-    cache: Path,
-    outputs: List<Output>,
-    pipeline: Pipeline,
-): List<String> = Ffmpeg(
-    input,
-    cache,
-    outputs,
-    pipeline,
-).build()

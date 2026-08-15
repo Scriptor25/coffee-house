@@ -20,6 +20,9 @@ services:
       PASSWORD: "root"
       TRANSCODING: "true"
 
+    devices:
+      - /dev/dri:/dev/dri
+
     volumes:
       - coffee-house-cache:/cache
       - /home/felix/remote:/data:ro

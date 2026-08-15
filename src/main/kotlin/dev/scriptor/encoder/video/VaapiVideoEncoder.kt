@@ -33,6 +33,34 @@ interface VaapiVideoEncoder : VideoEncoder {
         }
     }
 
+    data object VP8 : VaapiVideoEncoder {
+
+        override val name = "vp8_vaapi"
+
+        override val backend = VaapiVideoBackend
+        override val codec = VideoCodec.VP8
+
+        override fun invoke(
+            index: Int,
+            profile: Profile,
+            bitrate: Long,
+        ): List<String> = TODO()
+    }
+
+    data object VP9 : VaapiVideoEncoder {
+
+        override val name = "vp9_vaapi"
+
+        override val backend = VaapiVideoBackend
+        override val codec = VideoCodec.VP9
+
+        override fun invoke(
+            index: Int,
+            profile: Profile,
+            bitrate: Long,
+        ): List<String> = TODO()
+    }
+
     data object H264 : VaapiVideoEncoder {
 
         override val name = "h264_vaapi"
@@ -60,12 +88,12 @@ interface VaapiVideoEncoder : VideoEncoder {
         }
     }
 
-    data object H265 : VaapiVideoEncoder {
+    data object HEVC : VaapiVideoEncoder {
 
         override val name = "hevc_vaapi"
 
         override val backend = VaapiVideoBackend
-        override val codec = VideoCodec.H265
+        override val codec = VideoCodec.HEVC
 
         override fun invoke(
             index: Int,

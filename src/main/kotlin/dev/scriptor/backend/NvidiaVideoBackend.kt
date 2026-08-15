@@ -23,7 +23,7 @@ data object NvidiaVideoBackend : VideoBackend {
     override fun encoder(codec: VideoCodec): VideoEncoder = when (codec) {
         VideoCodec.AV1 -> NvidiaVideoEncoder.AV1
         VideoCodec.H264 -> NvidiaVideoEncoder.H264
-        VideoCodec.H265 -> NvidiaVideoEncoder.H265
+        VideoCodec.HEVC -> NvidiaVideoEncoder.HEVC
 
         else -> error("nvidia backend does not support codec $codec")
     }

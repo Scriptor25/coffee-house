@@ -25,6 +25,6 @@ data object SoftwareVideoBackend : VideoBackend {
         VideoCodec.VP8 -> VideoEncoder.VP8
         VideoCodec.VP9 -> VideoEncoder.VP9
         VideoCodec.H264 -> VideoEncoder.H264
-        VideoCodec.H265 -> VideoEncoder.H265
+        VideoCodec.HEVC -> VideoEncoder.HEVC
     }
 }

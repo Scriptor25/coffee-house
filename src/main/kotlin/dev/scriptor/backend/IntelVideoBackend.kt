@@ -22,8 +22,9 @@ data object IntelVideoBackend : VideoBackend {
 
     override fun encoder(codec: VideoCodec): VideoEncoder = when (codec) {
         VideoCodec.AV1 -> IntelVideoEncoder.AV1
+        VideoCodec.VP9 -> IntelVideoEncoder.VP9
         VideoCodec.H264 -> IntelVideoEncoder.H264
-        VideoCodec.H265 -> IntelVideoEncoder.H265
+        VideoCodec.HEVC -> IntelVideoEncoder.HEVC
 
         else -> error("intel backend does not support codec $codec")
     }

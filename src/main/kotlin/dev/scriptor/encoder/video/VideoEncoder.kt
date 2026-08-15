@@ -160,12 +160,12 @@ interface VideoEncoder : Encoder {
         }
     }
 
-    data object H265 : VideoEncoder {
+    data object HEVC : VideoEncoder {
 
         override val name = "libx265"
 
         override val backend = SoftwareVideoBackend
-        override val codec = VideoCodec.H265
+        override val codec = VideoCodec.HEVC
 
         override fun invoke(
             index: Int,

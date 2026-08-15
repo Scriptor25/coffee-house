@@ -1,13 +1,7 @@
 package dev.scriptor
 
-import dev.scriptor.backend.SoftwareVideoBackend
-import dev.scriptor.backend.VaapiVideoBackend
-import dev.scriptor.codec.AudioCodec
-import dev.scriptor.codec.SubtitleCodec
-import dev.scriptor.codec.VideoCodec
 import dev.scriptor.model.Media
 import java.nio.file.Path
-import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.io.path.createDirectories
 import kotlin.io.path.notExists
@@ -16,7 +10,7 @@ data class TranscodingJob(
     val metadata: Media,
     val cache: Path,
     val variants: List<Variant>,
-    val transcoding: Boolean,
+    val configuration: TranscodingConfiguration,
 ) {
     private enum class State {
         CREATED,
@@ -59,13 +53,7 @@ data class TranscodingJob(
 
         cache.createDirectories()
 
-        val log = getLogger("ffmpeg-$id", parent)
-
-        log.fine(command.joinToString("' '", "'", "'"))
-
-        process = ProcessBuilder(command).start()
-
-        process.attach(log, Level.FINEST)
+        process = start(command, "ffmpeg-$id")
     }
 
     context(_: Logger)
@@ -86,7 +74,9 @@ data class TranscodingJob(
             }
         }
 
-        if (path.notExists()) error("file $path does not exist")
+        if (path.notExists()) {
+            error("file $path does not exist")
+        }
 
         return path
     }
@@ -97,10 +87,10 @@ data class TranscodingJob(
                 variants.forEach {
                     when (it) {
                         is OriginalVariant -> {
-                            if (transcoding) {
+                            if (configuration.enable) {
                                 transcode(
                                     it.name,
-                                    VideoCodec.AV1, // TODO: make selectable from outside
+                                    configuration.video,
                                 )
                             } else {
                                 copy(it.name)
@@ -108,10 +98,10 @@ data class TranscodingJob(
                         }
 
                         is ScaleVariant -> {
-                            if (transcoding) {
+                            if (configuration.enable) {
                                 transcode(
                                     it.name,
-                                    VideoCodec.AV1, // TODO: make selectable from outside
+                                    configuration.video,
                                     it.profile,
                                     it.bitrate,
                                     it.width,
@@ -131,8 +121,8 @@ data class TranscodingJob(
 
             metadata.audio.forEach {
                 audio(it) {
-                    if (transcoding) {
-                        transcode(codec = AudioCodec.OPUS) // TODO: make selectable from outside
+                    if (configuration.enable) {
+                        transcode(codec = configuration.audio)
                     } else {
                         copy()
                     }
@@ -151,8 +141,8 @@ data class TranscodingJob(
                 }
             }.forEach {
                 subtitle(it) {
-                    if (transcoding) {
-                        transcode(codec = SubtitleCodec.WEBVTT) // TODO: make selectable from outside
+                    if (configuration.enable) {
+                        transcode(codec = configuration.subtitle)
                     } else {
                         copy()
                     }
@@ -160,17 +150,11 @@ data class TranscodingJob(
             }
         }
 
-        return ffmpeg(
+        return CommandBuilder(
             metadata.path,
             cache,
             outputs,
-            Pipeline(
-                10, // TODO: make selectable from outside
-                SoftwareVideoBackend, // TODO: make selectable from outside
-                VaapiVideoBackend, // TODO: make selectable from outside
-                VaapiVideoBackend, // TODO: make selectable from outside
-                VaapiVideoBackend, // TODO: make selectable from outside
-            ),
-        )
+            configuration.pipeline,
+        ).build()
     }
 }

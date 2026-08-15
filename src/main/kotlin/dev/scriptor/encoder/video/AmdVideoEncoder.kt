@@ -52,12 +52,12 @@ interface AmdVideoEncoder : VideoEncoder {
         }
     }
 
-    data object H265 : AmdVideoEncoder {
+    data object HEVC : AmdVideoEncoder {
 
         override val name = "hevc_amf"
 
         override val backend = AmdVideoBackend
-        override val codec = VideoCodec.H265
+        override val codec = VideoCodec.HEVC
 
         override fun quality(profile: Profile): String = when (profile) {
             Profile.ARCHIVAL -> "quality"

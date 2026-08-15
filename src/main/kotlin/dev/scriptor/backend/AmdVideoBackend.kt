@@ -23,7 +23,7 @@ data object AmdVideoBackend : VideoBackend {
     override fun encoder(codec: VideoCodec): VideoEncoder = when (codec) {
         VideoCodec.AV1 -> AmdVideoEncoder.AV1
         VideoCodec.H264 -> AmdVideoEncoder.H264
-        VideoCodec.H265 -> AmdVideoEncoder.H265
+        VideoCodec.HEVC -> AmdVideoEncoder.HEVC
 
         else -> error("amd backend does not support codec $codec")
     }
