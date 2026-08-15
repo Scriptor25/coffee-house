@@ -14,7 +14,7 @@ class Ffmpeg(
     private val encode: VideoBackend,
 ) {
     fun build(): List<String> = buildList {
-        this += "ffmpeg"
+        this += listOf("ffmpeg", "-hide_banner")
 
         val devices = mutableSetOf<String>()
 

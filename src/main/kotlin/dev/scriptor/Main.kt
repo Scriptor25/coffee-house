@@ -79,6 +79,7 @@ fun getMetadata(
 ) {
     val command = listOf(
         "ffprobe",
+        "-hide_banner",
         "-print_format", "json",
         "-show_format",
         "-show_streams",
