@@ -24,12 +24,12 @@ sealed interface MutableJsonNode : JsonNode {
     override val entries: MutableSet<MutableMap.MutableEntry<String, MutableJsonNode>>
         get() = throw UnsupportedOperationException()
 
-    override operator fun get(key: String): MutableJsonNode = throw UnsupportedOperationException()
+    override fun get(key: String): MutableJsonNode = throw UnsupportedOperationException()
     operator fun set(key: String, node: JsonNode): Unit = set(key, node.toMutable())
     operator fun set(key: String, node: MutableJsonNode): Unit = throw UnsupportedOperationException()
 
-    override operator fun get(index: Int): MutableJsonNode = throw UnsupportedOperationException()
-    override operator fun iterator(): MutableIterator<MutableJsonNode> = throw UnsupportedOperationException()
+    override fun get(index: Int): MutableJsonNode = throw UnsupportedOperationException()
+    override fun iterator(): MutableIterator<MutableJsonNode> = throw UnsupportedOperationException()
     operator fun set(index: Int, node: JsonNode): Unit = set(index, node.toMutable())
     operator fun set(index: Int, node: MutableJsonNode): Unit = throw UnsupportedOperationException()
 

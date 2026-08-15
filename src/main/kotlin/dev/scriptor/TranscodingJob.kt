@@ -1,5 +1,6 @@
 package dev.scriptor
 
+import dev.scriptor.backend.VaapiVideoBackend
 import dev.scriptor.model.Media
 import java.nio.file.Path
 import java.util.logging.Level
@@ -93,20 +94,32 @@ data class TranscodingJob(
                     when (it) {
                         is OriginalVariant -> {
                             if (transcoding) {
-                                originalH264(it.name)
+                                transcode(
+                                    it.name,
+                                    VideoCodec.AV1, // TODO: make selectable from outside
+                                )
                             } else {
-                                originalCopy(it.name)
+                                copy(it.name)
                             }
                         }
 
                         is ScaleVariant -> {
-                            scaleH264(
-                                it.name,
-                                it.width,
-                                it.height,
-                                it.profile,
-                                it.bitrate,
-                            )
+                            if (transcoding) {
+                                transcode(
+                                    it.name,
+                                    VideoCodec.AV1, // TODO: make selectable from outside
+                                    it.profile,
+                                    it.bitrate,
+                                    it.width,
+                                    it.height,
+                                )
+                            } else {
+                                copy(
+                                    it.name,
+                                    it.width,
+                                    it.height,
+                                )
+                            }
                         }
                     }
                 }
@@ -115,7 +128,7 @@ data class TranscodingJob(
             metadata.audio.forEach {
                 audio(it) {
                     if (transcoding) {
-                        aac()
+                        transcode(codec = AudioCodec.OPUS) // TODO: make selectable from outside
                     } else {
                         copy()
                     }
@@ -123,7 +136,7 @@ data class TranscodingJob(
             }
 
             metadata.subtitles.filter {
-                // HLS does not support bitmap subtitles?
+                // TODO: HLS does not support bitmap subtitles?
                 when (it.codec) {
                     "subrip",
                     "ass",
@@ -135,7 +148,7 @@ data class TranscodingJob(
             }.forEach {
                 subtitle(it) {
                     if (transcoding) {
-                        webVtt()
+                        transcode(codec = SubtitleCodec.WEBVTT) // TODO: make selectable from outside
                     } else {
                         copy()
                     }
@@ -143,6 +156,13 @@ data class TranscodingJob(
             }
         }
 
-        return ffmpeg(metadata.path, cache, outputs)
+        return ffmpeg(
+            metadata.path,
+            cache,
+            outputs,
+            VaapiVideoBackend, // TODO: make selectable from outside
+            VaapiVideoBackend, // TODO: make selectable from outside
+            VaapiVideoBackend, // TODO: make selectable from outside
+        )
     }
 }

@@ -225,7 +225,7 @@ fun getMetadata(
 
             "attachment" -> {
                 val index = stream["index"].get<Number>().toInt()
-                val codec = stream["codec_name"].get<String>()
+                val codec = stream["codec_name"].get<String?>()
 
                 val tags = stream["tags"]
                 val filename = tags["filename"].get<String?>()
@@ -263,8 +263,6 @@ fun getMetadata(
 }
 
 fun main() {
-    // TODO: kill timer threads
-
     val env = getEnvironment()
 
     val hostname = env["HOSTNAME"] ?: "0.0.0.0"
@@ -298,10 +296,14 @@ fun main() {
     val hls = HlsCache(cache, transcoding)
     provider.registerT(hls)
 
+    log.info("walking file tree")
+
     val paths = data
         .walk()
         .filter { it.extension in EXTENSIONS }
         .toList()
+
+    log.info("found ${paths.size} files")
 
     transaction(database) {
         SchemaUtils.create(

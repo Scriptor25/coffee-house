@@ -1,5 +1,7 @@
 package dev.scriptor
 
+import dev.scriptor.backend.SoftwareVideoBackend
+import dev.scriptor.backend.VideoBackend
 import java.nio.file.Path
 import kotlin.io.path.absolutePathString
 
@@ -7,44 +9,73 @@ class Ffmpeg(
     private val input: Path,
     private val cache: Path,
     private val outputs: List<Output>,
+    private val decode: VideoBackend,
+    private val scale: VideoBackend,
+    private val encode: VideoBackend,
 ) {
-    fun build(): List<String> =
-        buildList {
-            this += listOf(
-                "ffmpeg",
-                "-y", // allow overriding existing files
-                "-i", input.absolutePathString(),
-            )
+    fun build(): List<String> = buildList {
+        this += "ffmpeg"
 
-            this += buildFilter()
-            this += buildMappings()
-            this += buildCodecs()
-            this += buildHls()
+        val devices = mutableSetOf<String>()
+
+        if (decode !is SoftwareVideoBackend) {
+            devices += decode.name
         }
 
-    private fun buildFilter(): List<String> {
-        val scaled = outputs.filterIsInstance<VideoOutput>().filter { it.scaled }
+        if (encode !is SoftwareVideoBackend) {
+            devices += encode.name
+        }
 
-        if (scaled.isEmpty()) {
+        devices.forEach { this += listOf("-init_hw_device", it) }
+
+        if (decode !is SoftwareVideoBackend) {
+            this += listOf("-hwaccel", decode.name)
+            this += listOf("-hwaccel_output_format", decode.name)
+        }
+
+        this += "-y" // allow overriding existing files
+        this += listOf("-i", input.absolutePathString())
+
+        this += buildFilter()
+        this += buildMappings()
+        this += buildCodecs()
+        this += buildHls()
+    }
+
+    private fun buildFilter(): List<String> {
+        val video = outputs.filterIsInstance<VideoOutput>()
+
+        if (video.isEmpty()) {
             return emptyList()
         }
 
-        val input = scaled.first().source
-        val count = scaled.size
+        val input = video.first().source
+        val count = video.size
 
         val filter = buildString {
             append("[0:$input]")
             append("split=$count")
 
-            scaled.indices.forEach { append("[v$it]") }
+            video.indices.forEach { append("[v$it]") }
 
-            scaled.forEachIndexed { index, output ->
-                val width = output.width
-                val height = output.height
+            val pipeline = Pipeline(
+                10, // TODO
+                decode,
+                scale,
+                encode,
+            )
+
+            video.forEachIndexed { index, output ->
+                val transform = if (output.scaled) {
+                    val width = output.width
+                    val height = output.height
+
+                    pipeline.build(width, height)
+                } else pipeline.build()
 
                 append(";")
                 append("[v$index]")
-                append("scale=$width:$height")
+                append(transform)
                 append("[s$index]")
             }
         }
@@ -57,14 +88,8 @@ class Ffmpeg(
 
         return outputs.flatMap {
             when (it) {
-                is VideoOutput ->
-                    if (it.scaled)
-                        listOf("-map", "[s${filtered++}]")
-                    else
-                        listOf("-map", "0:${it.source}")
-
+                is VideoOutput -> listOf("-map", "[s${filtered++}]")
                 is AudioOutput -> listOf("-map", "0:${it.source}")
-
                 is SubtitleOutput -> listOf("-map", "0:${it.source}")
             }
         }
@@ -85,45 +110,13 @@ class Ffmpeg(
     }
 
     private fun buildVideoCodec(index: Int, output: VideoOutput): List<String> =
-        when (val codec = output.encoding) {
-            is VideoEncoding.Copy -> listOf(
-                "-c:v:$index", "copy",
-            )
-
-            is VideoEncoding.H264 -> listOf(
-                "-c:v:$index", "libx264",
-
-                "-preset:v:$index", codec.profile.preset,
-                "-crf:v:$index", codec.profile.crf.toString(),
-
-                "-b:v:$index", codec.bitrate.toString(),
-
-                "-maxrate:v:$index", codec.bitrate.toString(),
-                "-bufsize:v:$index", (codec.bitrate * 2).toString(),
-            )
-        }
+        output.encoding(index, encode)
 
     private fun buildAudioCodec(index: Int, output: AudioOutput): List<String> =
-        when (output.encoding) {
-            AudioEncoding.COPY -> listOf(
-                "-c:a:$index", "copy",
-            )
-
-            AudioEncoding.AAC -> listOf(
-                "-c:a:$index", "aac",
-            )
-        }
+        output.encoding(index)
 
     private fun buildSubtitleCodec(index: Int, output: SubtitleOutput): List<String> =
-        when (output.encoding) {
-            SubtitleEncoding.COPY -> listOf(
-                "-c:s:$index", "copy",
-            )
-
-            SubtitleEncoding.WEBVTT -> listOf(
-                "-c:s:$index", "webvtt",
-            )
-        }
+        output.encoding(index)
 
     private fun buildVariantMap(): String {
         var video = 0
@@ -188,4 +181,14 @@ fun ffmpeg(
     input: Path,
     cache: Path,
     outputs: List<Output>,
-): List<String> = Ffmpeg(input, cache, outputs).build()
+    decode: VideoBackend,
+    scale: VideoBackend,
+    encode: VideoBackend,
+): List<String> = Ffmpeg(
+    input,
+    cache,
+    outputs,
+    decode,
+    scale,
+    encode,
+).build()

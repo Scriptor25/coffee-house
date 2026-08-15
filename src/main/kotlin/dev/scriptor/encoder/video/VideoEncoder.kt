@@ -1,8 +1,15 @@
-package dev.scriptor
+package dev.scriptor.encoder.video
 
-sealed interface Encoder {
+import dev.scriptor.Profile
+import dev.scriptor.VideoCodec
+import dev.scriptor.backend.SoftwareVideoBackend
+import dev.scriptor.backend.VideoBackend
+import dev.scriptor.encoder.Encoder
 
-    val codec: Codec
+interface VideoEncoder : Encoder {
+
+    val backend: VideoBackend
+    val codec: VideoCodec
 
     operator fun invoke(
         index: Int,
@@ -10,18 +17,23 @@ sealed interface Encoder {
         bitrate: Long,
     ): List<String>
 
-    data object Copy : Encoder {
+    data object AV1 : VideoEncoder {
 
-        override val codec = Codec.COPY
+        override val name = "libsvtav1"
 
-        override operator fun invoke(
+        override val backend = SoftwareVideoBackend
+        override val codec = VideoCodec.AV1
+
+        override fun invoke(
             index: Int,
             profile: Profile,
             bitrate: Long,
-        ): List<String> = emptyList()
-    }
-
-    data object AV1 : Encoder {
+        ): List<String> = listOf(
+            "-preset:v:$index", preset(profile).toString(),
+            "-crf:v:$index", crf(profile).toString(),
+            "-maxrate:v:$index", bitrate.toString(),
+            "-bufsize:v:$index", (bitrate * 2).toString(),
+        )
 
         private fun preset(profile: Profile): Int = when (profile) {
             Profile.ARCHIVAL -> 3
@@ -38,23 +50,26 @@ sealed interface Encoder {
             Profile.LOW -> 35
             Profile.POTATO -> 40
         }
+    }
 
-        override val codec = Codec.AV1
+    data object VP8 : VideoEncoder {
 
-        override operator fun invoke(
+        override val name = "libvpx-vp8"
+
+        override val backend = SoftwareVideoBackend
+        override val codec = VideoCodec.VP8
+
+        override fun invoke(
             index: Int,
             profile: Profile,
-            bitrate: Long
+            bitrate: Long,
         ): List<String> = listOf(
-            "-preset:v:$index", preset(profile).toString(),
+            "-cpu-used:v:$index", cpuUsed(profile).toString(),
             "-crf:v:$index", crf(profile).toString(),
             "-b:v:$index", bitrate.toString(),
             "-maxrate:v:$index", bitrate.toString(),
             "-bufsize:v:$index", (bitrate * 2).toString(),
         )
-    }
-
-    data object VP8 : Encoder {
 
         private fun cpuUsed(profile: Profile): Int = when (profile) {
             Profile.ARCHIVAL -> 0
@@ -71,10 +86,16 @@ sealed interface Encoder {
             Profile.LOW -> 36
             Profile.POTATO -> 42
         }
+    }
 
-        override val codec = Codec.VP8
+    data object VP9 : VideoEncoder {
 
-        override operator fun invoke(
+        override val name = "libvpx-vp9"
+
+        override val backend = SoftwareVideoBackend
+        override val codec = VideoCodec.VP9
+
+        override fun invoke(
             index: Int,
             profile: Profile,
             bitrate: Long,
@@ -85,9 +106,6 @@ sealed interface Encoder {
             "-maxrate:v:$index", bitrate.toString(),
             "-bufsize:v:$index", (bitrate * 2).toString(),
         )
-    }
-
-    data object VP9 : Encoder {
 
         private fun cpuUsed(profile: Profile): Int = when (profile) {
             Profile.ARCHIVAL -> 0
@@ -104,23 +122,26 @@ sealed interface Encoder {
             Profile.LOW -> 36
             Profile.POTATO -> 42
         }
+    }
 
-        override val codec = Codec.VP9
+    data object H264 : VideoEncoder {
 
-        override operator fun invoke(
+        override val name = "libx264"
+
+        override val backend = SoftwareVideoBackend
+        override val codec = VideoCodec.H264
+
+        override fun invoke(
             index: Int,
             profile: Profile,
             bitrate: Long,
         ): List<String> = listOf(
-            "-cpu-used:v:$index", cpuUsed(profile).toString(),
+            "-preset:v:$index", preset(profile),
             "-crf:v:$index", crf(profile).toString(),
             "-b:v:$index", bitrate.toString(),
             "-maxrate:v:$index", bitrate.toString(),
             "-bufsize:v:$index", (bitrate * 2).toString(),
         )
-    }
-
-    data object H264 : Encoder {
 
         private fun preset(profile: Profile): String = when (profile) {
             Profile.ARCHIVAL -> "veryslow"
@@ -137,10 +158,16 @@ sealed interface Encoder {
             Profile.LOW -> 24
             Profile.POTATO -> 26
         }
+    }
 
-        override val codec = Codec.H264
+    data object H265 : VideoEncoder {
 
-        override operator fun invoke(
+        override val name = "libx265"
+
+        override val backend = SoftwareVideoBackend
+        override val codec = VideoCodec.H265
+
+        override fun invoke(
             index: Int,
             profile: Profile,
             bitrate: Long,
@@ -151,9 +178,6 @@ sealed interface Encoder {
             "-maxrate:v:$index", bitrate.toString(),
             "-bufsize:v:$index", (bitrate * 2).toString(),
         )
-    }
-
-    data object H265 : Encoder {
 
         private fun preset(profile: Profile): String = when (profile) {
             Profile.ARCHIVAL -> "veryslow"
@@ -170,19 +194,5 @@ sealed interface Encoder {
             Profile.LOW -> 30
             Profile.POTATO -> 32
         }
-
-        override val codec = Codec.H265
-
-        override operator fun invoke(
-            index: Int,
-            profile: Profile,
-            bitrate: Long,
-        ): List<String> = listOf(
-            "-preset:v:$index", preset(profile),
-            "-crf:v:$index", crf(profile).toString(),
-            "-b:v:$index", bitrate.toString(),
-            "-maxrate:v:$index", bitrate.toString(),
-            "-bufsize:v:$index", (bitrate * 2).toString(),
-        )
     }
 }
