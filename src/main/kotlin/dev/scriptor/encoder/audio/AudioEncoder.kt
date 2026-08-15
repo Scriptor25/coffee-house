@@ -1,6 +1,6 @@
 package dev.scriptor.encoder.audio
 
-import dev.scriptor.AudioCodec
+import dev.scriptor.codec.AudioCodec
 import dev.scriptor.encoder.Encoder
 
 interface AudioEncoder : Encoder {

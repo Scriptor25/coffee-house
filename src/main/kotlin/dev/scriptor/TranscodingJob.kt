@@ -1,6 +1,9 @@
 package dev.scriptor
 
 import dev.scriptor.backend.VaapiVideoBackend
+import dev.scriptor.codec.AudioCodec
+import dev.scriptor.codec.SubtitleCodec
+import dev.scriptor.codec.VideoCodec
 import dev.scriptor.model.Media
 import java.nio.file.Path
 import java.util.logging.Level

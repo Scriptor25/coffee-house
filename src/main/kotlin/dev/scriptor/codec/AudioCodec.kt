@@ -1,4 +1,4 @@
-package dev.scriptor
+package dev.scriptor.codec
 
 import dev.scriptor.encoder.audio.AudioEncoder
 

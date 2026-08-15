@@ -1,8 +1,8 @@
 package dev.scriptor.encoder.video
 
 import dev.scriptor.Profile
-import dev.scriptor.VideoCodec
 import dev.scriptor.backend.AmdVideoBackend
+import dev.scriptor.codec.VideoCodec
 
 interface AmdVideoEncoder : VideoEncoder {
 

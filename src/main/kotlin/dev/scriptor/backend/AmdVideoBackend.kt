@@ -1,6 +1,6 @@
 package dev.scriptor.backend
 
-import dev.scriptor.VideoCodec
+import dev.scriptor.codec.VideoCodec
 import dev.scriptor.encoder.video.AmdVideoEncoder
 import dev.scriptor.encoder.video.VideoEncoder
 

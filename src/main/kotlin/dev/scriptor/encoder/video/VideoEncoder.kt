@@ -1,9 +1,9 @@
 package dev.scriptor.encoder.video
 
 import dev.scriptor.Profile
-import dev.scriptor.VideoCodec
 import dev.scriptor.backend.SoftwareVideoBackend
 import dev.scriptor.backend.VideoBackend
+import dev.scriptor.codec.VideoCodec
 import dev.scriptor.encoder.Encoder
 
 interface VideoEncoder : Encoder {

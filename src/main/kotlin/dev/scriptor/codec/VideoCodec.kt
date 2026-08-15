@@ -1,4 +1,4 @@
-package dev.scriptor
+package dev.scriptor.codec
 
 enum class VideoCodec {
     AV1,
