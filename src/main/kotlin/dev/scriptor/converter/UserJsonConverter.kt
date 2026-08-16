@@ -2,33 +2,30 @@ package dev.scriptor.converter
 
 import dev.scriptor.JsonNode
 import dev.scriptor.jsonOf
-import dev.scriptor.model.Session
 import dev.scriptor.model.User
 import dev.scriptor.server.Provider
 import dev.scriptor.server.converter.Converter
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
-class SessionJsonConverter : Converter<Session, JsonNode> {
+class UserJsonConverter : Converter<User, JsonNode> {
 
     context(provider: Provider)
-    override fun convert(value: Session): JsonNode {
+    override fun convert(value: User): JsonNode {
         val database = provider.getContextT<Database>()
             ?: error("missing database context")
 
-        var user: User? = null
+        lateinit var sessions: JsonNode
 
         transaction(database) {
-            user = value.user
+            sessions = provider(value.sessions.toList())
         }
 
         return jsonOf(
-            "user_id" to jsonOf(user?.id),
-            "token" to jsonOf(value.token),
-            "created_at" to jsonOf(value.createdAt),
-            "expires_at" to jsonOf(value.expiresAt),
-            "agent" to jsonOf(value.agent),
-            "access" to jsonOf(value.access),
+            "id" to jsonOf(value.id),
+            "name" to jsonOf(value.name),
+            "role" to jsonOf(value.role),
+            "sessions" to sessions,
         )
     }
 }

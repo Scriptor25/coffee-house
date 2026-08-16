@@ -1,5 +1,6 @@
 package dev.scriptor.model
 
+import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.UuidTable
 import org.jetbrains.exposed.v1.dao.UuidEntity
@@ -7,7 +8,7 @@ import org.jetbrains.exposed.v1.dao.UuidEntityClass
 import kotlin.uuid.Uuid
 
 object AudioTrackTable : UuidTable("audio_track") {
-    val media = reference("media_id", MediaTable)
+    val media = reference("media_id", MediaTable, ReferenceOption.CASCADE)
     val index = integer("index")
     val codec = text("codec")
     val bitRate = long("bit_rate")
@@ -26,7 +27,7 @@ object AudioTrackTable : UuidTable("audio_track") {
 class AudioTrack(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<AudioTrack>(AudioTrackTable)
 
-    var media by AudioTrackTable.media
+    var media by Media referencedOn AudioTrackTable.media
     var index by AudioTrackTable.index
     var codec by AudioTrackTable.codec
     var bitRate by AudioTrackTable.bitRate

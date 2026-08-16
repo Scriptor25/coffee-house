@@ -1,6 +1,16 @@
 package dev.scriptor
 
+import kotlin.reflect.KProperty
+
+enum class JsonType {
+    OBJECT,
+    ARRAY,
+    VALUE,
+}
+
 sealed interface JsonNode {
+
+    val type: JsonType
 
     val entries: Set<Map.Entry<String, JsonNode>>
         get() = throw UnsupportedOperationException()
@@ -40,8 +50,10 @@ sealed interface MutableJsonNode : JsonNode {
 }
 
 private open class JsonObjectNode(
-    private val nodes: Map<String, JsonNode> = mapOf(),
+    open val nodes: Map<String, JsonNode> = mapOf(),
 ) : JsonNode {
+
+    override val type = JsonType.OBJECT
 
     override val entries: Set<Map.Entry<String, JsonNode>>
         get() = nodes.entries
@@ -64,7 +76,7 @@ private open class JsonObjectNode(
 }
 
 private class MutableJsonObjectNode(
-    private val nodes: MutableMap<String, MutableJsonNode> = mutableMapOf(),
+    override val nodes: MutableMap<String, MutableJsonNode> = mutableMapOf(),
 ) : MutableJsonNode, JsonObjectNode(nodes) {
 
     override val entries: MutableSet<MutableMap.MutableEntry<String, MutableJsonNode>>
@@ -82,8 +94,10 @@ private class MutableJsonObjectNode(
 }
 
 private open class JsonArrayNode(
-    private val nodes: List<JsonNode> = listOf(),
+    open val nodes: List<JsonNode> = listOf(),
 ) : JsonNode {
+
+    override val type = JsonType.ARRAY
 
     override val size: Int
         get() = nodes.size
@@ -106,7 +120,7 @@ private open class JsonArrayNode(
 }
 
 private class MutableJsonArrayNode(
-    private val nodes: MutableList<MutableJsonNode> = mutableListOf(),
+    override val nodes: MutableList<MutableJsonNode> = mutableListOf(),
 ) : MutableJsonNode, JsonArrayNode(nodes) {
 
     override fun get(index: Int): MutableJsonNode {
@@ -154,8 +168,10 @@ private fun escape(value: String): String {
 }
 
 private open class JsonValueNode(
-    private val value: Any? = null,
+    open val value: Any? = null,
 ) : JsonNode {
+
+    override val type = JsonType.VALUE
 
     override fun invoke(): Any? {
         return value
@@ -174,24 +190,11 @@ private open class JsonValueNode(
 }
 
 private class MutableJsonValueNode(
-    private var value: Any? = null,
+    override var value: Any? = null,
 ) : MutableJsonNode, JsonValueNode(value) {
-
-    override fun invoke(): Any? {
-        return value
-    }
 
     override fun invoke(value: Any?) {
         this.value = value
-    }
-
-    override fun toString(): String {
-        return when (value) {
-            null -> "null"
-            is Boolean -> value.toString()
-            is Number -> value.toString()
-            else -> escape(value.toString())
-        }
     }
 
     override fun toMutable(): MutableJsonNode = this
@@ -229,7 +232,26 @@ fun mutableJsonOf(value: Any?): MutableJsonNode {
     return MutableJsonValueNode(value)
 }
 
-inline fun <reified T> JsonNode.get() = this() as T
+fun jsonObject(block: MutableJsonNode.() -> Unit): JsonNode {
+    val node = MutableJsonObjectNode()
+    node.apply(block)
+    return node
+}
+
+fun jsonArray(block: MutableJsonNode.() -> Unit): JsonNode {
+    val node = MutableJsonArrayNode()
+    node.apply(block)
+    return node
+}
+
+inline fun <reified T> JsonNode.get(): T = this() as T
+inline fun <reified T> MutableJsonNode.set(value: T): Unit = this(value)
+
+inline operator fun <reified T> JsonNode.getValue(thisRef: Any?, property: KProperty<*>): T =
+    get()
+
+inline operator fun <reified T> MutableJsonNode.setValue(thisRef: Any?, property: KProperty<*>, value: T): Unit =
+    set(value)
 
 private enum class TokenType {
     NONE,

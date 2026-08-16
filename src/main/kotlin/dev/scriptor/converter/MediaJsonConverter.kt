@@ -7,20 +7,24 @@ import dev.scriptor.server.Provider
 import dev.scriptor.server.converter.Converter
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import kotlin.reflect.typeOf
 
 class MediaJsonConverter : Converter<Media, JsonNode> {
 
     context(provider: Provider)
     override fun convert(value: Media): JsonNode {
-        val database = provider[typeOf<Database>()] as Database
+        val database = provider.getContextT<Database>()
+            ?: error("missing database context")
 
-        val (video, audio, subtitles) = transaction(database) {
-            Triple(
-                value.video.toList(),
-                value.audio.toList(),
-                value.subtitles.toList(),
-            )
+        lateinit var video: JsonNode
+        lateinit var audio: JsonNode
+        lateinit var subtitles: JsonNode
+        lateinit var chapters: JsonNode
+
+        transaction(database) {
+            video = provider(value.video.toList())
+            audio = provider(value.audio.toList())
+            subtitles = provider(value.subtitles.toList())
+            chapters = provider(value.chapters.toList())
         }
 
         return jsonOf(
@@ -31,9 +35,10 @@ class MediaJsonConverter : Converter<Media, JsonNode> {
             "created_at" to jsonOf(value.createdAt),
             "modified_at" to jsonOf(value.modifiedAt),
             "duration" to jsonOf(value.duration),
-            "video" to provider<_, JsonNode>(video),
-            "audio" to provider<_, JsonNode>(audio),
-            "subtitles" to provider<_, JsonNode>(subtitles),
+            "video" to video,
+            "audio" to audio,
+            "subtitles" to subtitles,
+            "chapters" to chapters,
         )
     }
 }

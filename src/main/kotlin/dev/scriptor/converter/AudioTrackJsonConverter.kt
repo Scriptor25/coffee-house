@@ -18,5 +18,6 @@ class AudioTrackJsonConverter : Converter<AudioTrack, JsonNode> {
         "language" to jsonOf(value.language),
         "title" to jsonOf(value.title),
         "default" to jsonOf(value.default),
+        "forced" to jsonOf(value.forced),
     )
 }

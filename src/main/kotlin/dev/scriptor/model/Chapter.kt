@@ -1,5 +1,6 @@
 package dev.scriptor.model
 
+import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.UuidTable
 import org.jetbrains.exposed.v1.dao.UuidEntity
@@ -7,7 +8,7 @@ import org.jetbrains.exposed.v1.dao.UuidEntityClass
 import kotlin.uuid.Uuid
 
 object ChapterTable : UuidTable("chapter") {
-    val media = reference("media_id", MediaTable.id)
+    val media = reference("media_id", MediaTable.id, ReferenceOption.CASCADE)
     val index = integer("index")
     val start = double("start")
     val end = double("end")
@@ -22,7 +23,7 @@ object ChapterTable : UuidTable("chapter") {
 class Chapter(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<Chapter>(ChapterTable)
 
-    var media by ChapterTable.media
+    var media by Media referencedOn ChapterTable.media
     var index by ChapterTable.index
     var start by ChapterTable.start
     var end by ChapterTable.end

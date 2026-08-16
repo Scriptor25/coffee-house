@@ -52,7 +52,7 @@ class SessionRest {
                     .firstOrNull()
             } ?: throw UnauthorizedSignal()
 
-            // TODO: check password hash
+            TODO("generate password hash")
         }
 
         val bytes = ByteArray(24) { 0 }
@@ -65,7 +65,7 @@ class SessionRest {
 
         return transaction(database) {
             Session.new {
-                this.user = user?.id
+                this.user = user
                 this.token = token
                 this.createdAt = createdAt
                 this.expiresAt = expiresAt

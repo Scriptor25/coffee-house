@@ -1,5 +1,6 @@
 package dev.scriptor.model
 
+import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.UuidTable
 import org.jetbrains.exposed.v1.dao.UuidEntity
@@ -7,7 +8,7 @@ import org.jetbrains.exposed.v1.dao.UuidEntityClass
 import kotlin.uuid.Uuid
 
 object VideoTrackTable : UuidTable("video_track") {
-    val media = reference("media_id", MediaTable)
+    val media = reference("media_id", MediaTable, ReferenceOption.CASCADE)
     val index = integer("index")
     val codec = text("codec")
     val width = integer("width")
@@ -29,7 +30,7 @@ object VideoTrackTable : UuidTable("video_track") {
 class VideoTrack(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<VideoTrack>(VideoTrackTable)
 
-    var media by VideoTrackTable.media
+    var media by Media referencedOn VideoTrackTable.media
     var index by VideoTrackTable.index
     var codec by VideoTrackTable.codec
     var width by VideoTrackTable.width

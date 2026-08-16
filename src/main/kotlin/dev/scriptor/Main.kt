@@ -144,7 +144,7 @@ fun getMetadata(
 
                 transaction(database) {
                     VideoTrack.new {
-                        this.media = media.id
+                        this.media = media
                         this.index = index
                         this.codec = codec
                         this.width = width
@@ -180,7 +180,7 @@ fun getMetadata(
 
                 transaction(database) {
                     AudioTrack.new {
-                        this.media = media.id
+                        this.media = media
                         this.index = index
                         this.codec = codec
                         this.bitRate = bitRate
@@ -208,7 +208,7 @@ fun getMetadata(
 
                 transaction(database) {
                     SubtitleTrack.new {
-                        this.media = media.id
+                        this.media = media
                         this.index = index
                         this.codec = codec
                         this.language = language
@@ -247,7 +247,7 @@ fun getMetadata(
 
         transaction(database) {
             Chapter.new {
-                this.media = media.id
+                this.media = media
                 this.index = index
                 this.start = start
                 this.end = end
