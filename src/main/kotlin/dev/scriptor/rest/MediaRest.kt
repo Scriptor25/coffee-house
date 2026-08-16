@@ -60,7 +60,7 @@ class MediaRest {
                 .toList()
         }
 
-    fun stream(range: String?, path: Path, chunk: Long): Result {
+    fun stream(range: String?, path: Path): Result {
         val channel = FileChannel.open(path)
 
         return if (range.isNullOrBlank()) {
@@ -74,7 +74,7 @@ class MediaRest {
                 .filter { it.isNotBlank() }
 
             val begin = minOf(segment[0].toLong(), total)
-            val end = minOf(if (segment.size == 2) segment[1].toLong() else begin + chunk, total)
+            val end = minOf(if (segment.size == 2) segment[1].toLong() else total, total)
 
             val limit = end - 1L
 
@@ -143,7 +143,7 @@ class MediaRest {
             session.access = now
         }
 
-        return stream(range, item.path, 2L * 1024L * 1024L)
+        return stream(range, item.path)
     }
 
     @Get("/stream/[id]/master.m3u8", result = "application/vnd.apple.mpegurl")
@@ -240,7 +240,7 @@ class MediaRest {
         val job = hls.job(item)
         val path = job.segment(name, segment)
 
-        return stream(range, path, 2L * 1024L * 1024L)
+        return stream(range, path)
     }
 
     @Get("/stream/[id]/chapters.json", result = "application/json")
