@@ -52,7 +52,10 @@ class SessionRest {
                     .firstOrNull()
             } ?: throw UnauthorizedSignal()
 
-            TODO("generate password hash")
+            // TODO: generate password hash
+            if (password != user.hash) {
+                throw UnauthorizedSignal()
+            }
         }
 
         val bytes = ByteArray(24) { 0 }

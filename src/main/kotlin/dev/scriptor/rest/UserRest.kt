@@ -56,7 +56,7 @@ class UserRest {
         return transaction(database) {
             User.new {
                 this.name = username
-                this.hash = TODO("generate password hash")
+                this.hash = password // TODO: generate password hash
                 this.role = UserRole.valueOf(role)
             }
         }
@@ -102,9 +102,16 @@ class UserRest {
             throw ForbiddenSignal()
         }
 
+        val username: String = value["username"].get()
+        val role: String = value["role"].get()
+
+        // TODO: only update role if current.role is higher than user.role
+        // TODO: separate route for updating password
+
         return transaction(database) {
             User.findByIdAndUpdate(id) {
-                TODO()
+                it.name = username
+                it.role = UserRole.valueOf(role)
             }
         } ?: throw NotFoundSignal()
     }
