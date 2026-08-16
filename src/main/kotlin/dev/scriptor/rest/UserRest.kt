@@ -1,15 +1,14 @@
 package dev.scriptor.rest
 
 import dev.scriptor.model.Bearer
-import dev.scriptor.server.annotation.Endpoint
+import dev.scriptor.server.annotation.Controller
 import dev.scriptor.server.annotation.Header
-import dev.scriptor.server.annotation.Resource
-import dev.scriptor.server.http.Method.POST
+import dev.scriptor.server.annotation.Post
 
-@Endpoint("/user")
+@Controller("/user")
 class UserRest {
 
-    @Resource("/", POST)
+    @Post("/")
     fun createUser(@Header authorization: Bearer) {
     }
 }

@@ -10,12 +10,7 @@ import dev.scriptor.model.UserTable
 import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.Provider
 import dev.scriptor.server.UnauthorizedSignal
-import dev.scriptor.server.annotation.Body
-import dev.scriptor.server.annotation.Endpoint
-import dev.scriptor.server.annotation.Header
-import dev.scriptor.server.annotation.Resource
-import dev.scriptor.server.http.Method.DELETE
-import dev.scriptor.server.http.Method.POST
+import dev.scriptor.server.annotation.*
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -25,17 +20,12 @@ import kotlin.io.encoding.Base64
 import kotlin.time.Clock.System.now
 import kotlin.time.toKotlinDuration
 
-@Endpoint("/session")
+@Controller("/session")
 class SessionRest {
 
     private val random = SecureRandom()
 
-    @Resource(
-        "/",
-        POST,
-        "application/json",
-        "application/json",
-    )
+    @Post("/", "application/json", "application/json")
     context(provider: Provider, database: Database)
     fun createSession(
         @Body body: JsonNode,
@@ -84,20 +74,13 @@ class SessionRest {
         }
     }
 
-    @Resource(
-        "/",
-        result = "application/json",
-    )
+    @Get("/", result = "application/json")
     context(auth: AuthContext, database: Database)
     fun getCurrentSession(@Header authorization: Bearer): Session =
         auth.auth(authorization.token)
             ?: throw NotFoundSignal()
 
-    @Resource(
-        "/",
-        DELETE,
-        result = "application/json",
-    )
+    @Delete("/", result = "application/json")
     context(auth: AuthContext, database: Database)
     fun deleteCurrentSession(@Header authorization: Bearer): Session {
         val session = auth.auth(authorization.token)

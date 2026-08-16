@@ -1,16 +1,16 @@
 package dev.scriptor.rest
 
 import dev.scriptor.server.ParameterList
-import dev.scriptor.server.annotation.Endpoint
+import dev.scriptor.server.annotation.Controller
+import dev.scriptor.server.annotation.Get
 import dev.scriptor.server.annotation.PathParameter
-import dev.scriptor.server.annotation.Resource
 import dev.scriptor.server.result.StreamResult
 import dev.scriptor.server.result.UnitResult
 
-@Endpoint("/")
+@Controller("/")
 class DashboardRest {
 
-    @Resource("/favicon.[]", result = "image/svg+xml")
+    @Get("/favicon.[]", result = "image/svg+xml")
     fun getFavicon(): StreamResult {
         val stream = ClassLoader.getSystemResourceAsStream("favicon.svg")
             ?: throw NullPointerException()
@@ -24,7 +24,7 @@ class DashboardRest {
         )
     }
 
-    @Resource("/", result = "text/html")
+    @Get("/", result = "text/html")
     fun getDashboard(): StreamResult {
         val stream = ClassLoader.getSystemResourceAsStream("dashboard.html")
             ?: throw NullPointerException()
@@ -38,7 +38,7 @@ class DashboardRest {
         )
     }
 
-    @Resource("/script/[slug+].js", result = "text/javascript")
+    @Get("/script/[slug+].js", result = "text/javascript")
     fun getScript(@PathParameter slug: Array<String>): StreamResult {
         val stream = ClassLoader.getSystemResourceAsStream("script/${slug.joinToString("/")}.js")
             ?: throw NullPointerException()
@@ -52,6 +52,6 @@ class DashboardRest {
         )
     }
 
-    @Resource("/health")
+    @Get("/health")
     fun getHealth(): UnitResult = UnitResult(204, "No Content")
 }

@@ -9,6 +9,7 @@ import dev.scriptor.model.Chapter
 import dev.scriptor.model.Media
 import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.ParameterList
+import dev.scriptor.server.RangeReadableByteChannel
 import dev.scriptor.server.UnauthorizedSignal
 import dev.scriptor.server.annotation.*
 import dev.scriptor.server.result.ChannelResult
@@ -24,7 +25,7 @@ import kotlin.time.Clock.System.now
 import kotlin.time.toKotlinDuration
 import kotlin.uuid.Uuid
 
-@Endpoint("/media")
+@Controller("/media")
 class MediaRest {
 
     val hlsUriLine = """^(?!#)(?!\s*$)(.+)$""".toRegex()
@@ -61,33 +62,21 @@ class MediaRest {
 
     fun stream(range: String?, path: Path, chunk: Long): Result {
         val channel = FileChannel.open(path)
-        val total = channel.size()
 
         return if (range.isNullOrBlank()) {
-            ChannelResult(
-                value = channel,
-                position = 0L,
-                count = total,
-            )
+            ChannelResult(value = channel)
         } else {
+            val total = channel.size()
+
             val segment = range
                 .substringAfter("bytes=")
                 .split('-')
                 .filter { it.isNotBlank() }
 
-            val begin = segment[0].toLong()
-            val end =
-                if (segment.size == 2)
-                    segment[1].toLong()
-                else null
+            val begin = minOf(segment[0].toLong(), total)
+            val end = minOf(if (segment.size == 2) segment[1].toLong() else begin + chunk, total)
 
-            val count = minOf(
-                if (end !== null) end - begin
-                else chunk,
-                total - begin,
-            )
-
-            val limit = begin + count - 1
+            val limit = end - 1L
 
             val headers = ParameterList()
             headers["accept-ranges"] = "bytes"
@@ -97,14 +86,12 @@ class MediaRest {
                 206,
                 "Partial Content",
                 headers = headers,
-                value = channel,
-                position = begin,
-                count = count,
+                value = RangeReadableByteChannel(channel, begin until end),
             )
         }
     }
 
-    @Resource("/", result = "application/json")
+    @Get("/", result = "application/json")
     context(database: Database, auth: AuthContext)
     fun getMediaList(
         @QueryParameter offset: Long?,
@@ -123,7 +110,7 @@ class MediaRest {
         }
     }
 
-    @Resource("/[id]", result = "application/json")
+    @Get("/[id]", result = "application/json")
     context(database: Database, auth: AuthContext)
     fun getMedia(
         @PathParameter id: Uuid,
@@ -136,7 +123,7 @@ class MediaRest {
             ?: throw NotFoundSignal()
     }
 
-    @Resource("/stream/[id]", result = "video/*")
+    @Get("/stream/[id]", result = "video/*")
     context(database: Database, auth: AuthContext)
     fun getMediaStream(
         @PathParameter id: Uuid,
@@ -159,7 +146,7 @@ class MediaRest {
         return stream(range, item.path, 2L * 1024L * 1024L)
     }
 
-    @Resource("/stream/[id]/master.m3u8", result = "application/vnd.apple.mpegurl")
+    @Get("/stream/[id]/master.m3u8", result = "application/vnd.apple.mpegurl")
     context(
         _: Logger,
         database: Database,
@@ -192,7 +179,7 @@ class MediaRest {
         return manifest.joinToString("\n")
     }
 
-    @Resource("/stream/[id]/[name]/index.m3u8", result = "application/vnd.apple.mpegurl")
+    @Get("/stream/[id]/[name]/index.m3u8", result = "application/vnd.apple.mpegurl")
     context(
         _: Logger,
         database: Database,
@@ -223,8 +210,7 @@ class MediaRest {
         return appendToken(path, token).joinToString("\n")
     }
 
-    // TODO: differentiate between video and audio
-    @Resource("/stream/[id]/[name]/[segment].mp4", result = "video/mp4")
+    @Get("/stream/[id]/[name]/[segment].mp4", result = "video/mp4")
     context(
         _: Logger,
         database: Database,
@@ -257,7 +243,7 @@ class MediaRest {
         return stream(range, path, 2L * 1024L * 1024L)
     }
 
-    @Resource("/stream/[id]/chapters.json", result = "application/json")
+    @Get("/stream/[id]/chapters.json", result = "application/json")
     context(database: Database, auth: AuthContext)
     fun getMediaStreamChapters(
         @PathParameter id: Uuid,
