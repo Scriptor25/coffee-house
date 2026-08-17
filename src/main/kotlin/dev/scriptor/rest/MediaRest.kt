@@ -1,7 +1,7 @@
 package dev.scriptor.rest
 
-import dev.scriptor.HlsCache
 import dev.scriptor.JsonNode
+import dev.scriptor.TranscodingCache
 import dev.scriptor.context.AuthContext
 import dev.scriptor.jsonOf
 import dev.scriptor.model.Bearer
@@ -150,7 +150,7 @@ class MediaRest {
     context(
         _: Logger,
         database: Database,
-        hls: HlsCache,
+        transcoding: TranscodingCache,
         auth: AuthContext,
     )
     fun getMediaStreamMaster(
@@ -170,7 +170,7 @@ class MediaRest {
             session.expiresAt = now + ofMinutes(60).toKotlinDuration()
         }
 
-        val job = hls.job(item)
+        val job = transcoding.job(item)
         val path = job.master()
 
         val manifest = appendToken(path, token).toMutableList()
@@ -183,7 +183,7 @@ class MediaRest {
     context(
         _: Logger,
         database: Database,
-        hls: HlsCache,
+        transcoding: TranscodingCache,
         auth: AuthContext,
     )
     fun getMediaStreamIndex(
@@ -204,7 +204,7 @@ class MediaRest {
             session.expiresAt = now + ofMinutes(60).toKotlinDuration()
         }
 
-        val job = hls.job(item)
+        val job = transcoding.job(item)
         val path = job.index(name)
 
         return appendToken(path, token).joinToString("\n")
@@ -214,7 +214,7 @@ class MediaRest {
     context(
         _: Logger,
         database: Database,
-        hls: HlsCache,
+        transcoding: TranscodingCache,
         auth: AuthContext,
     )
     fun getMediaStreamSegment(
@@ -237,7 +237,7 @@ class MediaRest {
             session.expiresAt = now + ofMinutes(60).toKotlinDuration()
         }
 
-        val job = hls.job(item)
+        val job = transcoding.job(item)
         val path = job.segment(name, segment)
 
         return stream(range, path)

@@ -7,10 +7,12 @@ import kotlin.io.path.createDirectories
 import kotlin.io.path.notExists
 
 data class TranscodingJob(
+    val ffmpeg: String,
     val metadata: Media,
     val cache: Path,
     val variants: List<Variant>,
-    val configuration: TranscodingConfiguration,
+    val requirements: TranscodingRequirements,
+    val pipeline: Pipeline,
 ) {
     private enum class State {
         CREATED,
@@ -87,10 +89,10 @@ data class TranscodingJob(
                 variants.forEach {
                     when (it) {
                         is OriginalVariant -> {
-                            if (configuration.enable) {
+                            if (requirements.enable) {
                                 transcode(
                                     it.name,
-                                    configuration.video,
+                                    requirements.video,
                                 )
                             } else {
                                 copy(it.name)
@@ -98,10 +100,10 @@ data class TranscodingJob(
                         }
 
                         is ScaleVariant -> {
-                            if (configuration.enable) {
+                            if (requirements.enable) {
                                 transcode(
                                     it.name,
-                                    configuration.video,
+                                    requirements.video,
                                     it.profile,
                                     it.bitrate,
                                     it.width,
@@ -121,8 +123,8 @@ data class TranscodingJob(
 
             metadata.audio.forEach {
                 audio(it) {
-                    if (configuration.enable) {
-                        transcode(codec = configuration.audio)
+                    if (requirements.enable) {
+                        transcode(codec = requirements.audio)
                     } else {
                         copy()
                     }
@@ -141,8 +143,8 @@ data class TranscodingJob(
                 }
             }.forEach {
                 subtitle(it) {
-                    if (configuration.enable) {
-                        transcode(codec = configuration.subtitle)
+                    if (requirements.enable) {
+                        transcode(codec = requirements.subtitle)
                     } else {
                         copy()
                     }
@@ -151,10 +153,13 @@ data class TranscodingJob(
         }
 
         return CommandBuilder(
+            ffmpeg,
+            requirements.enable,
+            requirements.device,
             metadata.path,
             cache,
             outputs,
-            configuration.pipeline,
+            pipeline,
         ).build()
     }
 }

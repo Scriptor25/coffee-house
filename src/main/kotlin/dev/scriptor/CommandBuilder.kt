@@ -5,6 +5,9 @@ import java.nio.file.Path
 import kotlin.io.path.absolutePathString
 
 class CommandBuilder(
+    val ffmpeg: String,
+    val enable: Boolean,
+    val device: String?,
     val input: Path,
     val cache: Path,
     val outputs: List<Output>,
@@ -12,33 +15,43 @@ class CommandBuilder(
 ) {
 
     fun build(): List<String> = buildList {
-        this += listOf("ffmpeg", "-hide_banner")
+        this += listOf(
+            ffmpeg,
+            "-hide_banner",
+            "-i", input.absolutePathString(),
+            "-y", // allow overriding existing files
+        )
 
-        val devices = pipeline.devices
-
-        devices.forEach { this += listOf("-init_hw_device", it) }
-
-        when (val decode = pipeline.decode) {
-            !is SoftwareVideoBackend -> {
-                this += listOf("-hwaccel", decode.name)
-                this += listOf("-hwaccel_output_format", decode.name)
-            }
-        }
-
-        this += listOf("-i", input.absolutePathString())
-
-        this += "-y" // allow overriding existing files
-
+        this += buildDevices()
         this += buildFilter()
         this += buildMappings()
         this += buildCodecs()
         this += buildHls()
     }
 
+    private fun buildDevices(): List<String> {
+        if (!enable) {
+            return emptyList()
+        }
+
+        return buildList {
+            pipeline.devices.forEach {
+                this += listOf("-init_hw_device", if (device != null) "$it:$device" else it)
+            }
+
+            when (val decode = pipeline.decode) {
+                !is SoftwareVideoBackend -> {
+                    this += listOf("-hwaccel", decode.name)
+                    this += listOf("-hwaccel_output_format", decode.name)
+                }
+            }
+        }
+    }
+
     private fun buildFilter(): List<String> {
         val video = outputs.filterIsInstance<VideoOutput>()
 
-        if (video.isEmpty()) {
+        if (!enable || video.isEmpty()) {
             return emptyList()
         }
 
@@ -74,7 +87,7 @@ class CommandBuilder(
 
         return outputs.flatMap {
             when (it) {
-                is VideoOutput -> listOf("-map", "[s${filtered++}]")
+                is VideoOutput -> listOf("-map", if (enable) "[s${filtered++}]" else "0:${it.source}")
                 is AudioOutput -> listOf("-map", "0:${it.source}")
                 is SubtitleOutput -> listOf("-map", "0:${it.source}")
             }

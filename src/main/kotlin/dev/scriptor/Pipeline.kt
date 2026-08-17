@@ -27,40 +27,66 @@ data class Pipeline(
             }
         }
 
-    fun buildSplit(count: Int): String =
-        buildList<String> {
-            this += transition(decode, split)
-            this += "split=$count"
-        }
-            .joinToString(",")
+    fun buildSplit(count: Int): String = buildList<String> {
+        this += transition(decode, split, true)
+        this += "split=$count"
+    }
+        .joinToString(",")
 
     fun buildEncode(): String =
-        transition(split, encode)
+        transition(split, encode, true)
             .ifEmpty { listOf("null") }
             .joinToString(",")
 
     fun buildScaleEncode(
         width: Int,
         height: Int,
-    ): String =
-        buildList<String> {
-            this += transition(split, scale)
-            this += scale.scale(width, height)
-            this += transition(scale, encode)
+    ): String = buildList<String> {
+        this += transition(split, scale, true)
+
+        val scaleAndFormat = scale.supportScaleAndFormat && transitionRequiresFormat(scale, encode)
+
+        if (scaleAndFormat) {
+            this += scale.scale(width, height, encode.format(bitDepth))
+        } else {
+            this += scale.scale(width, height, null)
         }
-            .ifEmpty { listOf("null") }
-            .joinToString(",")
+
+        this += transition(scale, encode, !scaleAndFormat)
+    }
+        .ifEmpty { listOf("null") }
+        .joinToString(",")
+
+    private fun transitionRequiresFormat(
+        src: VideoBackend,
+        dst: VideoBackend,
+    ): Boolean = when (src) {
+        dst -> false
+
+        else -> {
+            val srcFormat = src.format(bitDepth)
+            val dstFormat = dst.format(bitDepth)
+
+            return srcFormat != dstFormat
+        }
+    }
 
     private fun transition(
         src: VideoBackend,
         dst: VideoBackend,
+        format: Boolean,
     ): List<String> = when (src) {
         dst -> emptyList()
 
-        else -> listOfNotNull(
-            src.download,
-            "format=${dst.format(bitDepth)}",
-            dst.upload,
-        )
+        else -> {
+            val srcFormat = src.format(bitDepth)
+            val dstFormat = dst.format(bitDepth)
+
+            listOfNotNull(
+                src.download,
+                if (srcFormat != dstFormat && format) "format=$dstFormat" else null,
+                dst.upload,
+            )
+        }
     }
 }

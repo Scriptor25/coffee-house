@@ -75,14 +75,16 @@ fun parseFrameRate(value: String?): Double {
 
 context(parent: Logger)
 fun getMetadata(
+    ffprobe: String,
     database: Database,
     path: Path,
     createdAt: Instant,
     modifiedAt: Instant,
 ) {
     val process = start(
-        "ffprobe",
+        ffprobe,
         "-hide_banner",
+        "-loglevel", "error",
         "-print_format", "json",
         "-show_format",
         "-show_streams",
@@ -267,15 +269,15 @@ data class DeviceMetadata(
 private val codecRegex = """^\s*([VASFXBD.]{6})\s+(\S+)\s+(.*)$""".toRegex()
 
 context(parent: Logger)
-fun ffmpeg(vararg command: String): Pair<Int, String> {
-    val process = start("ffmpeg", *command)
+fun ffmpeg(ffmpeg: String, vararg command: String): Pair<Int, String> {
+    val process = start(ffmpeg, *command)
     val output = process.inputStream.bufferedReader().readText()
     return process.waitFor() to output
 }
 
 context(parent: Logger)
-fun getDeviceTypes(): Set<String> {
-    val (result, output) = ffmpeg("-hide_banner", "-init_hw_device", "list")
+fun getDeviceTypes(ffmpeg: String): Set<String> {
+    val (result, output) = ffmpeg(ffmpeg, "-hide_banner", "-init_hw_device", "list")
 
     if (result != 0) {
         return emptySet()
@@ -290,12 +292,13 @@ fun getDeviceTypes(): Set<String> {
 }
 
 context(parent: Logger)
-fun getDeviceMetadata(types: Set<String>): List<DeviceMetadata> {
+fun getDeviceMetadata(ffmpeg: String, device: String?, types: Set<String>): List<DeviceMetadata> {
     return types.map {
         val (result, output) = ffmpeg(
+            ffmpeg,
             "-hide_banner",
             "-loglevel", "error",
-            "-init_hw_device", it,
+            "-init_hw_device", if (device != null) "$it:$device" else it,
             "-f", "lavfi",
             "-i", "nullsrc",
             "-frames:v", "1",
@@ -353,8 +356,8 @@ fun parseCodecMetadata(text: String): List<CodecCapabilities> {
 }
 
 context(parent: Logger)
-fun getDecoders(): List<CodecCapabilities> {
-    val (result, output) = ffmpeg("-hide_banner", "-decoders")
+fun getDecoders(ffmpeg: String): List<CodecCapabilities> {
+    val (result, output) = ffmpeg(ffmpeg, "-hide_banner", "-decoders")
 
     if (result != 0) {
         return emptyList()
@@ -364,8 +367,8 @@ fun getDecoders(): List<CodecCapabilities> {
 }
 
 context(parent: Logger)
-fun getEncoders(): List<CodecCapabilities> {
-    val (result, output) = ffmpeg("-hide_banner", "-encoders")
+fun getEncoders(ffmpeg: String): List<CodecCapabilities> {
+    val (result, output) = ffmpeg(ffmpeg, "-hide_banner", "-encoders")
 
     if (result != 0) {
         return emptyList()
@@ -389,23 +392,38 @@ fun main() {
 
     val hostname = env["HOSTNAME"] ?: "0.0.0.0"
     val port = env["PORT"]?.toInt() ?: 8080
+
     val data = Path(env["DATA"] ?: "/data")
     val cache = Path(env["CACHE"] ?: "/cache")
+
     val username = env["USERNAME"]
     val password = env["PASSWORD"]
-    val transcoding = env["TRANSCODING"].toBoolean()
+
+    val transcodingEnable = env["TRANSCODING"].toBoolean()
+    val transcodingDevice = env["TRANSCODING_DEVICE"]
+
     val preferredVideoCodec = env["PREFERRED_VIDEO_CODEC"]?.uppercase()
     val preferredAudioCodec = env["PREFERRED_AUDIO_CODEC"]?.uppercase()
     val preferredSubtitleCodec = env["PREFERRED_SUBTITLE_CODEC"]?.uppercase()
 
+    val ffmpeg = env["FFMPEG"] ?: "ffmpeg"
+    val ffprobe = env["FFPROBE"] ?: "ffprobe"
+
     val log = getLogger("coffee-house")
     log.level = Level.ALL
 
+    val provider = Provider()
+
+    provider["username"] = username
+    provider["password"] = password
+
+    provider.registerT(log)
+
     val capabilities = context(log) {
-        val types = getDeviceTypes()
-        val devices = getDeviceMetadata(types)
-        val decoders = getDecoders()
-        val encoders = getEncoders()
+        val types = getDeviceTypes(ffmpeg)
+        val devices = getDeviceMetadata(ffmpeg, transcodingDevice, types)
+        val decoders = getDecoders(ffmpeg)
+        val encoders = getEncoders(ffmpeg)
 
         val availableDevices = devices
             .filter(DeviceMetadata::available)
@@ -429,39 +447,31 @@ fun main() {
         )
     }
 
-    val provider = Provider()
-
-    provider["hostname"] = hostname
-    provider["port"] = port
-    provider["data"] = data
-    provider["cache"] = cache
-    provider["username"] = username
-    provider["password"] = password
-    provider["transcoding"] = transcoding
-
-    provider.registerT(log)
-
     val databasePath = cache.resolve("index.db")
     databasePath.createParentDirectories()
 
     val database = Database.connect({ DriverManager.getConnection("jdbc:sqlite:$databasePath") })
     provider.registerT(database)
 
-    val hls = HlsCache(
+    val transcoding = TranscodingCache(
+        ffmpeg,
         cache,
-        transcoding,
         capabilities,
-        if (preferredVideoCodec != null)
-            VideoCodec.valueOf(preferredVideoCodec)
-        else VideoCodec.H264,
-        if (preferredAudioCodec != null)
-            AudioCodec.valueOf(preferredAudioCodec)
-        else AudioCodec.AAC,
-        if (preferredSubtitleCodec != null)
-            SubtitleCodec.valueOf(preferredSubtitleCodec)
-        else SubtitleCodec.WEBVTT,
+        TranscodingRequirements(
+            transcodingEnable,
+            transcodingDevice,
+            if (preferredVideoCodec != null)
+                VideoCodec.valueOf(preferredVideoCodec)
+            else VideoCodec.H264,
+            if (preferredAudioCodec != null)
+                AudioCodec.valueOf(preferredAudioCodec)
+            else AudioCodec.AAC,
+            if (preferredSubtitleCodec != null)
+                SubtitleCodec.valueOf(preferredSubtitleCodec)
+            else SubtitleCodec.WEBVTT,
+        ),
     )
-    provider.registerT(hls)
+    provider.registerT(transcoding)
 
     log.info("walking file tree")
 
@@ -509,6 +519,7 @@ fun main() {
 
         context(log) {
             getMetadata(
+                ffprobe,
                 database,
                 path,
                 createdAt,

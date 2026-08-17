@@ -8,8 +8,10 @@ data object IntelVideoBackend : VideoBackend {
 
     override val name = "qsv"
 
-    override val upload = "hwupload"
+    override val upload = "hwupload=derive_device=qsv"
     override val download = "hwdownload"
+
+    override val supportScaleAndFormat = true
 
     override fun format(bitDepth: Int): String = when (bitDepth) {
         8 -> "nv12"
@@ -18,7 +20,12 @@ data object IntelVideoBackend : VideoBackend {
         else -> error("intel backend does not support bit depth $bitDepth")
     }
 
-    override fun scale(width: Int, height: Int): String = "scale_qsv=$width:$height"
+    override fun scale(width: Int, height: Int, format: String?): String = filter(
+        "vpp_qsv",
+        "w" to width,
+        "h" to height,
+        "format" to format,
+    )
 
     override fun encoder(codec: VideoCodec): VideoEncoder = when (codec) {
         VideoCodec.AV1 -> IntelVideoEncoder.AV1

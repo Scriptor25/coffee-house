@@ -10,6 +10,8 @@ data object SoftwareVideoBackend : VideoBackend {
     override val upload = null
     override val download = null
 
+    override val supportScaleAndFormat = false
+
     override fun format(bitDepth: Int): String = when (bitDepth) {
         8 -> "yuv420p"
         10 -> "yuv420p10le"
@@ -18,7 +20,11 @@ data object SoftwareVideoBackend : VideoBackend {
         else -> error("software backend does not support bit depth $bitDepth")
     }
 
-    override fun scale(width: Int, height: Int): String = "scale=$width:$height"
+    override fun scale(width: Int, height: Int, format: String?): String = filter(
+        "scale",
+        "w" to width,
+        "h" to height,
+    )
 
     override fun encoder(codec: VideoCodec): VideoEncoder = when (codec) {
         VideoCodec.AV1 -> VideoEncoder.AV1

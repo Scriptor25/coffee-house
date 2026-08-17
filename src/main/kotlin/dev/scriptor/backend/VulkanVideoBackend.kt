@@ -8,8 +8,10 @@ data object VulkanVideoBackend : VideoBackend {
 
     override val name = "vulkan"
 
-    override val upload = "hwupload"
+    override val upload = "hwupload=derive_device=vulkan"
     override val download = "hwdownload"
+
+    override val supportScaleAndFormat = true
 
     override fun format(bitDepth: Int): String = when (bitDepth) {
         8 -> "nv12"
@@ -18,7 +20,12 @@ data object VulkanVideoBackend : VideoBackend {
         else -> error("vulkan backend does not support bit depth $bitDepth")
     }
 
-    override fun scale(width: Int, height: Int): String = "scale_vulkan=$width:$height"
+    override fun scale(width: Int, height: Int, format: String?): String = filter(
+        "libplacebo",
+        "w" to width.toString(),
+        "h" to height.toString(),
+        "format" to format,
+    )
 
     override fun encoder(codec: VideoCodec): VideoEncoder = when (codec) {
         VideoCodec.AV1 -> VulkanVideoEncoder.AV1

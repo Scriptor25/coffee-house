@@ -1,8 +1,6 @@
 package dev.scriptor
 
 import dev.scriptor.backend.*
-import dev.scriptor.codec.AudioCodec
-import dev.scriptor.codec.SubtitleCodec
 import dev.scriptor.codec.VideoCodec
 import dev.scriptor.model.Media
 import dev.scriptor.model.VideoTrack
@@ -12,13 +10,11 @@ import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.uuid.Uuid
 
-class HlsCache(
+class TranscodingCache(
+    private val ffmpeg: String,
     private val base: Path,
-    private val transcoding: Boolean,
     private val capabilities: TranscodingCapabilities,
-    private val preferredVideoCodec: VideoCodec,
-    private val preferredAudioCodec: AudioCodec,
-    private val preferredSubtitleCodec: SubtitleCodec,
+    private val requirements: TranscodingRequirements,
     private val allowed: Set<String> = setOf("2160p", "1440p", "1080p", "720p", "480p", "360p", "144p"),
 ) {
     private val definedVariants: List<Variant> = listOf(
@@ -38,7 +34,7 @@ class HlsCache(
         val sourceHeight = item.height - (item.height % 2)
 
         val result = mutableListOf(
-            if (transcoding && (sourceWidth != item.width || sourceHeight != item.height))
+            if (requirements.enable && sourceWidth != item.width || sourceHeight != item.height)
                 ScaleVariant(
                     "original",
                     sourceWidth,
@@ -50,7 +46,7 @@ class HlsCache(
                 OriginalVariant()
         )
 
-        if (transcoding) {
+        if (requirements.enable) {
             for (variant in definedVariants) {
                 if (variant.name !in allowed) continue
                 if (variant !is ScaleVariant) continue
@@ -91,33 +87,26 @@ class HlsCache(
     }
 
     context(database: Database)
-    fun job(item: Media): TranscodingJob =
-        jobs.computeIfAbsent(item.id.value) {
-            transaction(database) {
-                val backend = selectBackend(preferredVideoCodec)
+    fun job(item: Media): TranscodingJob = jobs.computeIfAbsent(item.id.value) {
+        transaction(database) {
+            val backend = selectBackend(requirements.video)
 
-                val pipeline = Pipeline(
-                    8,
-                    SoftwareVideoBackend,
-                    backend,
-                    backend,
-                    backend,
-                )
+            val pipeline = Pipeline(
+                8,
+                SoftwareVideoBackend,
+                backend,
+                backend,
+                backend,
+            )
 
-                val configuration = TranscodingConfiguration(
-                    transcoding,
-                    preferredVideoCodec,
-                    preferredAudioCodec,
-                    preferredSubtitleCodec,
-                    pipeline,
-                )
-
-                TranscodingJob(
-                    item,
-                    base.resolve(item.id.value.toHexDashString()),
-                    variants(item.video.first { it.index == 0 }),
-                    configuration,
-                )
-            }
+            TranscodingJob(
+                ffmpeg,
+                item,
+                base.resolve(item.id.value.toHexDashString()),
+                variants(item.video.first { it.index == 0 }),
+                requirements,
+                pipeline,
+            )
         }
+    }
 }

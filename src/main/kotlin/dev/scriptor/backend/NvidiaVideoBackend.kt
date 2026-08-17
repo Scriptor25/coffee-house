@@ -11,6 +11,8 @@ data object NvidiaVideoBackend : VideoBackend {
     override val upload = "hwupload_cuda"
     override val download = "hwdownload"
 
+    override val supportScaleAndFormat = true
+
     override fun format(bitDepth: Int): String = when (bitDepth) {
         8 -> "nv12"
         10 -> "p010le"
@@ -18,7 +20,12 @@ data object NvidiaVideoBackend : VideoBackend {
         else -> error("nvidia backend does not support bit depth $bitDepth")
     }
 
-    override fun scale(width: Int, height: Int): String = "scale_cuda=$width:$height"
+    override fun scale(width: Int, height: Int, format: String?): String = filter(
+        "scale_cuda",
+        "w" to width,
+        "h" to height,
+        "format" to format,
+    )
 
     override fun encoder(codec: VideoCodec): VideoEncoder = when (codec) {
         VideoCodec.AV1 -> NvidiaVideoEncoder.AV1
