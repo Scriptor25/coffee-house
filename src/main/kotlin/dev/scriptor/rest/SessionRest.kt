@@ -3,7 +3,7 @@ package dev.scriptor.rest
 import dev.scriptor.JsonNode
 import dev.scriptor.context.AuthContext
 import dev.scriptor.get
-import dev.scriptor.model.Bearer
+import dev.scriptor.model.Authorization
 import dev.scriptor.model.Session
 import dev.scriptor.model.User
 import dev.scriptor.model.UserTable
@@ -79,14 +79,14 @@ class SessionRest {
 
     @Get("/", result = "application/json")
     context(auth: AuthContext, database: Database)
-    fun getCurrentSession(@Header authorization: Bearer): Session =
-        auth.auth(authorization.token)
+    fun getCurrentSession(@Header authorization: Authorization): Session =
+        auth.auth(authorization.credentials)
             ?: throw NotFoundSignal()
 
     @Delete("/", result = "application/json")
     context(auth: AuthContext, database: Database)
-    fun deleteCurrentSession(@Header authorization: Bearer): Session {
-        val session = auth.auth(authorization.token)
+    fun deleteCurrentSession(@Header authorization: Authorization): Session {
+        val session = auth.auth(authorization.credentials)
             ?: throw NotFoundSignal()
 
         transaction(database) { session.delete() }

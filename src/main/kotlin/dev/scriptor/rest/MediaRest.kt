@@ -4,13 +4,10 @@ import dev.scriptor.JsonNode
 import dev.scriptor.TranscodingCache
 import dev.scriptor.context.AuthContext
 import dev.scriptor.jsonOf
-import dev.scriptor.model.Bearer
+import dev.scriptor.model.Authorization
 import dev.scriptor.model.Chapter
 import dev.scriptor.model.Media
-import dev.scriptor.server.NotFoundSignal
-import dev.scriptor.server.ParameterList
-import dev.scriptor.server.RangeReadableByteChannel
-import dev.scriptor.server.UnauthorizedSignal
+import dev.scriptor.server.*
 import dev.scriptor.server.annotation.*
 import dev.scriptor.server.result.ChannelResult
 import dev.scriptor.server.result.Result
@@ -28,15 +25,15 @@ import kotlin.uuid.Uuid
 @Controller("/media")
 class MediaRest {
 
-    val hlsUriLine = """^(?!#)(?!\s*$)(.+)$""".toRegex()
-    val hlsUriTag = """(\bURI=")([^"]+)(")""".toRegex()
+    private val hlsUriLine = """^(?!#)(?!\s*$)(.+)$""".toRegex()
+    private val hlsUriTag = """(\bURI=")([^"]+)(")""".toRegex()
 
-    fun appendToken(uri: String, token: String): String {
+    private fun appendToken(uri: String, token: String): String {
         val separator = if ('?' in uri) '&' else '?'
         return "${uri}${separator}token=${token}"
     }
 
-    fun appendToken(path: Path, token: String): List<String> = path
+    private fun appendToken(path: Path, token: String): List<String> = path
         .bufferedReader()
         .useLines { lines ->
             lines
@@ -60,7 +57,37 @@ class MediaRest {
                 .toList()
         }
 
-    fun stream(range: String?, path: Path): Result {
+    context(
+        database: Database,
+        auth: AuthContext,
+    )
+    private fun mediaSession(
+        id: Uuid,
+        authorization: Authorization?,
+        token: String? = null,
+    ): Media {
+        val instant = now()
+
+        val token = when {
+            authorization != null && authorization.scheme == "Bearer" -> authorization.credentials
+            else -> token
+        } ?: throw UnauthorizedSignal()
+
+        val session = auth.auth(token, instant)
+            ?: throw UnauthorizedSignal()
+
+        val item = transaction(database) { Media.findById(id) }
+            ?: throw NotFoundSignal()
+
+        transaction(database) {
+            session.access = instant
+            session.expiresAt = instant + ofMinutes(60).toKotlinDuration()
+        }
+
+        return item
+    }
+
+    private fun stream(range: String?, path: Path): Result {
         val channel = FileChannel.open(path)
 
         return if (range.isNullOrBlank()) {
@@ -68,27 +95,43 @@ class MediaRest {
         } else {
             val total = channel.size()
 
-            val segment = range
+            val range = range
                 .substringAfter("bytes=")
-                .split('-')
+                .split("-", limit = 2)
                 .filter { it.isNotBlank() }
 
-            val begin = minOf(segment[0].toLong(), total)
-            val end = minOf(if (segment.size == 2) segment[1].toLong() else total, total)
+            val begin = range[0].toLong()
+            val end = if (range.size == 2) range[1].toLong() else (total - 1L)
 
-            val limit = end - 1L
+            if (begin < 0 || end < 0 || begin >= total || end >= total || begin > end) {
+                val headers = ParameterList(
+                    "content-range" to "bytes */$total",
+                )
 
-            val headers = ParameterList()
-            headers["accept-ranges"] = "bytes"
-            headers["content-range"] = "bytes $begin-$limit/$total"
+                RangeNotSatisfiableSignal(headers).generate()
+            } else {
+                val headers = ParameterList(
+                    "content-length" to (end + 1L - begin).toString(),
+                    "content-range" to "bytes $begin-$end/$total",
+                )
 
-            ChannelResult(
-                206,
-                "Partial Content",
-                headers = headers,
-                value = RangeReadableByteChannel(channel, begin until end),
-            )
+                ChannelResult(
+                    206,
+                    "Partial Content",
+                    headers = headers,
+                    value = RangeReadableByteChannel(channel, begin until end),
+                )
+            }
         }
+    }
+
+    @Head("/")
+    fun getMediaListHeaders() {
+        val headers = ParameterList(
+            "content-type" to "application/json",
+        )
+
+        throw NoContentSignal(headers)
     }
 
     @Get("/", result = "application/json")
@@ -96,10 +139,22 @@ class MediaRest {
     fun getMediaList(
         @QueryParameter offset: Long?,
         @QueryParameter limit: Int?,
-        @Header authorization: Bearer,
+        @Header authorization: Authorization,
     ): List<Media> {
-        auth.auth(authorization.token)
+        val instant = now()
+
+        val token = when {
+            authorization.scheme == "Bearer" -> authorization.credentials
+            else -> null
+        } ?: throw UnauthorizedSignal()
+
+        val session = auth.auth(token, instant)
             ?: throw UnauthorizedSignal()
+
+        transaction(database) {
+            session.access = instant
+            session.expiresAt = instant + ofMinutes(60).toKotlinDuration()
+        }
 
         return transaction(database) {
             Media
@@ -110,17 +165,32 @@ class MediaRest {
         }
     }
 
+    @Head("/[id]")
+    fun getMediaHeaders() {
+        val headers = ParameterList(
+            "content-type" to "application/json",
+        )
+
+        throw NoContentSignal(headers)
+    }
+
     @Get("/[id]", result = "application/json")
     context(database: Database, auth: AuthContext)
     fun getMedia(
         @PathParameter id: Uuid,
-        @Header authorization: Bearer,
+        @Header authorization: Authorization,
     ): Media {
-        auth.auth(authorization.token)
-            ?: throw UnauthorizedSignal()
+        return mediaSession(id, authorization)
+    }
 
-        return transaction(database) { Media.findById(id) }
-            ?: throw NotFoundSignal()
+    @Head("/stream/[id]")
+    fun getMediaStreamHeaders() {
+        val headers = ParameterList(
+            "content-type" to "video/*",
+            "accept-ranges" to "bytes",
+        )
+
+        throw NoContentSignal(headers)
     }
 
     @Get("/stream/[id]", result = "video/*")
@@ -128,22 +198,21 @@ class MediaRest {
     fun getMediaStream(
         @PathParameter id: Uuid,
         @QueryParameter token: String,
+        @Header authorization: Authorization?,
         @Header range: String?,
     ): Result {
-        val now = now()
-
-        val session = auth.auth(token, now)
-            ?: throw UnauthorizedSignal()
-
-        val item = transaction(database) { Media.findById(id) }
-            ?: throw NotFoundSignal()
-
-        transaction(database) {
-            session.expiresAt = now + ofMinutes(60).toKotlinDuration()
-            session.access = now
-        }
+        val item = mediaSession(id, authorization, token)
 
         return stream(range, item.path)
+    }
+
+    @Head("/stream/[id]/master.m3u8")
+    fun getMediaStreamMasterHeaders() {
+        val headers = ParameterList(
+            "content-type" to "application/vnd.apple.mpegurl",
+        )
+
+        throw NoContentSignal(headers)
     }
 
     @Get("/stream/[id]/master.m3u8", result = "application/vnd.apple.mpegurl")
@@ -156,19 +225,9 @@ class MediaRest {
     fun getMediaStreamMaster(
         @PathParameter id: Uuid,
         @QueryParameter token: String,
+        @Header authorization: Authorization?,
     ): String {
-        val now = now()
-
-        val session = auth.auth(token, now)
-            ?: throw UnauthorizedSignal()
-
-        val item = transaction(database) { Media.findById(id) }
-            ?: throw NotFoundSignal()
-
-        transaction(database) {
-            session.access = now
-            session.expiresAt = now + ofMinutes(60).toKotlinDuration()
-        }
+        val item = mediaSession(id, authorization, token)
 
         val job = transcoding.job(item)
         val path = job.master()
@@ -177,6 +236,15 @@ class MediaRest {
         manifest += """#EXT-X-SESSION-DATA:DATA-ID="com.apple.hls.chapters",URI="chapters.json?token=$token""""
 
         return manifest.joinToString("\n")
+    }
+
+    @Head("/stream/[id]/[name]/index.m3u8")
+    fun getMediaStreamIndexHeaders() {
+        val headers = ParameterList(
+            "content-type" to "application/vnd.apple.mpegurl",
+        )
+
+        throw NoContentSignal(headers)
     }
 
     @Get("/stream/[id]/[name]/index.m3u8", result = "application/vnd.apple.mpegurl")
@@ -190,24 +258,24 @@ class MediaRest {
         @PathParameter id: Uuid,
         @PathParameter name: String,
         @QueryParameter token: String,
+        @Header authorization: Authorization?,
     ): String {
-        val now = now()
-
-        val session = auth.auth(token, now)
-            ?: throw UnauthorizedSignal()
-
-        val item = transaction(database) { Media.findById(id) }
-            ?: throw NotFoundSignal()
-
-        transaction(database) {
-            session.access = now
-            session.expiresAt = now + ofMinutes(60).toKotlinDuration()
-        }
+        val item = mediaSession(id, authorization, token)
 
         val job = transcoding.job(item)
         val path = job.index(name)
 
         return appendToken(path, token).joinToString("\n")
+    }
+
+    @Head("/stream/[id]/[name]/[segment].mp4")
+    fun getMediaStreamSegmentHeaders() {
+        val headers = ParameterList(
+            "content-type" to "video/mp4",
+            "accept-ranges" to "bytes",
+        )
+
+        throw NoContentSignal(headers)
     }
 
     @Get("/stream/[id]/[name]/[segment].mp4", result = "video/mp4")
@@ -222,20 +290,10 @@ class MediaRest {
         @PathParameter name: String,
         @PathParameter segment: String,
         @QueryParameter token: String,
+        @Header authorization: Authorization?,
         @Header range: String?,
     ): Result {
-        val now = now()
-
-        val session = auth.auth(token, now)
-            ?: throw UnauthorizedSignal()
-
-        val item = transaction(database) { Media.findById(id) }
-            ?: throw NotFoundSignal()
-
-        transaction(database) {
-            session.access = now
-            session.expiresAt = now + ofMinutes(60).toKotlinDuration()
-        }
+        val item = mediaSession(id, authorization, token)
 
         val job = transcoding.job(item)
         val path = job.segment(name, segment)
@@ -243,24 +301,23 @@ class MediaRest {
         return stream(range, path)
     }
 
+    @Head("/stream/[id]/chapters.json")
+    fun getMediaStreamChaptersHeaders() {
+        val headers = ParameterList(
+            "content-type" to "application/json",
+        )
+
+        throw NoContentSignal(headers)
+    }
+
     @Get("/stream/[id]/chapters.json", result = "application/json")
     context(database: Database, auth: AuthContext)
     fun getMediaStreamChapters(
         @PathParameter id: Uuid,
-        @QueryParameter token: String,
+        @QueryParameter token: String?,
+        @Header authorization: Authorization?,
     ): JsonNode {
-        val now = now()
-
-        val session = auth.auth(token, now)
-            ?: throw UnauthorizedSignal()
-
-        val item = transaction(database) { Media.findById(id) }
-            ?: throw NotFoundSignal()
-
-        transaction(database) {
-            session.access = now
-            session.expiresAt = now + ofMinutes(60).toKotlinDuration()
-        }
+        val item = mediaSession(id, authorization, token)
 
         val chapters = transaction(database) { item.chapters.toList() }
 

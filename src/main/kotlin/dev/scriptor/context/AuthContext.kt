@@ -17,10 +17,10 @@ class AuthContext {
     context(database: Database)
     fun auth(
         token: String,
-        now: Instant = now(),
+        instant: Instant = now(),
     ): Session? = transaction(database) {
         Session
-            .find { (SessionTable.token eq token) and (SessionTable.expiresAt greaterEq now) }
+            .find { (SessionTable.token eq token) and (SessionTable.expiresAt greaterEq instant) }
             .limit(1)
             .singleOrNull()
     }
