@@ -1,4 +1,4 @@
-package dev.scriptor
+package dev.scriptor.model.ffmpeg
 
 enum class CodecType {
     VIDEO,

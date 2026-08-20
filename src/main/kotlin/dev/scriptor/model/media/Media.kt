@@ -1,4 +1,4 @@
-package dev.scriptor.model
+package dev.scriptor.model.media
 
 import dev.scriptor.instant
 import dev.scriptor.path

@@ -1,7 +1,7 @@
 package dev.scriptor.context
 
-import dev.scriptor.model.Session
-import dev.scriptor.model.SessionTable
+import dev.scriptor.model.user.Session
+import dev.scriptor.model.user.SessionTable
 import dev.scriptor.server.annotation.Context
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq

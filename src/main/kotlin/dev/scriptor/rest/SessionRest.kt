@@ -4,9 +4,9 @@ import dev.scriptor.JsonNode
 import dev.scriptor.context.AuthContext
 import dev.scriptor.get
 import dev.scriptor.model.Authorization
-import dev.scriptor.model.Session
-import dev.scriptor.model.User
-import dev.scriptor.model.UserTable
+import dev.scriptor.model.user.Session
+import dev.scriptor.model.user.User
+import dev.scriptor.model.user.UserTable
 import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.Provider
 import dev.scriptor.server.UnauthorizedSignal

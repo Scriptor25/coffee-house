@@ -1,6 +1,6 @@
 package dev.scriptor
 
-import dev.scriptor.model.Media
+import dev.scriptor.model.media.Media
 import java.nio.file.Path
 import java.util.logging.Logger
 import kotlin.io.path.createDirectories

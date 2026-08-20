@@ -1,4 +1,4 @@
-package dev.scriptor.model
+package dev.scriptor.model.media
 
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
@@ -27,7 +27,7 @@ object AudioTrackTable : UuidTable("audio_track") {
 class AudioTrack(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<AudioTrack>(AudioTrackTable)
 
-    var media by Media referencedOn AudioTrackTable.media
+    var media by Media.Companion referencedOn AudioTrackTable.media
     var index by AudioTrackTable.index
     var codec by AudioTrackTable.codec
     var bitRate by AudioTrackTable.bitRate

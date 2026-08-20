@@ -4,8 +4,8 @@ import dev.scriptor.JsonNode
 import dev.scriptor.context.AuthContext
 import dev.scriptor.get
 import dev.scriptor.model.Authorization
-import dev.scriptor.model.User
-import dev.scriptor.model.UserRole
+import dev.scriptor.model.user.User
+import dev.scriptor.model.user.UserRole
 import dev.scriptor.server.ForbiddenSignal
 import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.UnauthorizedSignal

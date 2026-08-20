@@ -1,4 +1,4 @@
-package dev.scriptor.model
+package dev.scriptor.model.media
 
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
@@ -23,7 +23,7 @@ object ChapterTable : UuidTable("chapter") {
 class Chapter(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<Chapter>(ChapterTable)
 
-    var media by Media referencedOn ChapterTable.media
+    var media by Media.Companion referencedOn ChapterTable.media
     var index by ChapterTable.index
     var start by ChapterTable.start
     var end by ChapterTable.end

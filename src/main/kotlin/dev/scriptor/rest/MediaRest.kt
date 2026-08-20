@@ -5,8 +5,8 @@ import dev.scriptor.TranscodingCache
 import dev.scriptor.context.AuthContext
 import dev.scriptor.jsonOf
 import dev.scriptor.model.Authorization
-import dev.scriptor.model.Chapter
-import dev.scriptor.model.Media
+import dev.scriptor.model.media.Chapter
+import dev.scriptor.model.media.Media
 import dev.scriptor.server.*
 import dev.scriptor.server.annotation.*
 import dev.scriptor.server.result.ChannelResult

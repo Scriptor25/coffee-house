@@ -2,7 +2,7 @@ package dev.scriptor.converter
 
 import dev.scriptor.JsonNode
 import dev.scriptor.jsonOf
-import dev.scriptor.model.VideoTrack
+import dev.scriptor.model.media.VideoTrack
 import dev.scriptor.server.Provider
 import dev.scriptor.server.converter.Converter
 

@@ -1,4 +1,4 @@
-package dev.scriptor.model
+package dev.scriptor.model.user
 
 import dev.scriptor.instant
 import org.jetbrains.exposed.v1.core.ReferenceOption

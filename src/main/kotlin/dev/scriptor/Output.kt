@@ -4,10 +4,10 @@ import dev.scriptor.backend.VideoBackend
 import dev.scriptor.codec.AudioCodec
 import dev.scriptor.codec.SubtitleCodec
 import dev.scriptor.codec.VideoCodec
-import dev.scriptor.model.AudioTrack
-import dev.scriptor.model.Media
-import dev.scriptor.model.SubtitleTrack
-import dev.scriptor.model.VideoTrack
+import dev.scriptor.model.media.AudioTrack
+import dev.scriptor.model.media.Media
+import dev.scriptor.model.media.SubtitleTrack
+import dev.scriptor.model.media.VideoTrack
 
 sealed interface VideoEncoding {
 

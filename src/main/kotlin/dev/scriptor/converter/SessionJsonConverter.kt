@@ -2,8 +2,8 @@ package dev.scriptor.converter
 
 import dev.scriptor.JsonNode
 import dev.scriptor.jsonOf
-import dev.scriptor.model.Session
-import dev.scriptor.model.User
+import dev.scriptor.model.user.Session
+import dev.scriptor.model.user.User
 import dev.scriptor.server.Provider
 import dev.scriptor.server.converter.Converter
 import org.jetbrains.exposed.v1.jdbc.Database
