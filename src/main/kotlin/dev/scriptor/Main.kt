@@ -1,8 +1,5 @@
 package dev.scriptor
 
-import dev.scriptor.codec.AudioCodec
-import dev.scriptor.codec.SubtitleCodec
-import dev.scriptor.codec.VideoCodec
 import dev.scriptor.model.media.*
 import dev.scriptor.model.user.Session
 import dev.scriptor.model.user.SessionTable
@@ -122,12 +119,12 @@ fun getMetadata(
 
     val streams = data["streams"]
     for (stream in streams) {
-        val codecType = stream["codec_type"].get<String>()
+        val codecType = stream["codec_type"].get<String>().uppercase()
 
         when (codecType) {
-            "video" -> {
+            "VIDEO" -> {
                 val index = stream["index"].get<Number>().toInt()
-                val codec = stream["codec_name"].get<String>()
+                val codec = stream["codec_name"].get<String>().uppercase()
                 val width = stream["width"].get<Number>().toInt()
                 val height = stream["height"].get<Number>().toInt()
                 val bitRate = stream["bit_rate"].get<String?>()?.toLongOrNull() ?: 0L
@@ -145,7 +142,7 @@ fun getMetadata(
                 val title = tags["title"].get<String?>()
 
                 val disposition = stream["disposition"]
-                val default = disposition["default"].get<Number>() == 1
+                val default = disposition["default"].get<Number>().toInt() == 1
 
                 transaction(database) {
                     VideoTrack.new {
@@ -168,9 +165,9 @@ fun getMetadata(
                 }
             }
 
-            "audio" -> {
+            "AUDIO" -> {
                 val index = stream["index"].get<Number>().toInt()
-                val codec = stream["codec_name"].get<String>()
+                val codec = stream["codec_name"].get<String>().uppercase()
                 val bitRate = stream["bit_rate"].get<String?>()?.toLongOrNull() ?: 0L
                 val sampleRate = stream["sample_rate"].get<String>().toLong()
                 val channels = stream["channels"].get<Number>().toInt()
@@ -199,9 +196,9 @@ fun getMetadata(
                 }
             }
 
-            "subtitle" -> {
+            "SUBTITLE" -> {
                 val index = stream["index"].get<Number>().toInt()
-                val codec = stream["codec_name"].get<String>()
+                val codec = stream["codec_name"].get<String>().uppercase()
 
                 val tags = stream["tags"]
                 val language = tags["language"].get<String?>()
@@ -224,7 +221,7 @@ fun getMetadata(
                 }
             }
 
-            "attachment" -> {
+            "ATTACHMENT" -> {
                 val index = stream["index"].get<Number>().toInt()
                 val codec = stream["codec_name"].get<String?>()
 
@@ -278,9 +275,9 @@ fun main() {
     val transcodingEnable = env["TRANSCODING"].toBoolean()
     val transcodingDevice = env["TRANSCODING_DEVICE"]
 
-    val preferredVideoCodec = env["PREFERRED_VIDEO_CODEC"]?.uppercase()
-    val preferredAudioCodec = env["PREFERRED_AUDIO_CODEC"]?.uppercase()
-    val preferredSubtitleCodec = env["PREFERRED_SUBTITLE_CODEC"]?.uppercase()
+    val targetVideoCodec = env["TARGET_VIDEO_CODEC"]?.uppercase() ?: "H264"
+    val targetAudioCodec = env["TARGET_AUDIO_CODEC"]?.uppercase() ?: "AAC"
+    val targetSubtitleCodec = env["TARGET_SUBTITLE_CODEC"]?.uppercase() ?: "WEBVTT"
 
     val ffmpeg = env["FFMPEG"] ?: "ffmpeg"
     val ffprobe = env["FFPROBE"] ?: "ffprobe"
@@ -310,15 +307,9 @@ fun main() {
         TranscodingRequirements(
             transcodingEnable,
             transcodingDevice,
-            if (preferredVideoCodec != null)
-                VideoCodec.valueOf(preferredVideoCodec)
-            else VideoCodec.H264,
-            if (preferredAudioCodec != null)
-                AudioCodec.valueOf(preferredAudioCodec)
-            else AudioCodec.AAC,
-            if (preferredSubtitleCodec != null)
-                SubtitleCodec.valueOf(preferredSubtitleCodec)
-            else SubtitleCodec.WEBVTT,
+            targetVideoCodec,
+            targetAudioCodec,
+            targetSubtitleCodec,
         ),
     )
     provider.registerT(transcoding)

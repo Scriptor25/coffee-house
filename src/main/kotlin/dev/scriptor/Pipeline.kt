@@ -2,8 +2,10 @@ package dev.scriptor
 
 import dev.scriptor.backend.SoftwareVideoBackend
 import dev.scriptor.backend.VideoBackend
+import dev.scriptor.model.ffmpeg.Capabilities
 
 data class Pipeline(
+    val capabilities: Capabilities,
     val bitDepth: Int,
     val decode: VideoBackend,
     val split: VideoBackend,
@@ -79,14 +81,22 @@ data class Pipeline(
         dst -> emptyList()
 
         else -> {
-            val srcFormat = src.format(bitDepth)
-            val dstFormat = dst.format(bitDepth)
+            val interop = capabilities.getInterop(src.name, dst.name)
 
-            listOfNotNull(
-                src.download,
-                if (srcFormat != dstFormat && format) "format=$dstFormat" else null,
-                dst.upload,
-            )
+            if (interop == null || !interop.derivable) {
+                val srcFormat = src.format(bitDepth)
+                val dstFormat = dst.format(bitDepth)
+
+                listOfNotNull(
+                    src.download,
+                    if (format && srcFormat != dstFormat) "format=$dstFormat" else null,
+                    dst.upload,
+                )
+            } else if (!interop.direct) {
+                listOf("hwmap=derive_device=${dst.name}")
+            } else {
+                listOf("hwmap=derive_device=${dst.name}:direct=1")
+            }
         }
     }
 }

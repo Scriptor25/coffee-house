@@ -1,5 +1,8 @@
 package dev.scriptor
 
+import dev.scriptor.codec.AudioCodec
+import dev.scriptor.codec.SubtitleCodec
+import dev.scriptor.codec.VideoCodec
 import dev.scriptor.model.media.Media
 import java.nio.file.Path
 import java.util.logging.Logger
@@ -92,7 +95,7 @@ data class TranscodingJob(
                             if (requirements.enable) {
                                 transcode(
                                     it.name,
-                                    requirements.video,
+                                    VideoCodec.valueOf(requirements.video), // TODO: no fixed codec enum
                                 )
                             } else {
                                 copy(it.name)
@@ -103,7 +106,7 @@ data class TranscodingJob(
                             if (requirements.enable) {
                                 transcode(
                                     it.name,
-                                    requirements.video,
+                                    VideoCodec.valueOf(requirements.video), // TODO: no fixed codec enum
                                     it.profile,
                                     it.bitrate,
                                     it.width,
@@ -124,7 +127,7 @@ data class TranscodingJob(
             metadata.audio.forEach {
                 audio(it) {
                     if (requirements.enable) {
-                        transcode(codec = requirements.audio)
+                        transcode(codec = AudioCodec.valueOf(requirements.audio)) // TODO: no fixed codec enum
                     } else {
                         copy()
                     }
@@ -133,6 +136,7 @@ data class TranscodingJob(
 
             metadata.subtitles.filter {
                 // TODO: HLS does not support bitmap subtitles?
+                // TODO: use ocr filter for preprocessing bitmap subtitles
                 when (it.codec) {
                     "subrip",
                     "ass",
@@ -144,7 +148,7 @@ data class TranscodingJob(
             }.forEach {
                 subtitle(it) {
                     if (requirements.enable) {
-                        transcode(codec = requirements.subtitle)
+                        transcode(codec = SubtitleCodec.valueOf(requirements.subtitle)) // TODO: no fixed codec enum
                     } else {
                         copy()
                     }

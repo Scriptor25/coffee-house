@@ -1,24 +1,16 @@
 package dev.scriptor.model.ffmpeg
 
 data class CodecCapabilities(
-    val name: String,
-    val description: String,
-
+    val id: CodecId,
     val type: CodecType,
-    val direction: CodecDirection,
 
-    val frameLevelMultithreading: Boolean,
-    val sliceLevelMultithreading: Boolean,
-    val experimental: Boolean,
-    val supportDrawHorizontalBand: Boolean,
-    val supportDirectRendering: Boolean,
+    val supportsDecoding: Boolean,
+    val supportsEncoding: Boolean,
 
-    val generalCapabilities: Set<String> = emptySet(),
-    val threadingCapabilities: Set<String> = emptySet(),
+    val intraFrameOnly: Boolean,
+    val lossyCompression: Boolean,
+    val losslessCompression: Boolean,
 
-    val pixelFormats: Set<String> = emptySet(),
-
-    val sampleRates: Set<Long> = emptySet(),
-    val sampleFormats: Set<String> = emptySet(),
-    val channelLayouts: Set<String> = emptySet(),
+    val decoders: Set<ImplementationId>,
+    val encoders: Set<ImplementationId>,
 )

@@ -15,13 +15,17 @@ class Probe(
 
         val deviceTypes = probeDeviceTypes()
 
-        log.fine("probe encoders")
+        log.fine("probe codecs")
 
-        val encoders = probeEncoders()
+        val codecs = probeCodecs()
 
         log.fine("probe decoders")
 
         val decoders = probeDecoders()
+
+        log.fine("probe encoders")
+
+        val encoders = probeEncoders()
 
         log.fine("probe filters")
 
@@ -29,29 +33,23 @@ class Probe(
 
         log.fine("probe devices")
 
-        val devices = deviceTypes.mapNotNull { type ->
-            probeDevice(
-                type,
-                encoders,
-                decoders,
-                filters,
-            )
-        }
+        val devices = deviceTypes.mapNotNull(::probeDevice)
 
         log.fine("probe interop")
 
         val interop = probeInterop(devices)
 
         return Capabilities(
-            devices,
-            encoders,
-            decoders,
-            filters,
-            interop,
+            devices.associateBy(DeviceCapabilities::id),
+            codecs.associateBy(CodecCapabilities::id),
+            decoders.associateBy(ImplementationCapabilities::id),
+            encoders.associateBy(ImplementationCapabilities::id),
+            filters.associateBy(FilterCapabilities::id),
+            interop.associateBy { it.src to it.dst },
         )
     }
 
-    private fun probeDeviceTypes(): List<String> {
+    private fun probeDeviceTypes(): Set<DeviceId> {
         val result = command(
             "-hide_banner",
             "-loglevel", "error",
@@ -67,90 +65,92 @@ class Probe(
             .map(String::trim)
             .filter(String::isNotEmpty)
             .drop(1)
-            .toList()
+            .map(::DeviceId)
+            .toSet()
     }
 
-    private fun probeEncoders(): List<CodecCapabilities> {
-        val encoders = command(
+    private fun probeCodecs(): List<CodecCapabilities> {
+        val result = command(
+            "-hide_banner",
+            "-loglevel", "error",
+            "-codecs",
+        )
+
+        if (result.error) {
+            val message = result.stderr.ifBlank(result::stdout)
+            error("failed to probe encoders:\n$message")
+        }
+
+        return parseCodecs(result.stdout)
+    }
+
+    private fun probeEncoders(): List<ImplementationCapabilities> {
+        val result = command(
             "-hide_banner",
             "-loglevel", "error",
             "-encoders",
         )
 
-        if (encoders.error) {
-            val message = encoders.stderr.ifBlank(encoders::stdout)
+        if (result.error) {
+            val message = result.stderr.ifBlank(result::stdout)
             error("failed to probe encoders:\n$message")
         }
 
-        return parseCodecs(encoders.stdout, CodecDirection.ENCODE)
+        return parseImplementation(result.stdout, CodecDirection.ENCODE)
     }
 
-    private fun probeDecoders(): List<CodecCapabilities> {
-        val decoders = command(
+    private fun probeDecoders(): List<ImplementationCapabilities> {
+        val result = command(
             "-hide_banner",
             "-loglevel", "error",
             "-decoders",
         )
 
-        if (decoders.error) {
-            val message = decoders.stderr.ifBlank(decoders::stdout)
+        if (result.error) {
+            val message = result.stderr.ifBlank(result::stdout)
             error("failed to probe decoders:\n$message")
         }
 
-        return parseCodecs(decoders.stdout, CodecDirection.DECODE)
+        return parseImplementation(result.stdout, CodecDirection.DECODE)
     }
 
     private fun probeFilters(): List<FilterCapabilities> {
-        val filters = command(
+        val result = command(
             "-hide_banner",
             "-loglevel", "error",
             "-filters",
         )
 
-        if (filters.error) {
-            val message = filters.stderr.ifBlank(filters::stdout)
+        if (result.error) {
+            val message = result.stderr.ifBlank(result::stdout)
             error("failed to probe filters:\n$message")
         }
 
-        return parseFilters(filters.stdout)
+        return parseFilters(result.stdout)
     }
 
     private fun probeDevice(
-        type: String,
-        encoders: List<CodecCapabilities>,
-        decoders: List<CodecCapabilities>,
-        filters: List<FilterCapabilities>,
+        id: DeviceId,
     ): DeviceCapabilities? {
-        val init = command(
+        val result = command(
             "-hide_banner",
             "-loglevel", "error",
-            "-init_hw_device", "$type=probe"
+            "-init_hw_device", "$id=probe",
+            "-filter_hw_device", "probe",
+            "-f", "lavfi",
+            "-i", "nullsrc",
+            "-vf", "format=nv12,hwupload,hwdownload,format=nv12",
+            "-frames:v", "1",
+            "-f", "null",
+            "-",
         )
 
-        if (init.error) {
+        if (result.error) {
             return null
         }
 
-        val encoderSet = encoders
-            .filter { codecBelongsToDevice(it.name, type) }
-            .map { it.name }
-            .toSet()
-
-        val decoderSet = decoders
-            .filter { codecBelongsToDevice(it.name, type) }
-            .map { it.name }
-            .toSet()
-
-        val filterSet = filters
-            .filter { filterBelongsToDevice(it.name, type) }
-            .map { it.name }
-            .toSet()
-
         return DeviceCapabilities(
-            type,
-            encoderSet,
-            decoderSet,
-            filterSet,
+            id,
         )
     }
 
@@ -161,8 +161,8 @@ class Probe(
             for (dst in devices) {
                 if (src == dst) {
                     result += InteropCapabilities(
-                        src = src.type,
-                        dst = dst.type,
+                        src = src.id,
+                        dst = dst.id,
                         derivable = true,
                         direct = true,
                         mapping = true,
@@ -170,42 +170,49 @@ class Probe(
                     continue
                 }
 
-                result += probeDeviceInterop(src.type, dst.type) ?: continue
+                result += probeDeviceInterop(src.id, dst.id) ?: continue
             }
         }
 
         return result
     }
 
-    private fun probeDeviceInterop(src: String, dst: String): InteropCapabilities? {
-        log.finer("probe device interop: $src <---> $dst")
+    private fun probeDeviceInterop(src: DeviceId, dst: DeviceId): InteropCapabilities? {
+        log.finer("probe device interop: $src ---> $dst")
 
-        val derive = command(
-            "-hide_banner",
-            "-loglevel", "error",
-            "-init_hw_device", "$src=src",
-            "-init_hw_device", "$dst=dst@src",
-        )
-
-        if (derive.error) {
-            return null
-        }
-
-        val direct = command(
+        val resultDerive = command(
             "-hide_banner",
             "-loglevel", "error",
             "-init_hw_device", "$src=src",
             "-init_hw_device", "$dst=dst@src",
             "-filter_hw_device", "src",
             "-f", "lavfi",
-            "-i", "color=size=64x64:rate=1:color=black",
+            "-i", "nullsrc",
+            "-frames:v", "1",
+            "-vf", "format=nv12,hwupload,hwdownload,format=nv12",
+            "-f", "null",
+            "-",
+        )
+
+        if (resultDerive.error) {
+            return null
+        }
+
+        val resultDirect = command(
+            "-hide_banner",
+            "-loglevel", "error",
+            "-init_hw_device", "$src=src",
+            "-init_hw_device", "$dst=dst@src",
+            "-filter_hw_device", "src",
+            "-f", "lavfi",
+            "-i", "nullsrc",
             "-frames:v", "1",
             "-vf", "format=nv12,hwupload,hwmap=derive_device=$dst:direct=1,hwdownload,format=nv12",
             "-f", "null",
             "-",
         )
 
-        if (direct.success) {
+        if (resultDirect.success) {
             return InteropCapabilities(
                 src = src,
                 dst = dst,
@@ -215,21 +222,21 @@ class Probe(
             )
         }
 
-        val mapping = command(
+        val resultMapping = command(
             "-hide_banner",
             "-loglevel", "error",
             "-init_hw_device", "$src=src",
             "-init_hw_device", "$dst=dst@src",
             "-filter_hw_device", "src",
             "-f", "lavfi",
-            "-i", "color=size=64x64:rate=1:color=black",
+            "-i", "nullsrc",
             "-frames:v", "1",
             "-vf", "format=nv12,hwupload,hwmap=derive_device=$dst,hwdownload,format=nv12",
             "-f", "null",
             "-",
         )
 
-        if (mapping.success) {
+        if (resultMapping.success) {
             return InteropCapabilities(
                 src = src,
                 dst = dst,
@@ -248,14 +255,72 @@ class Probe(
         )
     }
 
-    private val codecGeneralCapabilitiesRegex = """General capabilities:\s*(.+)""".toRegex()
-    private val codecThreadingCapabilitiesRegex = """Threading capabilities:\s*(.+)""".toRegex()
-    private val codecSupportedPixelFormatsRegex = """Supported pixel formats:\s*(.+)""".toRegex()
-    private val codecSupportedSampleRatesRegex = """Supported sample rates:\s*(.+)""".toRegex()
-    private val codecSupportedSampleFormatsRegex = """Supported sample formats:\s*(.+)""".toRegex()
-    private val codecSupportedChannelLayoutsRegex = """Supported channel layouts:\s*(.+)""".toRegex()
+    private val codecLineRegex = """^\s*([DEVASTIL.]{6})\s+(\S+)\s+(.*)$""".toRegex()
+    private val codecDecodersRegex = """\(decoders:\s*(.+)\)""".toRegex()
+    private val codecEncodersRegex = """\(encoders:\s*(.+)\)""".toRegex()
 
-    private fun parseCodecCapabilities(regex: Regex, text: String): Set<String> {
+    private fun parseCodecs(text: String): List<CodecCapabilities> {
+        val result = mutableListOf<CodecCapabilities>()
+
+        for (line in text.lineSequence().dropWhile { !it.trim().startsWith('-') }) {
+            val match = codecLineRegex.matchEntire(line) ?: continue
+
+            val flags = match.groupValues[1]
+            val name = match.groupValues[2]
+            val description = match.groupValues[3]
+
+            val type = when (flags[2]) {
+                'V' -> CodecType.VIDEO
+                'A' -> CodecType.AUDIO
+                'S' -> CodecType.SUBTITLE
+                'D' -> CodecType.DATA
+                'T' -> CodecType.ATTACHMENT
+                else -> null
+            } ?: continue
+
+            val id = CodecId(name)
+
+            val decoders = codecDecodersRegex
+                .findAll(description)
+                .flatMap { it.groupValues[1].split("\\s+".toRegex()) }
+                .map(String::trim)
+                .filter(String::isNotEmpty)
+                .map(::ImplementationId)
+                .toSet()
+
+            val encoders = codecEncodersRegex
+                .findAll(description)
+                .flatMap { it.groupValues[1].split("\\s+".toRegex()) }
+                .map(String::trim)
+                .filter(String::isNotEmpty)
+                .map(::ImplementationId)
+                .toSet()
+
+            result += CodecCapabilities(
+                id,
+                type,
+                flags[0] == 'D',
+                flags[1] == 'E',
+                flags[3] == 'I',
+                flags[4] == 'L',
+                flags[5] == 'S',
+                decoders,
+                encoders,
+            )
+        }
+
+        return result
+    }
+
+    private val coderGeneralCapabilitiesRegex = """General capabilities:\s*(.+)""".toRegex()
+    private val coderThreadingCapabilitiesRegex = """Threading capabilities:\s*(.+)""".toRegex()
+    private val coderSupportedHardwareDevicesRegex = """Supported hardware devices:\s*(.+)""".toRegex()
+    private val coderSupportedPixelFormatsRegex = """Supported pixel formats:\s*(.+)""".toRegex()
+    private val coderSupportedSampleRatesRegex = """Supported sample rates:\s*(.+)""".toRegex()
+    private val coderSupportedSampleFormatsRegex = """Supported sample formats:\s*(.+)""".toRegex()
+    private val coderSupportedChannelLayoutsRegex = """Supported channel layouts:\s*(.+)""".toRegex()
+
+    private fun parseCoderCapabilities(regex: Regex, text: String): Set<String> {
         val match = regex.find(text)
 
         return if (match != null) {
@@ -266,59 +331,49 @@ class Probe(
         } else emptySet()
     }
 
-    private fun probeCodecCapabilities(codec: CodecCapabilities): CodecCapabilities {
-        val kind = when (codec.direction) {
-            CodecDirection.ENCODE -> "encoder"
+    private fun probeCoderCapabilities(coder: ImplementationCapabilities): ImplementationCapabilities {
+        val kind = when (coder.direction) {
             CodecDirection.DECODE -> "decoder"
+            CodecDirection.ENCODE -> "encoder"
         }
 
         val result = command(
             "-hide_banner",
             "-loglevel", "error",
-            "-h", "$kind=${codec.name}",
+            "-h", "$kind=${coder.id}",
         )
 
-        val generalCapabilities = parseCodecCapabilities(codecGeneralCapabilitiesRegex, result.stdout)
-        val threadingCapabilities = parseCodecCapabilities(codecThreadingCapabilitiesRegex, result.stdout)
-        val supportedPixelFormats = parseCodecCapabilities(codecSupportedPixelFormatsRegex, result.stdout)
-        val supportedSampleRates = parseCodecCapabilities(codecSupportedSampleRatesRegex, result.stdout)
-        val supportedSampleFormats = parseCodecCapabilities(codecSupportedSampleFormatsRegex, result.stdout)
-        val supportedChannelLayouts = parseCodecCapabilities(codecSupportedChannelLayoutsRegex, result.stdout)
+        val generalCapabilities = parseCoderCapabilities(coderGeneralCapabilitiesRegex, result.stdout)
+        val threadingCapabilities = parseCoderCapabilities(coderThreadingCapabilitiesRegex, result.stdout)
+        val supportedHardwareDevices = parseCoderCapabilities(coderSupportedHardwareDevicesRegex, result.stdout)
+        val supportedPixelFormats = parseCoderCapabilities(coderSupportedPixelFormatsRegex, result.stdout)
+        val supportedSampleRates = parseCoderCapabilities(coderSupportedSampleRatesRegex, result.stdout)
+        val supportedSampleFormats = parseCoderCapabilities(coderSupportedSampleFormatsRegex, result.stdout)
+        val supportedChannelLayouts = parseCoderCapabilities(coderSupportedChannelLayoutsRegex, result.stdout)
 
-        return codec.copy(
+        return coder.copy(
             generalCapabilities = generalCapabilities,
             threadingCapabilities = threadingCapabilities,
-            pixelFormats = supportedPixelFormats,
-            sampleRates = supportedSampleRates.map(String::toLong).toSet(),
-            sampleFormats = supportedSampleFormats,
-            channelLayouts = supportedChannelLayouts,
+            supportedHardwareDevices = supportedHardwareDevices.map(::DeviceId).toSet(),
+            supportedPixelFormats = supportedPixelFormats,
+            supportedSampleRates = supportedSampleRates.map(String::toLong).toSet(),
+            supportedSampleFormats = supportedSampleFormats,
+            supportedChannelLayouts = supportedChannelLayouts,
         )
     }
 
-    private fun parseConfiguration(text: String): List<String> {
-        val line = text
-            .lineSequence()
-            .firstOrNull { it.trimStart().startsWith("configuration:") }
+    private val coderLineRegex = """^\s*([VASFXBD.]{6})\s+(\S+)\s+(.*)$""".toRegex()
 
-        return line
-            ?.substringAfter("configuration:")
-            ?.trim()
-            ?.split("\\s+".toRegex())
-            ?.filter(String::isNotEmpty)
-            ?: emptyList()
-    }
+    private fun parseImplementation(text: String, direction: CodecDirection): List<ImplementationCapabilities> {
+        val result = mutableListOf<ImplementationCapabilities>()
 
-    private val codecLineRegex = """^\s*([VASFXBD.]{6})\s+(\S+)\s+(.*)$""".toRegex()
-
-    private fun parseCodecs(text: String, direction: CodecDirection): List<CodecCapabilities> {
-        val result = mutableListOf<CodecCapabilities>()
-
-        for (line in text.lineSequence().dropWhile { it.trim() != "------" }) {
-            val match = codecLineRegex.matchEntire(line) ?: continue
+        for (line in text.lineSequence().dropWhile { !it.trim().startsWith('-') }) {
+            val match = coderLineRegex.matchEntire(line) ?: continue
 
             val flags = match.groupValues[1]
             val name = match.groupValues[2]
-            val description = match.groupValues[3]
+
+            val id = ImplementationId(name)
 
             val type = when (flags[0]) {
                 'V' -> CodecType.VIDEO
@@ -327,9 +382,8 @@ class Probe(
                 else -> null
             } ?: continue
 
-            result += CodecCapabilities(
-                name,
-                description,
+            result += ImplementationCapabilities(
+                id,
                 type,
                 direction,
                 flags[1] == 'F',
@@ -340,7 +394,7 @@ class Probe(
             )
         }
 
-        return result.map(::probeCodecCapabilities)
+        return result.map(::probeCoderCapabilities)
     }
 
     private val filterLineRegex = """^\s*([TS.]{2,3})\s+(\S+)\s+([AVN|\->]+)\s+(.+)$""".toRegex()
@@ -348,60 +402,24 @@ class Probe(
     private fun parseFilters(text: String): List<FilterCapabilities> {
         val result = mutableListOf<FilterCapabilities>()
 
-        for (line in text.lineSequence().dropWhile { it.trim() != "------" }) {
+        for (line in text.lineSequence().dropWhile { !it.trim().startsWith('-') }) {
             val match = filterLineRegex.matchEntire(line) ?: continue
 
-            val type = match.groupValues[1]
+            val flags = match.groupValues[1]
             val name = match.groupValues[2]
             val transform = match.groupValues[3]
-            val description = match.groupValues[4]
+
+            val id = FilterId(name)
 
             result += FilterCapabilities(
-                type,
-                name,
+                id,
                 transform,
-                description,
+                flags[0] == 'T',
+                flags[1] == 'S',
             )
         }
 
         return result
-    }
-
-    private fun codecBelongsToDevice(codec: String, device: String): Boolean {
-        val c = codec.lowercase()
-        val d = device.lowercase()
-
-        return when (d) {
-            "cuda" -> "cuda" in c || "cuvid" in c || "nvenc" in c
-            "vaapi" -> "vaapi" in c
-            "qsv" -> "qsv" in c
-            "vulkan" -> "vulkan" in c
-            "vdpau" -> "vdpau" in c
-            "d3d11va" -> "d3d11" in c
-            "d3d12va" -> "d3d12" in c
-            "dxva2" -> "dxva2" in c
-            "videotoolbox" -> "videotoolbox" in c
-            "amf" -> "amf" in c
-            else -> false
-        }
-    }
-
-    private fun filterBelongsToDevice(filter: String, device: String): Boolean {
-        val f = filter.lowercase()
-        val d = device.lowercase()
-
-        return when (d) {
-            "cuda" -> "cuda" in f
-            "vaapi" -> "vaapi" in f
-            "qsv" -> "qsv" in f
-            "vulkan" -> "vulkan" in f
-            "opencl" -> "opencl" in f
-            "vdpau" -> "vdpau" in f
-            "amf" -> "amf" in f
-            "d3d11va" -> "d3d11" in f
-            "d3d12va" -> "d3d12" in f
-            else -> false
-        }
     }
 
     private data class CommandResult(

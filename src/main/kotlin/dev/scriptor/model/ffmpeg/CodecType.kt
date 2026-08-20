@@ -4,4 +4,6 @@ enum class CodecType {
     VIDEO,
     AUDIO,
     SUBTITLE,
+    DATA,
+    ATTACHMENT,
 }

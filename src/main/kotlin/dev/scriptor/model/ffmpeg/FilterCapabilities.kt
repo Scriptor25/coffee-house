@@ -1,8 +1,9 @@
 package dev.scriptor.model.ffmpeg
 
 data class FilterCapabilities(
-    val type: String,
-    val name: String,
+    val id: FilterId,
     val transform: String,
-    val description: String,
+
+    val timelineSupport: Boolean,
+    val sliceThreading: Boolean,
 )

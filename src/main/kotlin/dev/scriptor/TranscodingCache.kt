@@ -2,6 +2,7 @@ package dev.scriptor
 
 import dev.scriptor.backend.SoftwareVideoBackend
 import dev.scriptor.model.ffmpeg.Capabilities
+import dev.scriptor.model.ffmpeg.CodecId
 import dev.scriptor.model.media.Media
 import dev.scriptor.model.media.VideoTrack
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -75,7 +76,27 @@ class TranscodingCache(
     context(database: Database)
     fun job(item: Media): TranscodingJob = jobs.computeIfAbsent(item.id.value) {
         transaction(database) {
+
+            val video = item.video.first { it.index == 0 }
+
+            // TODO: pipeline <input codec> ---> <split> ---> <scale> ---> <output codec>
+            // TODO: which backend supports decoding? constraint: input codec
+            // TODO: which backend supports splitting?
+            // TODO: which backend supports scaling?
+            // TODO: which backend support encoding? constraint: output codec
+
+            val decode = CodecId(video.codec)
+            val encode = CodecId(requirements.video)
+
+            val decodeCandidates = capabilities.getDevicesForDecoding(decode)
+            val encodeCandidates = capabilities.getDevicesForEncoding(encode)
+
+            // TODO: find best candidate for decoding/encoding
+
+            // TODO: filters ---> hardcoded in backend or from ffmpeg?
+
             val pipeline = Pipeline(
+                capabilities,
                 8,
                 SoftwareVideoBackend,
                 SoftwareVideoBackend,
@@ -87,7 +108,7 @@ class TranscodingCache(
                 ffmpeg,
                 item,
                 base.resolve(item.id.value.toHexDashString()),
-                variants(item.video.first { it.index == 0 }),
+                variants(video),
                 requirements,
                 pipeline,
             )
