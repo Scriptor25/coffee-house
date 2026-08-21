@@ -1,4 +1,6 @@
 package dev.scriptor.model.ffmpeg
 
 @JvmInline
-value class DeviceId(val value: String)
+value class DeviceId(private val value: String) {
+    override fun toString(): String = value
+}

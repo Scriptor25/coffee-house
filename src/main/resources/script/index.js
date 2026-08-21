@@ -88,16 +88,16 @@ function downloadBlob(blob, name) {
 }
 
 async function render() {
-    const session = localStorage.getItem("session")
+    const token = localStorage.getItem("session")
 
     loginSectionEl.style.display = "none"
     mediaSectionEl.style.display = "none"
 
-    if (session !== null) {
+    if (token !== null) {
         const response = await fetchAPI("media", {method: "GET"})
 
         if (!response.ok) {
-            console.log(response.status, response.statusText, await response.text())
+            console.log(response.status, response.statusText)
             localStorage.removeItem("session")
 
             render().then()
@@ -133,8 +133,8 @@ async function render() {
             const listItemEls = sorted
                 .map(node => {
                     if (node instanceof MediaNode) {
-                        const directUri = `/media/stream/${node.item.id}?token=${session}`
-                        const hlsUri = `/media/stream/${node.item.id}/master.m3u8?token=${session}`
+                        const directUri = `/media/stream/${node.item.id}?token=${token}`
+                        const hlsUri = `/media/stream/${node.item.id}/master.m3u8?token=${token}`
                         return createListItem(
                             node.name,
                             "Direct",
@@ -169,7 +169,7 @@ async function render() {
 
             const directLines = playlist.flatMap(item => {
                 const url = new URL(
-                    encodeURI(`/media/stream/${item.id}?token=${session}`),
+                    encodeURI(`/media/stream/${item.id}?token=${token}`),
                     window.location.origin,
                 )
                 return [`#EXTINF:${item.duration},${item.title}`, url.toString()]
@@ -177,7 +177,7 @@ async function render() {
 
             const hlsLines = playlist.flatMap(item => {
                 const url = new URL(
-                    encodeURI(`/media/stream/${item.id}/master.m3u8?token=${session}`),
+                    encodeURI(`/media/stream/${item.id}/master.m3u8?token=${token}`),
                     window.location.origin,
                 )
                 return [`#EXTINF:${item.duration},${item.title}`, url.toString()]
@@ -217,7 +217,7 @@ async function render() {
         }, false)
 
         if (!response.ok) {
-            console.log(response.status, response.statusText, await response.text())
+            console.log(response.status, response.statusText)
             localStorage.removeItem("session")
         } else {
             /** @type {{token: string}} */

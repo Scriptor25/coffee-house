@@ -1,5 +1,6 @@
 package dev.scriptor
 
+import dev.scriptor.model.ffmpeg.CodecId
 import dev.scriptor.model.media.*
 import dev.scriptor.model.user.Session
 import dev.scriptor.model.user.SessionTable
@@ -119,12 +120,12 @@ fun getMetadata(
 
     val streams = data["streams"]
     for (stream in streams) {
-        val codecType = stream["codec_type"].get<String>().uppercase()
+        val codecType = stream["codec_type"].get<String>().lowercase()
 
         when (codecType) {
-            "VIDEO" -> {
+            "video" -> {
                 val index = stream["index"].get<Number>().toInt()
-                val codec = stream["codec_name"].get<String>().uppercase()
+                val codec = stream["codec_name"].get<String>().lowercase()
                 val width = stream["width"].get<Number>().toInt()
                 val height = stream["height"].get<Number>().toInt()
                 val bitRate = stream["bit_rate"].get<String?>()?.toLongOrNull() ?: 0L
@@ -165,9 +166,9 @@ fun getMetadata(
                 }
             }
 
-            "AUDIO" -> {
+            "audio" -> {
                 val index = stream["index"].get<Number>().toInt()
-                val codec = stream["codec_name"].get<String>().uppercase()
+                val codec = stream["codec_name"].get<String>().lowercase()
                 val bitRate = stream["bit_rate"].get<String?>()?.toLongOrNull() ?: 0L
                 val sampleRate = stream["sample_rate"].get<String>().toLong()
                 val channels = stream["channels"].get<Number>().toInt()
@@ -196,9 +197,9 @@ fun getMetadata(
                 }
             }
 
-            "SUBTITLE" -> {
+            "subtitle" -> {
                 val index = stream["index"].get<Number>().toInt()
-                val codec = stream["codec_name"].get<String>().uppercase()
+                val codec = stream["codec_name"].get<String>().lowercase()
 
                 val tags = stream["tags"]
                 val language = tags["language"].get<String?>()
@@ -221,7 +222,7 @@ fun getMetadata(
                 }
             }
 
-            "ATTACHMENT" -> {
+            "attachment" -> {
                 val index = stream["index"].get<Number>().toInt()
                 val codec = stream["codec_name"].get<String?>()
 
@@ -275,9 +276,9 @@ fun main() {
     val transcodingEnable = env["TRANSCODING"].toBoolean()
     val transcodingDevice = env["TRANSCODING_DEVICE"]
 
-    val targetVideoCodec = env["TARGET_VIDEO_CODEC"]?.uppercase() ?: "H264"
-    val targetAudioCodec = env["TARGET_AUDIO_CODEC"]?.uppercase() ?: "AAC"
-    val targetSubtitleCodec = env["TARGET_SUBTITLE_CODEC"]?.uppercase() ?: "WEBVTT"
+    val targetVideoCodec = env["TARGET_VIDEO_CODEC"]?.lowercase() ?: "h264"
+    val targetAudioCodec = env["TARGET_AUDIO_CODEC"]?.lowercase() ?: "aac"
+    val targetSubtitleCodec = env["TARGET_SUBTITLE_CODEC"]?.lowercase() ?: "webvtt"
 
     val ffmpeg = env["FFMPEG"] ?: "ffmpeg"
     val ffprobe = env["FFPROBE"] ?: "ffprobe"
@@ -292,7 +293,7 @@ fun main() {
 
     provider.registerT(log)
 
-    val capabilities = Probe(log, ffmpeg)()
+    val capabilities = Probe(log, ffmpeg, transcodingDevice)()
 
     val databasePath = cache.resolve("index.db")
     databasePath.createParentDirectories()
@@ -307,9 +308,9 @@ fun main() {
         TranscodingRequirements(
             transcodingEnable,
             transcodingDevice,
-            targetVideoCodec,
-            targetAudioCodec,
-            targetSubtitleCodec,
+            CodecId(targetVideoCodec),
+            CodecId(targetAudioCodec),
+            CodecId(targetSubtitleCodec),
         ),
     )
     provider.registerT(transcoding)

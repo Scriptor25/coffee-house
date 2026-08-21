@@ -1,8 +1,5 @@
 package dev.scriptor
 
-import dev.scriptor.codec.AudioCodec
-import dev.scriptor.codec.SubtitleCodec
-import dev.scriptor.codec.VideoCodec
 import dev.scriptor.model.media.Media
 import java.nio.file.Path
 import java.util.logging.Logger
@@ -14,7 +11,8 @@ data class TranscodingJob(
     val metadata: Media,
     val cache: Path,
     val variants: List<Variant>,
-    val requirements: TranscodingRequirements,
+    val enable: Boolean,
+    val device: String?,
     val pipeline: Pipeline,
 ) {
     private enum class State {
@@ -92,21 +90,17 @@ data class TranscodingJob(
                 variants.forEach {
                     when (it) {
                         is OriginalVariant -> {
-                            if (requirements.enable) {
-                                transcode(
-                                    it.name,
-                                    VideoCodec.valueOf(requirements.video), // TODO: no fixed codec enum
-                                )
+                            if (enable) {
+                                transcode(it.name)
                             } else {
                                 copy(it.name)
                             }
                         }
 
                         is ScaleVariant -> {
-                            if (requirements.enable) {
+                            if (enable) {
                                 transcode(
                                     it.name,
-                                    VideoCodec.valueOf(requirements.video), // TODO: no fixed codec enum
                                     it.profile,
                                     it.bitrate,
                                     it.width,
@@ -126,8 +120,8 @@ data class TranscodingJob(
 
             metadata.audio.forEach {
                 audio(it) {
-                    if (requirements.enable) {
-                        transcode(codec = AudioCodec.valueOf(requirements.audio)) // TODO: no fixed codec enum
+                    if (enable) {
+                        transcode()
                     } else {
                         copy()
                     }
@@ -147,8 +141,8 @@ data class TranscodingJob(
                 }
             }.forEach {
                 subtitle(it) {
-                    if (requirements.enable) {
-                        transcode(codec = SubtitleCodec.valueOf(requirements.subtitle)) // TODO: no fixed codec enum
+                    if (enable) {
+                        transcode()
                     } else {
                         copy()
                     }
@@ -158,8 +152,8 @@ data class TranscodingJob(
 
         return CommandBuilder(
             ffmpeg,
-            requirements.enable,
-            requirements.device,
+            enable,
+            device,
             metadata.path,
             cache,
             outputs,

@@ -1,9 +1,8 @@
 package dev.scriptor
 
-import dev.scriptor.backend.VideoBackend
-import dev.scriptor.codec.AudioCodec
-import dev.scriptor.codec.SubtitleCodec
-import dev.scriptor.codec.VideoCodec
+import dev.scriptor.encoder.audio.AudioEncoder
+import dev.scriptor.encoder.subtitle.SubtitleEncoder
+import dev.scriptor.encoder.video.VideoEncoder
 import dev.scriptor.model.media.AudioTrack
 import dev.scriptor.model.media.Media
 import dev.scriptor.model.media.SubtitleTrack
@@ -11,24 +10,21 @@ import dev.scriptor.model.media.VideoTrack
 
 sealed interface VideoEncoding {
 
-    operator fun invoke(index: Int, backend: VideoBackend): List<String>
+    operator fun invoke(index: Int, encoder: VideoEncoder): List<String>
 
     data object Copy : VideoEncoding {
 
-        override fun invoke(index: Int, backend: VideoBackend): List<String> =
+        override fun invoke(index: Int, encoder: VideoEncoder): List<String> =
             listOf("-c:v:$index", "copy")
     }
 
     data class Transcode(
-        val codec: VideoCodec,
         val profile: Profile,
         val bitrate: Long,
     ) : VideoEncoding {
 
-        override fun invoke(index: Int, backend: VideoBackend): List<String> = buildList {
-            val encoder = backend.encoder(codec)
-
-            this += listOf("-c:v:$index", encoder.name)
+        override fun invoke(index: Int, encoder: VideoEncoder): List<String> = buildList {
+            this += listOf("-c:v:$index", "${encoder.id}")
             this += encoder(index, profile, bitrate)
         }
     }
@@ -36,43 +32,35 @@ sealed interface VideoEncoding {
 
 sealed interface AudioEncoding {
 
-    operator fun invoke(index: Int): List<String>
+    operator fun invoke(index: Int, encoder: AudioEncoder): List<String>
 
     data object Copy : AudioEncoding {
 
-        override fun invoke(index: Int): List<String> =
+        override fun invoke(index: Int, encoder: AudioEncoder): List<String> =
             listOf("-c:a:$index", "copy")
     }
 
-    data class Transcode(
-        val codec: AudioCodec,
-    ) : AudioEncoding {
+    data object Transcode : AudioEncoding {
 
-        val encoder = codec.encoder
-
-        override fun invoke(index: Int): List<String> =
-            listOf("-c:a:$index", encoder.name) + encoder(index)
+        override fun invoke(index: Int, encoder: AudioEncoder): List<String> =
+            listOf("-c:a:$index", "${encoder.id}") + encoder(index)
     }
 }
 
 sealed interface SubtitleEncoding {
 
-    operator fun invoke(index: Int): List<String>
+    operator fun invoke(index: Int, encoder: SubtitleEncoder): List<String>
 
     data object Copy : SubtitleEncoding {
 
-        override fun invoke(index: Int): List<String> =
+        override fun invoke(index: Int, encoder: SubtitleEncoder): List<String> =
             listOf("-c:s:$index", "copy")
     }
 
-    data class Transcode(
-        val codec: SubtitleCodec,
-    ) : SubtitleEncoding {
+    data object Transcode : SubtitleEncoding {
 
-        val encoder = codec.encoder;
-
-        override fun invoke(index: Int): List<String> =
-            listOf("-c:s:$index", encoder.name) + encoder(index)
+        override fun invoke(index: Int, encoder: SubtitleEncoder): List<String> =
+            listOf("-c:s:$index", "${encoder.id}") + encoder(index)
     }
 }
 
@@ -197,14 +185,13 @@ class VideoQuery(
 
     fun transcode(
         name: String = "original",
-        codec: VideoCodec,
         profile: Profile = Profile.ARCHIVAL,
         bitrate: Long = metadata.bitRate,
     ) {
         outputs += VideoOutput(
             name,
             source,
-            VideoEncoding.Transcode(codec, profile, bitrate),
+            VideoEncoding.Transcode(profile, bitrate),
             false,
             metadata.width,
             metadata.height,
@@ -228,7 +215,6 @@ class VideoQuery(
 
     fun transcode(
         name: String,
-        codec: VideoCodec,
         profile: Profile,
         bitrate: Long,
         width: Int,
@@ -237,7 +223,7 @@ class VideoQuery(
         outputs += VideoOutput(
             name,
             source,
-            VideoEncoding.Transcode(codec, profile, bitrate),
+            VideoEncoding.Transcode(profile, bitrate),
             true,
             width,
             height,
@@ -264,11 +250,11 @@ class AudioQuery(
         )
     }
 
-    fun transcode(name: String = "audio$source", codec: AudioCodec) {
+    fun transcode(name: String = "audio$source") {
         output = AudioOutput(
             name,
             source,
-            AudioEncoding.Transcode(codec),
+            AudioEncoding.Transcode,
             metadata.language,
             metadata.title,
             metadata.default,
@@ -295,11 +281,11 @@ class SubtitleQuery(
         )
     }
 
-    fun transcode(name: String = "subtitle$source", codec: SubtitleCodec) {
+    fun transcode(name: String = "subtitle$source") {
         output = SubtitleOutput(
             name,
             source,
-            SubtitleEncoding.Transcode(codec),
+            SubtitleEncoding.Transcode,
             metadata.language,
             metadata.title,
             metadata.default,

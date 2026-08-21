@@ -1,8 +1,11 @@
 package dev.scriptor
 
-import dev.scriptor.backend.SoftwareVideoBackend
+import dev.scriptor.backend.VideoBackend
+import dev.scriptor.encoder.video.VideoEncoder
 import dev.scriptor.model.ffmpeg.Capabilities
 import dev.scriptor.model.ffmpeg.CodecId
+import dev.scriptor.model.ffmpeg.DeviceId
+import dev.scriptor.model.ffmpeg.FilterId
 import dev.scriptor.model.media.Media
 import dev.scriptor.model.media.VideoTrack
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -73,43 +76,81 @@ class TranscodingCache(
         return result
     }
 
+    private fun createBackend(device: DeviceId?, input: CodecId, output: CodecId): VideoBackend {
+        val decoder = capabilities.getDecoders(input, device).first()
+        val encoder = capabilities.getEncoders(output, device).first()
+
+        val videoEncoder = VideoEncoder.find(encoder) ?: error("encoder '$encoder' not implemented")
+
+        // TODO: find scale filter for device
+        val scale = FilterId("scale")
+
+        return when (device) {
+            null -> VideoBackend(
+                device,
+                { emptyList() },
+                { emptyList() },
+                { listOf("-c:v", "$decoder") },
+                { width, height -> listOf("$scale=w=$width:h=$height") },
+                videoEncoder,
+            )
+
+            else -> VideoBackend(
+                device,
+                { listOf("hwupload") },
+                { listOf("hwdownload") },
+                { listOf("-hwaccel", "$device", "-c:v", "$decoder") },
+                { width, height -> listOf("$scale=w=$width:h=$height") },
+                videoEncoder,
+            )
+        }
+    }
+
     context(database: Database)
     fun job(item: Media): TranscodingJob = jobs.computeIfAbsent(item.id.value) {
         transaction(database) {
 
             val video = item.video.first { it.index == 0 }
 
-            // TODO: pipeline <input codec> ---> <split> ---> <scale> ---> <output codec>
-            // TODO: which backend supports decoding? constraint: input codec
-            // TODO: which backend supports splitting?
-            // TODO: which backend supports scaling?
-            // TODO: which backend support encoding? constraint: output codec
+            val input = CodecId(video.codec)
+            val output = requirements.video
 
-            val decode = CodecId(video.codec)
-            val encode = CodecId(requirements.video)
+            val decodeDevices = capabilities.getDevicesForDecoding(input)
+            val encodeDevices = capabilities.getDevicesForEncoding(output)
 
-            val decodeCandidates = capabilities.getDevicesForDecoding(decode)
-            val encodeCandidates = capabilities.getDevicesForEncoding(encode)
+            val transcodeDevice = decodeDevices.filter { it in encodeDevices }.toSet().firstOrNull()
 
-            // TODO: find best candidate for decoding/encoding
+            val pipeline = if (transcodeDevice == null) {
+                // TODO: find most suitable device for decoding/encoding
 
-            // TODO: filters ---> hardcoded in backend or from ffmpeg?
+                val decodeDevice = decodeDevices.firstOrNull()
+                val encodeDevice = encodeDevices.firstOrNull()
 
-            val pipeline = Pipeline(
-                capabilities,
-                8,
-                SoftwareVideoBackend,
-                SoftwareVideoBackend,
-                SoftwareVideoBackend,
-                SoftwareVideoBackend,
-            )
+                val decodeBackend = createBackend(decodeDevice, input, output)
+                val encodeBackend = createBackend(encodeDevice, input, output)
+
+                // TODO: find separate device and backend for splitting/scaling
+
+                Pipeline(
+                    capabilities,
+                    decodeBackend,
+                    encodeBackend,
+                    encodeBackend,
+                    encodeBackend,
+                )
+            } else {
+                val backend = createBackend(transcodeDevice, input, output)
+
+                Pipeline(capabilities, backend)
+            }
 
             TranscodingJob(
                 ffmpeg,
                 item,
                 base.resolve(item.id.value.toHexDashString()),
                 variants(video),
-                requirements,
+                requirements.enable,
+                requirements.device,
                 pipeline,
             )
         }

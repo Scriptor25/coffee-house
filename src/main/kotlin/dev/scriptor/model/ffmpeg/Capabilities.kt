@@ -2,14 +2,40 @@ package dev.scriptor.model.ffmpeg
 
 data class Capabilities(
     val devices: Map<DeviceId, DeviceCapabilities>,
-    val codecs: Map<CodecId, CodecCapabilities>,
-    val decoders: Map<ImplementationId, ImplementationCapabilities>,
-    val encoders: Map<ImplementationId, ImplementationCapabilities>,
-    val filters: Map<FilterId, FilterCapabilities>,
     val interop: Map<Pair<DeviceId, DeviceId>, InteropCapabilities>,
+    val implementations: Map<ImplementationId, ImplementationCapabilities>,
+    val codecs: Map<CodecId, CodecCapabilities>,
+    val filters: Map<FilterId, FilterCapabilities>,
 ) {
+    val decoders = implementations.filterValues { it.direction == CodecDirection.DECODE }
+    val encoders = implementations.filterValues { it.direction == CodecDirection.ENCODE }
+
     fun getDevice(id: DeviceId): DeviceCapabilities? {
         return devices[id]
+    }
+
+    fun getSoftwareDecoders(): Map<ImplementationId, ImplementationCapabilities> {
+        return decoders.filterValues { it.kind == ImplementationKind.SOFTWARE }
+    }
+
+    fun getSoftwareEncoders(): Map<ImplementationId, ImplementationCapabilities> {
+        return encoders.filterValues { it.kind == ImplementationKind.SOFTWARE }
+    }
+
+    fun getHybridDecoders(): Map<ImplementationId, ImplementationCapabilities> {
+        return decoders.filterValues { it.kind == ImplementationKind.HYBRID }
+    }
+
+    fun getHybridEncoders(): Map<ImplementationId, ImplementationCapabilities> {
+        return encoders.filterValues { it.kind == ImplementationKind.HYBRID }
+    }
+
+    fun getHardwareDecoders(): Map<ImplementationId, ImplementationCapabilities> {
+        return decoders.filterValues { it.kind == ImplementationKind.HARDWARE }
+    }
+
+    fun getHardwareEncoders(): Map<ImplementationId, ImplementationCapabilities> {
+        return encoders.filterValues { it.kind == ImplementationKind.HARDWARE }
     }
 
     fun getDeviceDecoders(id: DeviceId): Map<ImplementationId, ImplementationCapabilities> {
@@ -48,6 +74,7 @@ data class Capabilities(
         return codec.decoders
             .mapNotNull(decoders::get)
             .flatMap(ImplementationCapabilities::supportedHardwareDevices)
+            .filter { it in devices }
             .toSet()
     }
 
@@ -57,6 +84,33 @@ data class Capabilities(
         return codec.encoders
             .mapNotNull(encoders::get)
             .flatMap(ImplementationCapabilities::supportedHardwareDevices)
+            .filter { it in devices }
+            .toSet()
+    }
+
+    fun getDecoders(codec: CodecId, device: DeviceId?): Set<ImplementationId> {
+        val codec = codecs[codec] ?: return emptySet()
+
+        return codec.decoders
+            .mapNotNull(decoders::get)
+            .filter {
+                if (device == null) it.kind == ImplementationKind.SOFTWARE
+                else device in it.supportedHardwareDevices
+            }
+            .map(ImplementationCapabilities::id)
+            .toSet()
+    }
+
+    fun getEncoders(codec: CodecId, device: DeviceId?): Set<ImplementationId> {
+        val codec = codecs[codec] ?: return emptySet()
+
+        return codec.encoders
+            .mapNotNull(encoders::get)
+            .filter {
+                if (device == null) it.kind == ImplementationKind.SOFTWARE
+                else device in it.supportedHardwareDevices
+            }
+            .map(ImplementationCapabilities::id)
             .toSet()
     }
 }

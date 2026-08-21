@@ -1,17 +1,27 @@
 package dev.scriptor.encoder.video
 
 import dev.scriptor.Profile
-import dev.scriptor.backend.VaapiVideoBackend
-import dev.scriptor.codec.VideoCodec
+import dev.scriptor.model.ffmpeg.CodecId
+import dev.scriptor.model.ffmpeg.ImplementationId
 
 interface VaapiVideoEncoder : VideoEncoder {
 
+    companion object {
+        fun find(id: ImplementationId): VaapiVideoEncoder? = when (id) {
+            AV1.id -> AV1
+            VP8.id -> VP8
+            VP9.id -> VP9
+            H264.id -> H264
+            HEVC.id -> HEVC
+
+            else -> null
+        }
+    }
+
     data object AV1 : VaapiVideoEncoder {
 
-        override val name = "av1_vaapi"
-
-        override val backend = VaapiVideoBackend
-        override val codec = VideoCodec.AV1
+        override val id = ImplementationId("av1_vaapi")
+        override val codec = CodecId("av1")
 
         override fun invoke(
             index: Int,
@@ -35,10 +45,8 @@ interface VaapiVideoEncoder : VideoEncoder {
 
     data object VP8 : VaapiVideoEncoder {
 
-        override val name = "vp8_vaapi"
-
-        override val backend = VaapiVideoBackend
-        override val codec = VideoCodec.VP8
+        override val id = ImplementationId("vp8_vaapi")
+        override val codec = CodecId("vp8")
 
         override fun invoke(
             index: Int,
@@ -62,10 +70,8 @@ interface VaapiVideoEncoder : VideoEncoder {
 
     data object VP9 : VaapiVideoEncoder {
 
-        override val name = "vp9_vaapi"
-
-        override val backend = VaapiVideoBackend
-        override val codec = VideoCodec.VP9
+        override val id = ImplementationId("vp9_vaapi")
+        override val codec = CodecId("vp9")
 
         override fun invoke(
             index: Int,
@@ -89,10 +95,8 @@ interface VaapiVideoEncoder : VideoEncoder {
 
     data object H264 : VaapiVideoEncoder {
 
-        override val name = "h264_vaapi"
-
-        override val backend = VaapiVideoBackend
-        override val codec = VideoCodec.H264
+        override val id = ImplementationId("h264_vaapi")
+        override val codec = CodecId("h264")
 
         override fun invoke(
             index: Int,
@@ -116,10 +120,8 @@ interface VaapiVideoEncoder : VideoEncoder {
 
     data object HEVC : VaapiVideoEncoder {
 
-        override val name = "hevc_vaapi"
-
-        override val backend = VaapiVideoBackend
-        override val codec = VideoCodec.HEVC
+        override val id = ImplementationId("hevc_vaapi")
+        override val codec = CodecId("hevc")
 
         override fun invoke(
             index: Int,

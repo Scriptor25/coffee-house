@@ -1,6 +1,7 @@
 package dev.scriptor
 
-import dev.scriptor.backend.SoftwareVideoBackend
+import dev.scriptor.encoder.audio.AudioEncoder
+import dev.scriptor.encoder.subtitle.SubtitleEncoder
 import java.nio.file.Path
 import kotlin.io.path.absolutePathString
 
@@ -18,14 +19,14 @@ class CommandBuilder(
         this += listOf(
             ffmpeg,
             "-hide_banner",
-            "-i", input.absolutePathString(),
             "-y", // allow overriding existing files
         )
 
         this += buildDevices()
+        this += buildDecode()
         this += buildFilter()
-        this += buildMappings()
-        this += buildCodecs()
+        this += buildStreamMap()
+        this += buildEncode()
         this += buildHls()
     }
 
@@ -34,19 +35,10 @@ class CommandBuilder(
             return emptyList()
         }
 
-        return buildList {
-            pipeline.devices.forEach {
-                this += listOf("-init_hw_device", if (device != null) "$it:$device" else it)
-            }
-
-            when (val decode = pipeline.decode) {
-                !is SoftwareVideoBackend -> {
-                    this += listOf("-hwaccel", decode.name)
-                    this += listOf("-hwaccel_output_format", decode.name)
-                }
-            }
-        }
+        return pipeline.devices.flatMap { listOf("-init_hw_device", if (device != null) "$it:$device" else "$it") }
     }
+
+    private fun buildDecode(): List<String> = pipeline.decode() + listOf("-i", input.absolutePathString())
 
     private fun buildFilter(): List<String> {
         val video = outputs.filterIsInstance<VideoOutput>()
@@ -60,21 +52,18 @@ class CommandBuilder(
 
         val filter = buildString {
             append("[0:$input]")
-            append(pipeline.buildSplit(count))
+            append(pipeline.split(count).joinToString(","))
 
             video.indices.forEach { append("[v$it]") }
 
             video.forEachIndexed { index, output ->
-                val transform = if (output.scaled) {
-                    val width = output.width
-                    val height = output.height
-
-                    pipeline.buildScaleEncode(width, height)
-                } else pipeline.buildEncode()
+                val transform =
+                    if (!output.scaled) pipeline.encode()
+                    else pipeline.scaleEncode(output.width, output.height)
 
                 append(";")
                 append("[v$index]")
-                append(transform)
+                append(transform.ifEmpty { listOf("null") }.joinToString(","))
                 append("[s$index]")
             }
         }
@@ -82,7 +71,7 @@ class CommandBuilder(
         return listOf("-filter_complex", filter)
     }
 
-    private fun buildMappings(): List<String> {
+    private fun buildStreamMap(): List<String> {
         var filtered = 0
 
         return outputs.flatMap {
@@ -94,28 +83,28 @@ class CommandBuilder(
         }
     }
 
-    private fun buildCodecs(): List<String> {
+    private fun buildEncode(): List<String> {
         var video = 0
         var audio = 0
         var subtitle = 0
 
         return outputs.flatMap {
             when (it) {
-                is VideoOutput -> buildVideoCodec(video++, it)
-                is AudioOutput -> buildAudioCodec(audio++, it)
-                is SubtitleOutput -> buildSubtitleCodec(subtitle++, it)
+                is VideoOutput -> buildVideoEncode(video++, it)
+                is AudioOutput -> buildAudioEncode(audio++, it)
+                is SubtitleOutput -> buildSubtitleEncode(subtitle++, it)
             }
         }
     }
 
-    private fun buildVideoCodec(index: Int, output: VideoOutput): List<String> =
-        output.encoding(index, pipeline.encode)
+    private fun buildVideoEncode(index: Int, output: VideoOutput): List<String> =
+        output.encoding(index, pipeline.encode.encoder)
 
-    private fun buildAudioCodec(index: Int, output: AudioOutput): List<String> =
-        output.encoding(index)
+    private fun buildAudioEncode(index: Int, output: AudioOutput): List<String> =
+        output.encoding(index, AudioEncoder.Aac) // TODO: dont hardcode encoder
 
-    private fun buildSubtitleCodec(index: Int, output: SubtitleOutput): List<String> =
-        output.encoding(index)
+    private fun buildSubtitleEncode(index: Int, output: SubtitleOutput): List<String> =
+        output.encoding(index, SubtitleEncoder.WebVtt) // TODO: dont hardcode encoder
 
     private fun buildVariantMap(): String {
         var video = 0

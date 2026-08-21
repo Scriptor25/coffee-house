@@ -1,17 +1,26 @@
 package dev.scriptor.encoder.video
 
 import dev.scriptor.Profile
-import dev.scriptor.backend.IntelVideoBackend
-import dev.scriptor.codec.VideoCodec
+import dev.scriptor.model.ffmpeg.CodecId
+import dev.scriptor.model.ffmpeg.ImplementationId
 
 interface IntelVideoEncoder : VideoEncoder {
 
+    companion object {
+        fun find(id: ImplementationId): IntelVideoEncoder? = when (id) {
+            AV1.id -> AV1
+            VP9.id -> VP9
+            H264.id -> H264
+            HEVC.id -> HEVC
+
+            else -> null
+        }
+    }
+
     data object AV1 : IntelVideoEncoder {
 
-        override val name = "av1_qsv"
-
-        override val backend = IntelVideoBackend
-        override val codec = VideoCodec.AV1
+        override val id = ImplementationId("av1_qsv")
+        override val codec = CodecId("av1")
 
         override fun invoke(
             index: Int,
@@ -35,10 +44,8 @@ interface IntelVideoEncoder : VideoEncoder {
 
     data object VP9 : IntelVideoEncoder {
 
-        override val name = "vp9_qsv"
-
-        override val backend = IntelVideoBackend
-        override val codec = VideoCodec.VP9
+        override val id = ImplementationId("vp9_qsv")
+        override val codec = CodecId("vp9")
 
         override fun invoke(
             index: Int,
@@ -62,10 +69,8 @@ interface IntelVideoEncoder : VideoEncoder {
 
     data object H264 : IntelVideoEncoder {
 
-        override val name = "h264_qsv"
-
-        override val backend = IntelVideoBackend
-        override val codec = VideoCodec.H264
+        override val id = ImplementationId("h264_qsv")
+        override val codec = CodecId("h264")
 
         override fun invoke(
             index: Int,
@@ -89,10 +94,8 @@ interface IntelVideoEncoder : VideoEncoder {
 
     data object HEVC : IntelVideoEncoder {
 
-        override val name = "hevc_qsv"
-
-        override val backend = IntelVideoBackend
-        override val codec = VideoCodec.HEVC
+        override val id = ImplementationId("hevc_qsv")
+        override val codec = CodecId("hevc")
 
         override fun invoke(
             index: Int,

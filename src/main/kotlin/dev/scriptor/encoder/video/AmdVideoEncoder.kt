@@ -1,10 +1,20 @@
 package dev.scriptor.encoder.video
 
 import dev.scriptor.Profile
-import dev.scriptor.backend.AmdVideoBackend
-import dev.scriptor.codec.VideoCodec
+import dev.scriptor.model.ffmpeg.CodecId
+import dev.scriptor.model.ffmpeg.ImplementationId
 
 interface AmdVideoEncoder : VideoEncoder {
+
+    companion object {
+        fun find(id: ImplementationId): AmdVideoEncoder? = when (id) {
+            AV1.id -> AV1
+            H264.id -> H264
+            HEVC.id -> HEVC
+
+            else -> null
+        }
+    }
 
     override fun invoke(
         index: Int,
@@ -22,10 +32,8 @@ interface AmdVideoEncoder : VideoEncoder {
 
     data object AV1 : AmdVideoEncoder {
 
-        override val name = "av1_amf"
-
-        override val backend = AmdVideoBackend
-        override val codec = VideoCodec.AV1
+        override val id = ImplementationId("av1_amf")
+        override val codec = CodecId("av1")
 
         override fun quality(profile: Profile): String = when (profile) {
             Profile.ARCHIVAL -> "high_quality"
@@ -38,10 +46,8 @@ interface AmdVideoEncoder : VideoEncoder {
 
     data object H264 : AmdVideoEncoder {
 
-        override val name = "h264_amf"
-
-        override val backend = AmdVideoBackend
-        override val codec = VideoCodec.H264
+        override val id = ImplementationId("h264_amf")
+        override val codec = CodecId("h264")
 
         override fun quality(profile: Profile): String = when (profile) {
             Profile.ARCHIVAL -> "quality"
@@ -54,10 +60,8 @@ interface AmdVideoEncoder : VideoEncoder {
 
     data object HEVC : AmdVideoEncoder {
 
-        override val name = "hevc_amf"
-
-        override val backend = AmdVideoBackend
-        override val codec = VideoCodec.HEVC
+        override val id = ImplementationId("hevc_amf")
+        override val codec = CodecId("hevc")
 
         override fun quality(profile: Profile): String = when (profile) {
             Profile.ARCHIVAL -> "quality"

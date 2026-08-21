@@ -1,11 +1,12 @@
 package dev.scriptor.encoder.subtitle
 
-import dev.scriptor.codec.SubtitleCodec
 import dev.scriptor.encoder.Encoder
+import dev.scriptor.model.ffmpeg.CodecId
+import dev.scriptor.model.ffmpeg.ImplementationId
 
 interface SubtitleEncoder : Encoder {
 
-    val codec: SubtitleCodec
+    val codec: CodecId
 
     operator fun invoke(
         index: Int,
@@ -13,9 +14,8 @@ interface SubtitleEncoder : Encoder {
 
     data object WebVtt : SubtitleEncoder {
 
-        override val name = "webvtt"
-
-        override val codec = SubtitleCodec.WEBVTT
+        override val id = ImplementationId("webvtt")
+        override val codec = CodecId("webvtt")
 
         override fun invoke(
             index: Int,

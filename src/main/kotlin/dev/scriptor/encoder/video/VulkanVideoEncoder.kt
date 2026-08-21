@@ -1,17 +1,25 @@
 package dev.scriptor.encoder.video
 
 import dev.scriptor.Profile
-import dev.scriptor.backend.VulkanVideoBackend
-import dev.scriptor.codec.VideoCodec
+import dev.scriptor.model.ffmpeg.CodecId
+import dev.scriptor.model.ffmpeg.ImplementationId
 
 interface VulkanVideoEncoder : VideoEncoder {
 
-    data object AV1 : IntelVideoEncoder {
+    companion object {
+        fun find(id: ImplementationId): VulkanVideoEncoder? = when (id) {
+            AV1.id -> AV1
+            H264.id -> H264
+            HEVC.id -> HEVC
 
-        override val name = "av1_vulkan"
+            else -> null
+        }
+    }
 
-        override val backend = VulkanVideoBackend
-        override val codec = VideoCodec.AV1
+    data object AV1 : VulkanVideoEncoder {
+
+        override val id = ImplementationId("av1_vulkan")
+        override val codec = CodecId("av1")
 
         override fun invoke(
             index: Int,
@@ -33,12 +41,10 @@ interface VulkanVideoEncoder : VideoEncoder {
         }
     }
 
-    data object H264 : IntelVideoEncoder {
+    data object H264 : VulkanVideoEncoder {
 
-        override val name = "h264_vulkan"
-
-        override val backend = VulkanVideoBackend
-        override val codec = VideoCodec.H264
+        override val id = ImplementationId("h264_vulkan")
+        override val codec = CodecId("h264")
 
         override fun invoke(
             index: Int,
@@ -60,12 +66,10 @@ interface VulkanVideoEncoder : VideoEncoder {
         }
     }
 
-    data object HEVC : IntelVideoEncoder {
+    data object HEVC : VulkanVideoEncoder {
 
-        override val name = "hevc_vulkan"
-
-        override val backend = VulkanVideoBackend
-        override val codec = VideoCodec.HEVC
+        override val id = ImplementationId("hevc_vulkan")
+        override val codec = CodecId("hevc")
 
         override fun invoke(
             index: Int,

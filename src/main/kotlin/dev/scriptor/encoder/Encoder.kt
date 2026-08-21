@@ -1,6 +1,8 @@
 package dev.scriptor.encoder
 
+import dev.scriptor.model.ffmpeg.ImplementationId
+
 interface Encoder {
 
-    val name: String
+    val id: ImplementationId
 }

@@ -1,10 +1,20 @@
 package dev.scriptor.encoder.video
 
 import dev.scriptor.Profile
-import dev.scriptor.backend.NvidiaVideoBackend
-import dev.scriptor.codec.VideoCodec
+import dev.scriptor.model.ffmpeg.CodecId
+import dev.scriptor.model.ffmpeg.ImplementationId
 
 interface NvidiaVideoEncoder : VideoEncoder {
+
+    companion object {
+        fun find(id: ImplementationId): NvidiaVideoEncoder? = when (id) {
+            AV1.id -> AV1
+            H264.id -> H264
+            HEVC.id -> HEVC
+
+            else -> null
+        }
+    }
 
     fun preset(profile: Profile): String = when (profile) {
         Profile.ARCHIVAL -> "p1"
@@ -16,10 +26,8 @@ interface NvidiaVideoEncoder : VideoEncoder {
 
     data object AV1 : NvidiaVideoEncoder {
 
-        override val name = "av1_nvenc"
-
-        override val backend = NvidiaVideoBackend
-        override val codec = VideoCodec.AV1
+        override val id = ImplementationId("av1_nvenc")
+        override val codec = CodecId("av1")
 
         override fun invoke(
             index: Int,
@@ -45,10 +53,8 @@ interface NvidiaVideoEncoder : VideoEncoder {
 
     data object H264 : NvidiaVideoEncoder {
 
-        override val name = "h264_nvenc"
-
-        override val backend = NvidiaVideoBackend
-        override val codec = VideoCodec.H264
+        override val id = ImplementationId("h264_nvenc")
+        override val codec = CodecId("h264")
 
         override fun invoke(
             index: Int,
@@ -74,10 +80,8 @@ interface NvidiaVideoEncoder : VideoEncoder {
 
     data object HEVC : NvidiaVideoEncoder {
 
-        override val name = "hevc_nvenc"
-
-        override val backend = NvidiaVideoBackend
-        override val codec = VideoCodec.HEVC
+        override val id = ImplementationId("hevc_nvenc")
+        override val codec = CodecId("hevc")
 
         override fun invoke(
             index: Int,

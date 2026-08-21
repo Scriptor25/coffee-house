@@ -12,12 +12,13 @@ data class ImplementationCapabilities(
     val supportDrawHorizontalBand: Boolean,
     val supportDirectRendering: Boolean,
 
+    val kind: ImplementationKind,
+
     val generalCapabilities: Set<String> = emptySet(),
-    val threadingCapabilities: Set<String> = emptySet(),
 
     val supportedHardwareDevices: Set<DeviceId> = emptySet(),
 
-    val supportedPixelFormats: Set<String> = emptySet(),
+    val supportedPixelFormats: Set<PixelFormat> = emptySet(),
 
     val supportedSampleRates: Set<Long> = emptySet(),
     val supportedSampleFormats: Set<String> = emptySet(),
