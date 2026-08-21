@@ -9,5 +9,5 @@ data class VideoBackend(
     val download: () -> List<String>,
     val decode: () -> List<String>,
     val scale: (width: Int, height: Int) -> List<String>,
-    val encoder: VideoEncoder,
+    val encoder: VideoEncoder?,
 )

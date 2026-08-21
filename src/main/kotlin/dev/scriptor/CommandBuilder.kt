@@ -98,7 +98,7 @@ class CommandBuilder(
     }
 
     private fun buildVideoEncode(index: Int, output: VideoOutput): List<String> =
-        output.encoding(index, pipeline.encode.encoder)
+        output.encoding(index, pipeline.encode.encoder!!)
 
     private fun buildAudioEncode(index: Int, output: AudioOutput): List<String> =
         output.encoding(index, AudioEncoder.Aac) // TODO: dont hardcode encoder

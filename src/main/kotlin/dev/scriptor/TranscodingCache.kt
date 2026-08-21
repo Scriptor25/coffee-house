@@ -4,8 +4,8 @@ import dev.scriptor.backend.VideoBackend
 import dev.scriptor.encoder.video.VideoEncoder
 import dev.scriptor.model.ffmpeg.Capabilities
 import dev.scriptor.model.ffmpeg.CodecId
+import dev.scriptor.model.ffmpeg.DeviceBackend
 import dev.scriptor.model.ffmpeg.DeviceId
-import dev.scriptor.model.ffmpeg.FilterId
 import dev.scriptor.model.media.Media
 import dev.scriptor.model.media.VideoTrack
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -77,13 +77,16 @@ class TranscodingCache(
     }
 
     private fun createBackend(device: DeviceId?, input: CodecId, output: CodecId): VideoBackend {
-        val decoder = capabilities.getDecoders(input, device).first()
-        val encoder = capabilities.getEncoders(output, device).first()
+        val decoders = capabilities.getDecoders(input, device)
+        val encoders = capabilities.getEncoders(output, device)
 
-        val videoEncoder = VideoEncoder.find(encoder) ?: error("encoder '$encoder' not implemented")
+        val decoder = decoders.firstOrNull()
+        val encoder = encoders.firstOrNull()
 
-        // TODO: find scale filter for device
-        val scale = FilterId("scale")
+        val videoEncoder =
+            if (encoder != null) VideoEncoder.find(encoder)
+                ?: error("encoder '$encoder' not implemented")
+            else null
 
         return when (device) {
             null -> VideoBackend(
@@ -91,18 +94,35 @@ class TranscodingCache(
                 { emptyList() },
                 { emptyList() },
                 { listOf("-c:v", "$decoder") },
-                { width, height -> listOf("$scale=w=$width:h=$height") },
+                { width, height -> listOf("scale=w=$width:h=$height") },
                 videoEncoder,
             )
 
-            else -> VideoBackend(
-                device,
-                { listOf("hwupload") },
-                { listOf("hwdownload") },
-                { listOf("-hwaccel", "$device", "-c:v", "$decoder") },
-                { width, height -> listOf("$scale=w=$width:h=$height") },
-                videoEncoder,
-            )
+            else -> {
+                val backend = DeviceBackend.entries.find { it.device == device }
+                    ?: error("device '$device' not implemented")
+
+                val format = backend.format
+                val scale = backend.scale
+
+                VideoBackend(
+                    device,
+                    { listOf("format=nv12", "hwupload") },
+                    { listOf("hwdownload", "format=nv12") },
+                    {
+                        listOf(
+                            "-hwaccel",
+                            "$device",
+                            "-hwaccel_output_format",
+                            "$format",
+                            "-c:v",
+                            "$decoder"
+                        )
+                    },
+                    { width, height -> listOf("$scale=w=$width:h=$height") },
+                    videoEncoder,
+                )
+            }
         }
     }
 

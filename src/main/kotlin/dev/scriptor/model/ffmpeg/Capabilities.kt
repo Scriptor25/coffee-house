@@ -74,7 +74,7 @@ data class Capabilities(
         return codec.decoders
             .mapNotNull(decoders::get)
             .flatMap(ImplementationCapabilities::supportedHardwareDevices)
-            .filter { it in devices }
+            .filter(devices::containsKey)
             .toSet()
     }
 
@@ -84,7 +84,7 @@ data class Capabilities(
         return codec.encoders
             .mapNotNull(encoders::get)
             .flatMap(ImplementationCapabilities::supportedHardwareDevices)
-            .filter { it in devices }
+            .filter(devices::containsKey)
             .toSet()
     }
 
