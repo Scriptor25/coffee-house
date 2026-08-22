@@ -47,7 +47,7 @@ class CommandBuilder(
             return listOf("-i", input.absolutePathString())
         }
 
-        return pipeline.decode.decoder(0) + listOf("-i", input.absolutePathString())
+        return VideoDecoding(0, pipeline.decode.decoder) + listOf("-i", input.absolutePathString())
     }
 
     private fun buildFilter(): List<String> {
