@@ -43,6 +43,21 @@ sealed interface VideoEncoder : Encoder {
         ): List<String> = error("null")
     }
 
+    data class Generic(
+        override val id: ImplementationId,
+        override val codec: CodecId,
+    ) : VideoEncoder {
+
+        override fun invoke(
+            index: Int,
+            profile: Profile,
+            bitrate: Long,
+        ): List<String> = listOf(
+            "-maxrate:v:$index", bitrate.toString(),
+            "-bufsize:v:$index", (bitrate * 2).toString(),
+        )
+    }
+
     data object AV1 : VideoEncoder {
 
         override val id = ImplementationId("libsvtav1")

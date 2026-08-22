@@ -302,6 +302,7 @@ fun main() {
     provider.registerT(database)
 
     val transcoding = TranscodingCache(
+        log,
         ffmpeg,
         cache,
         capabilities,

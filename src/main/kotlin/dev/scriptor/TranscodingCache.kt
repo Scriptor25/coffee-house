@@ -13,9 +13,11 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
+import java.util.logging.Logger
 import kotlin.uuid.Uuid
 
 class TranscodingCache(
+    private val log: Logger,
     private val ffmpeg: String,
     private val base: Path,
     private val capabilities: Capabilities,
@@ -85,12 +87,24 @@ class TranscodingCache(
         val encoder = encoders.firstOrNull()
 
         val videoDecoder =
-            if (decoder != null) VideoDecoder.find(decoder)
-                ?: error("decoder '$decoder' not implemented")
+            if (decoder != null) when (val x = VideoDecoder.find(decoder)) {
+                null -> {
+                    log.warning("decoder '$decoder' not implemented")
+                    VideoDecoder.Generic(decoder, input)
+                }
+
+                else -> x
+            }
             else VideoDecoder.Null
         val videoEncoder =
-            if (encoder != null) VideoEncoder.find(encoder)
-                ?: error("encoder '$encoder' not implemented")
+            if (encoder != null) when (val x = VideoEncoder.find(encoder)) {
+                null -> {
+                    log.warning("encoder '$encoder' not implemented")
+                    VideoEncoder.Generic(encoder, output)
+                }
+
+                else -> x
+            }
             else VideoEncoder.Null
 
         return when (device) {
