@@ -5,7 +5,7 @@ import dev.scriptor.encoder.Encoder
 import dev.scriptor.model.ffmpeg.CodecId
 import dev.scriptor.model.ffmpeg.ImplementationId
 
-interface VideoEncoder : Encoder {
+sealed interface VideoEncoder : Encoder {
 
     companion object {
         fun find(id: ImplementationId): VideoEncoder? = when (id) {
@@ -30,6 +30,18 @@ interface VideoEncoder : Encoder {
         profile: Profile,
         bitrate: Long,
     ): List<String>
+
+    data object Null : VideoEncoder {
+
+        override val id = ImplementationId("null")
+        override val codec = CodecId("null")
+
+        override fun invoke(
+            index: Int,
+            profile: Profile,
+            bitrate: Long,
+        ): List<String> = error("null")
+    }
 
     data object AV1 : VideoEncoder {
 

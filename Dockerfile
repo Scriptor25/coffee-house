@@ -1,13 +1,17 @@
-FROM eclipse-temurin:26
-RUN apt-get update && \
-    apt-get install -y \
-      ffmpeg \
-      vainfo \
-      libva2 \
-      i965-va-driver \
-      intel-media-va-driver \
-      va-driver-all && \
-    rm -rf /var/lib/apt/lists/*
+FROM debian:trixie-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openjdk-25-jre \
+    ffmpeg \
+    libva2 \
+    va-driver-all \
+    i965-va-driver \
+    intel-media-va-driver \
+    locales \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
 
 WORKDIR /app
 

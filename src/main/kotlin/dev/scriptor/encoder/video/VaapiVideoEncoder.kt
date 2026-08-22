@@ -4,7 +4,7 @@ import dev.scriptor.Profile
 import dev.scriptor.model.ffmpeg.CodecId
 import dev.scriptor.model.ffmpeg.ImplementationId
 
-interface VaapiVideoEncoder : VideoEncoder {
+sealed interface VaapiVideoEncoder : VideoEncoder {
 
     companion object {
         fun find(id: ImplementationId): VaapiVideoEncoder? = when (id) {

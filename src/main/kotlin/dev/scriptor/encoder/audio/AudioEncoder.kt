@@ -4,7 +4,19 @@ import dev.scriptor.encoder.Encoder
 import dev.scriptor.model.ffmpeg.CodecId
 import dev.scriptor.model.ffmpeg.ImplementationId
 
-interface AudioEncoder : Encoder {
+sealed interface AudioEncoder : Encoder {
+
+    companion object {
+        fun find(id: ImplementationId): AudioEncoder? = when (id) {
+            Aac.id -> Aac
+            Opus.id -> Opus
+            Mp3.id -> Mp3
+            Vorbis.id -> Vorbis
+            Flac.id -> Flac
+
+            else -> null
+        }
+    }
 
     val codec: CodecId
 

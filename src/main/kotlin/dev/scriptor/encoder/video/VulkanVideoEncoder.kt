@@ -4,7 +4,7 @@ import dev.scriptor.Profile
 import dev.scriptor.model.ffmpeg.CodecId
 import dev.scriptor.model.ffmpeg.ImplementationId
 
-interface VulkanVideoEncoder : VideoEncoder {
+sealed interface VulkanVideoEncoder : VideoEncoder {
 
     companion object {
         fun find(id: ImplementationId): VulkanVideoEncoder? = when (id) {

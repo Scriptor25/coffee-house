@@ -27,7 +27,7 @@ class CommandBuilder(
         this += buildFilter()
         this += buildStreamMap()
         this += buildEncode()
-        this += buildHls()
+        this += buildMuxer()
     }
 
     private fun buildDevices(): List<String> {
@@ -35,10 +35,20 @@ class CommandBuilder(
             return emptyList()
         }
 
-        return pipeline.devices.flatMap { listOf("-init_hw_device", if (device != null) "$it:$device" else "$it") }
+        if (device == null) {
+            return pipeline.devices.flatMap { listOf("-init_hw_device", "$it") }
+        }
+
+        return pipeline.devices.flatMap { listOf("-init_hw_device", "$it:$device") }
     }
 
-    private fun buildDecode(): List<String> = pipeline.decode() + listOf("-i", input.absolutePathString())
+    private fun buildDecode(): List<String> {
+        if (!enable) {
+            return listOf("-i", input.absolutePathString())
+        }
+
+        return pipeline.decode.decoder(0) + listOf("-i", input.absolutePathString())
+    }
 
     private fun buildFilter(): List<String> {
         val video = outputs.filterIsInstance<VideoOutput>()
@@ -98,7 +108,7 @@ class CommandBuilder(
     }
 
     private fun buildVideoEncode(index: Int, output: VideoOutput): List<String> =
-        output.encoding(index, pipeline.encode.encoder!!)
+        output.encoding(index, pipeline.encode.encoder)
 
     private fun buildAudioEncode(index: Int, output: AudioOutput): List<String> =
         output.encoding(index, AudioEncoder.Aac) // TODO: dont hardcode encoder
@@ -146,7 +156,7 @@ class CommandBuilder(
         }
     }
 
-    private fun buildHls(): List<String> {
+    private fun buildMuxer(): List<String> {
         val variantMap = buildVariantMap()
 
         return listOf(

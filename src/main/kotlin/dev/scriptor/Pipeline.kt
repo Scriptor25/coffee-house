@@ -20,8 +20,6 @@ data class Pipeline(
 
     val devices = setOfNotNull(decode.device, split.device, scale.device, encode.device)
 
-    fun decode(): List<String> = decode.decode()
-
     fun split(count: Int): List<String> = buildList {
         this += transition(decode, split)
         this += "split=$count"

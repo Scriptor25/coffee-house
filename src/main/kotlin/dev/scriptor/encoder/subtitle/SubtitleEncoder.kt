@@ -4,7 +4,15 @@ import dev.scriptor.encoder.Encoder
 import dev.scriptor.model.ffmpeg.CodecId
 import dev.scriptor.model.ffmpeg.ImplementationId
 
-interface SubtitleEncoder : Encoder {
+sealed interface SubtitleEncoder : Encoder {
+
+    companion object {
+        fun find(id: ImplementationId): SubtitleEncoder? = when (id) {
+            WebVtt.id -> WebVtt
+
+            else -> null
+        }
+    }
 
     val codec: CodecId
 

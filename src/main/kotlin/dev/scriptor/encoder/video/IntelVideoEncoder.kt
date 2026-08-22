@@ -4,7 +4,7 @@ import dev.scriptor.Profile
 import dev.scriptor.model.ffmpeg.CodecId
 import dev.scriptor.model.ffmpeg.ImplementationId
 
-interface IntelVideoEncoder : VideoEncoder {
+sealed interface IntelVideoEncoder : VideoEncoder {
 
     companion object {
         fun find(id: ImplementationId): IntelVideoEncoder? = when (id) {

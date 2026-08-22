@@ -1,6 +1,7 @@
 package dev.scriptor
 
 import dev.scriptor.backend.VideoBackend
+import dev.scriptor.decoder.video.VideoDecoder
 import dev.scriptor.encoder.video.VideoEncoder
 import dev.scriptor.model.ffmpeg.Capabilities
 import dev.scriptor.model.ffmpeg.CodecId
@@ -83,20 +84,27 @@ class TranscodingCache(
         val decoder = decoders.firstOrNull()
         val encoder = encoders.firstOrNull()
 
+        val videoDecoder =
+            if (decoder != null) VideoDecoder.find(decoder)
+                ?: error("decoder '$decoder' not implemented")
+            else VideoDecoder.Null
         val videoEncoder =
             if (encoder != null) VideoEncoder.find(encoder)
                 ?: error("encoder '$encoder' not implemented")
-            else null
+            else VideoEncoder.Null
 
         return when (device) {
-            null -> VideoBackend(
-                device,
-                { emptyList() },
-                { emptyList() },
-                { listOf("-c:v", "$decoder") },
-                { width, height -> listOf("scale=w=$width:h=$height") },
-                videoEncoder,
-            )
+            null -> object : VideoBackend {
+                override val device = device
+
+                override val decoder = videoDecoder
+                override val encoder = videoEncoder
+
+                override fun upload(): List<String> = emptyList()
+                override fun download(): List<String> = emptyList()
+
+                override fun scale(width: Int, height: Int): List<String> = listOf("scale=w=$width:h=$height")
+            }
 
             else -> {
                 val backend = DeviceBackend.entries.find { it.device == device }
@@ -105,23 +113,29 @@ class TranscodingCache(
                 val format = backend.format
                 val scale = backend.scale
 
-                VideoBackend(
-                    device,
-                    { listOf("format=nv12", "hwupload") },
-                    { listOf("hwdownload", "format=nv12") },
-                    {
-                        listOf(
-                            "-hwaccel",
-                            "$device",
-                            "-hwaccel_output_format",
-                            "$format",
-                            "-c:v",
-                            "$decoder"
-                        )
-                    },
-                    { width, height -> listOf("$scale=w=$width:h=$height") },
-                    videoEncoder,
-                )
+                { // software decode
+                    listOf("-c:v", "$decoder")
+                }
+
+                { // hardware decode
+                    listOf(
+                        "-hwaccel", "$device",
+                        "-hwaccel_output_format", "$format",
+                        "-c:v", "$decoder",
+                    )
+                }
+
+                object : VideoBackend {
+                    override val device = device
+
+                    override val decoder = videoDecoder
+                    override val encoder = videoEncoder
+
+                    override fun upload(): List<String> = listOf("format=nv12", "hwupload")
+                    override fun download(): List<String> = listOf("hwdownload", "format=nv12")
+
+                    override fun scale(width: Int, height: Int): List<String> = listOf("$scale=w=$width:h=$height")
+                }
             }
         }
     }
@@ -138,7 +152,10 @@ class TranscodingCache(
             val decodeDevices = capabilities.getDevicesForDecoding(input)
             val encodeDevices = capabilities.getDevicesForEncoding(output)
 
-            val transcodeDevice = decodeDevices.filter { it in encodeDevices }.toSet().firstOrNull()
+            val transcodeDevice = decodeDevices
+                .filter(encodeDevices::contains)
+                .toSet()
+                .firstOrNull()
 
             val pipeline = if (transcodeDevice == null) {
                 // TODO: find most suitable device for decoding/encoding
@@ -147,7 +164,9 @@ class TranscodingCache(
                 val encodeDevice = encodeDevices.firstOrNull()
 
                 val decodeBackend = createBackend(decodeDevice, input, output)
-                val encodeBackend = createBackend(encodeDevice, input, output)
+                val encodeBackend =
+                    if (decodeDevice == encodeDevice) decodeBackend
+                    else createBackend(encodeDevice, input, output)
 
                 // TODO: find separate device and backend for splitting/scaling
 
