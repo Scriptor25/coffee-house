@@ -18,20 +18,30 @@ sealed interface AudioEncoder : Encoder {
         }
     }
 
-    val codec: CodecId
+    operator fun invoke(index: Int): List<String>
 
-    operator fun invoke(
-        index: Int,
-    ): List<String>
+    data object Null : AudioEncoder {
+
+        override val id = ImplementationId("null")
+        override val codec = CodecId("null")
+
+        override fun invoke(index: Int): List<String> = error("null")
+    }
+
+    data class Generic(
+        override val id: ImplementationId,
+        override val codec: CodecId,
+    ) : AudioEncoder {
+
+        override fun invoke(index: Int): List<String> = emptyList()
+    }
 
     data object Aac : AudioEncoder {
 
         override val id = ImplementationId("aac")
         override val codec = CodecId("aac")
 
-        override fun invoke(
-            index: Int,
-        ): List<String> = emptyList()
+        override fun invoke(index: Int): List<String> = emptyList()
     }
 
     data object Opus : AudioEncoder {
@@ -39,9 +49,7 @@ sealed interface AudioEncoder : Encoder {
         override val id = ImplementationId("libopus")
         override val codec = CodecId("opus")
 
-        override fun invoke(
-            index: Int,
-        ): List<String> = emptyList()
+        override fun invoke(index: Int): List<String> = emptyList()
     }
 
     data object Mp3 : AudioEncoder {
@@ -49,9 +57,7 @@ sealed interface AudioEncoder : Encoder {
         override val id = ImplementationId("libmp3lame")
         override val codec = CodecId("mp3")
 
-        override fun invoke(
-            index: Int,
-        ): List<String> = emptyList()
+        override fun invoke(index: Int): List<String> = emptyList()
     }
 
     data object Vorbis : AudioEncoder {
@@ -59,9 +65,7 @@ sealed interface AudioEncoder : Encoder {
         override val id = ImplementationId("libvorbis")
         override val codec = CodecId("vorbis")
 
-        override fun invoke(
-            index: Int,
-        ): List<String> = emptyList()
+        override fun invoke(index: Int): List<String> = emptyList()
     }
 
     data object Flac : AudioEncoder {
@@ -69,8 +73,6 @@ sealed interface AudioEncoder : Encoder {
         override val id = ImplementationId("flac")
         override val codec = CodecId("flac")
 
-        override fun invoke(
-            index: Int,
-        ): List<String> = emptyList()
+        override fun invoke(index: Int): List<String> = emptyList()
     }
 }

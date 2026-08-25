@@ -12,8 +12,6 @@ sealed interface VideoDecoder : Decoder {
         }
     }
 
-    val codec: CodecId
-
     operator fun invoke(index: Int): List<String>
 
     data object Null : VideoDecoder {

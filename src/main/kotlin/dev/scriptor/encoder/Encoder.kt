@@ -3,6 +3,7 @@ package dev.scriptor.encoder
 import dev.scriptor.encoder.audio.AudioEncoder
 import dev.scriptor.encoder.subtitle.SubtitleEncoder
 import dev.scriptor.encoder.video.VideoEncoder
+import dev.scriptor.model.ffmpeg.CodecId
 import dev.scriptor.model.ffmpeg.ImplementationId
 
 interface Encoder {
@@ -15,4 +16,5 @@ interface Encoder {
     }
 
     val id: ImplementationId
+    val codec: CodecId
 }

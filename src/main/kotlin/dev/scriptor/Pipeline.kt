@@ -20,17 +20,24 @@ data class Pipeline(
 
     val devices = setOfNotNull(decode.device, split.device, scale.device, encode.device)
 
-    fun split(count: Int): List<String> = buildList {
-        this += transition(decode, split)
-        this += "split=$count"
+    fun filter(name: String, vararg args: Pair<String?, Any?>): String {
+        val args = args
+            .filter { it.second != null }
+            .joinToString(":") { (k, v) -> if (k == null) "$v" else "$k=$v" }
+        return "$name=$args"
     }
 
-    fun encode(): List<String> = transition(split, encode)
+    fun split(count: Int): List<String> =
+        transition(decode, split) + filter("split", null to count)
+
+    fun encode(): List<String> =
+        transition(split, encode)
 
     fun scaleEncode(
         width: Int,
         height: Int,
-    ): List<String> = transition(split, scale) + scale.scale(width, height) + transition(scale, encode)
+    ): List<String> =
+        transition(split, scale) + scale.scale(width, height) + transition(scale, encode)
 
     private fun transition(
         src: VideoBackend,
@@ -50,9 +57,9 @@ data class Pipeline(
                 if (interop == null || !interop.derivable) {
                     src.download() + dst.upload()
                 } else if (!interop.direct) {
-                    listOf("hwmap=derive_device=${dd}")
+                    listOf(filter("hwmap", "derive_device" to dd))
                 } else {
-                    listOf("hwmap=derive_device=${dd}:mode=direct")
+                    listOf(filter("hwmap", "derive_device" to dd, "mode" to "direct"))
                 }
             }
         }

@@ -14,19 +14,29 @@ sealed interface SubtitleEncoder : Encoder {
         }
     }
 
-    val codec: CodecId
+    operator fun invoke(index: Int): List<String>
 
-    operator fun invoke(
-        index: Int,
-    ): List<String>
+    data object Null : SubtitleEncoder {
+
+        override val id = ImplementationId("null")
+        override val codec = CodecId("null")
+
+        override fun invoke(index: Int): List<String> = error("null")
+    }
+
+    data class Generic(
+        override val id: ImplementationId,
+        override val codec: CodecId,
+    ) : SubtitleEncoder {
+
+        override fun invoke(index: Int): List<String> = emptyList()
+    }
 
     data object WebVtt : SubtitleEncoder {
 
         override val id = ImplementationId("webvtt")
         override val codec = CodecId("webvtt")
 
-        override fun invoke(
-            index: Int,
-        ): List<String> = emptyList()
+        override fun invoke(index: Int): List<String> = emptyList()
     }
 }

@@ -23,8 +23,6 @@ sealed interface VideoEncoder : Encoder {
         }
     }
 
-    val codec: CodecId
-
     operator fun invoke(
         index: Int,
         profile: Profile,
