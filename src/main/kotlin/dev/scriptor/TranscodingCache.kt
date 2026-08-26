@@ -83,8 +83,12 @@ class TranscodingCache(
         val decoders = capabilities.getDecoders(input, device)
         val encoders = capabilities.getEncoders(output, device)
 
-        val decoder = decoders.firstOrNull()
-        val encoder = encoders.firstOrNull()
+        val decoder = decoders
+            .toSortedSet(capabilities::compare)
+            .firstOrNull()
+        val encoder = encoders
+            .toSortedSet(capabilities::compare)
+            .firstOrNull()
 
         val videoDecoder =
             if (decoder != null) when (val x = VideoDecoder.find(decoder)) {
@@ -121,23 +125,10 @@ class TranscodingCache(
             }
 
             else -> {
-                val backend = DeviceBackend.entries.find { it.device == device }
+                val backend = DeviceBackend.find(device)
                     ?: error("device '$device' not implemented")
 
-                val format = backend.format
                 val scale = backend.scale
-
-                { // software decode
-                    listOf("-c:v", "$decoder")
-                }
-
-                { // hardware decode
-                    listOf(
-                        "-hwaccel", "$device",
-                        "-hwaccel_output_format", "$format",
-                        "-c:v", "$decoder",
-                    )
-                }
 
                 object : VideoBackend {
                     override val device = device
@@ -166,23 +157,27 @@ class TranscodingCache(
             val decodeDevices = capabilities.getDevicesForDecoding(input)
             val encodeDevices = capabilities.getDevicesForEncoding(output)
 
+            // TODO: find most suitable device for decoding/encoding
+            // TODO: find separate device for splitting/scaling if unsupported
+
             val transcodeDevice = decodeDevices
                 .filter(encodeDevices::contains)
-                .toSet()
+                .toSortedSet(capabilities::compare)
                 .firstOrNull()
 
             val pipeline = if (transcodeDevice == null) {
-                // TODO: find most suitable device for decoding/encoding
 
-                val decodeDevice = decodeDevices.firstOrNull()
-                val encodeDevice = encodeDevices.firstOrNull()
+                val decodeDevice = decodeDevices
+                    .toSortedSet(capabilities::compare)
+                    .firstOrNull()
+                val encodeDevice = encodeDevices
+                    .toSortedSet(capabilities::compare)
+                    .firstOrNull()
 
                 val decodeBackend = createBackend(decodeDevice, input, output)
                 val encodeBackend =
                     if (decodeDevice == encodeDevice) decodeBackend
                     else createBackend(encodeDevice, input, output)
-
-                // TODO: find separate device and backend for splitting/scaling
 
                 Pipeline(
                     capabilities,

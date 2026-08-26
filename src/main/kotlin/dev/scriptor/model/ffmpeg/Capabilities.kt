@@ -113,4 +113,35 @@ data class Capabilities(
             .map(ImplementationCapabilities::id)
             .toSet()
     }
+
+    fun compare(a: DeviceId, b: DeviceId): Int {
+        val a = DeviceBackend.find(a) ?: return -1
+        val b = DeviceBackend.find(b) ?: return 1
+
+        return a.priority - b.priority
+    }
+
+    fun compare(a: ImplementationId, b: ImplementationId): Int {
+        val a = implementations[a] ?: return -1
+        val b = implementations[b] ?: return 1
+
+        var errorA = 0
+        var errorB = 0
+
+        if (a.experimental) {
+            errorA += 1
+        }
+        if (b.experimental) {
+            errorB += 1
+        }
+
+        if (a.kind == ImplementationKind.HYBRID) {
+            errorA += 1
+        }
+        if (b.kind == ImplementationKind.HYBRID) {
+            errorB += 1
+        }
+
+        return errorA - errorB
+    }
 }
