@@ -16,7 +16,7 @@ import dev.scriptor.server.annotation.Post
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import java.time.Duration.ofMinutes
+import java.time.Duration.ofHours
 import kotlin.time.Clock
 import kotlin.time.toKotlinDuration
 
@@ -56,7 +56,7 @@ class SessionRest {
         val role = user?.role ?: UserRole.ADMIN
 
         val createdAt = Clock.System.now()
-        val expiresAt = createdAt + ofMinutes(60).toKotlinDuration()
+        val expiresAt = createdAt + ofHours(24).toKotlinDuration()
 
         val jwt = Jwt.encode(
             JwtHeader(
