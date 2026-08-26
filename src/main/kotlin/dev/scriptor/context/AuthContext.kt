@@ -1,27 +1,44 @@
 package dev.scriptor.context
 
-import dev.scriptor.model.user.Session
-import dev.scriptor.model.user.SessionTable
+import dev.scriptor.model.Session
+import dev.scriptor.model.user.UserRole
+import dev.scriptor.security.Jwt
 import dev.scriptor.server.annotation.Context
-import org.jetbrains.exposed.v1.core.and
-import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.core.greaterEq
-import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import kotlin.time.Clock.System.now
+import kotlin.time.Clock
 import kotlin.time.Instant
+import kotlin.uuid.Uuid
 
 @Context
 class AuthContext {
 
-    context(database: Database)
     fun auth(
         token: String,
-        instant: Instant = now(),
-    ): Session? = transaction(database) {
-        Session
-            .find { (SessionTable.token eq token) and (SessionTable.expiresAt greaterEq instant) }
-            .limit(1)
-            .singleOrNull()
+        instant: Instant = Clock.System.now(),
+    ): Session? {
+        val jwt: Jwt = Jwt.decode(token)
+            ?: return null
+
+        // TODO: change to something more secure
+        if (!jwt.verify("hello-world-secret")) {
+            return null
+        }
+
+        if (jwt.payload.exp != null && jwt.payload.exp < instant) {
+            return null
+        }
+
+        val id =
+            when (val sub = jwt.payload.sub) {
+                null -> null
+                else -> Uuid.parseHexDash(sub)
+            }
+
+        val role =
+            when (val role = jwt.payload.custom["role"]) {
+                null -> UserRole.ADMIN
+                else -> UserRole.valueOf(role.uppercase())
+            }
+
+        return Session(jwt, id, role)
     }
 }

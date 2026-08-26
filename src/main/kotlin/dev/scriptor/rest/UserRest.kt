@@ -26,12 +26,12 @@ class UserRest {
         val session = auth.auth(authorization.credentials)
             ?: throw UnauthorizedSignal()
 
-        val current = session.user
-
-        return if (current == null || current.role == UserRole.ADMIN) {
-            transaction(database) { User.all().toList() }
-        } else {
-            listOf(current)
+        return when (session.role) {
+            UserRole.ADMIN -> transaction(database) { User.all().toList() }
+            UserRole.USER -> {
+                val self = transaction(database) { User.findById(session.id!!) }
+                listOfNotNull(self)
+            }
         }
     }
 
@@ -44,8 +44,7 @@ class UserRest {
         val session = auth.auth(authorization.credentials)
             ?: throw UnauthorizedSignal()
 
-        val current = session.user
-        if (current != null && current.role != UserRole.ADMIN) {
+        if (session.role != UserRole.ADMIN) {
             throw ForbiddenSignal()
         }
 
@@ -71,12 +70,7 @@ class UserRest {
         val session = auth.auth(authorization.credentials)
             ?: throw UnauthorizedSignal()
 
-        val current = session.user
-        if (
-            current != null
-            && current.role != UserRole.ADMIN
-            && current.id.value != id
-        ) {
+        if (session.role != UserRole.ADMIN && session.id != id) {
             throw ForbiddenSignal()
         }
 
@@ -93,12 +87,7 @@ class UserRest {
         val session = auth.auth(authorization.credentials)
             ?: throw UnauthorizedSignal()
 
-        val current = session.user
-        if (
-            current != null
-            && current.role != UserRole.ADMIN
-            && current.id.value != id
-        ) {
+        if (session.role != UserRole.ADMIN && session.id != id) {
             throw ForbiddenSignal()
         }
 
@@ -125,12 +114,7 @@ class UserRest {
         val session = auth.auth(authorization.credentials)
             ?: throw UnauthorizedSignal()
 
-        val current = session.user
-        if (
-            current != null
-            && current.role != UserRole.ADMIN
-            && current.id.value != id
-        ) {
+        if (session.role != UserRole.ADMIN && session.id != id) {
             throw ForbiddenSignal()
         }
 

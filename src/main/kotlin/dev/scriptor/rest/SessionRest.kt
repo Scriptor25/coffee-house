@@ -1,36 +1,31 @@
 package dev.scriptor.rest
 
 import dev.scriptor.JsonNode
-import dev.scriptor.context.AuthContext
 import dev.scriptor.get
-import dev.scriptor.model.Authorization
-import dev.scriptor.model.user.Session
 import dev.scriptor.model.user.User
+import dev.scriptor.model.user.UserRole
 import dev.scriptor.model.user.UserTable
-import dev.scriptor.server.NotFoundSignal
+import dev.scriptor.security.Jwt
+import dev.scriptor.security.JwtHeader
+import dev.scriptor.security.JwtPayload
 import dev.scriptor.server.Provider
 import dev.scriptor.server.UnauthorizedSignal
-import dev.scriptor.server.annotation.*
+import dev.scriptor.server.annotation.Body
+import dev.scriptor.server.annotation.Controller
+import dev.scriptor.server.annotation.Post
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import java.security.SecureRandom
 import java.time.Duration.ofMinutes
-import kotlin.io.encoding.Base64
-import kotlin.time.Clock.System.now
+import kotlin.time.Clock
 import kotlin.time.toKotlinDuration
 
 @Controller("/session")
 class SessionRest {
 
-    private val random = SecureRandom()
-
     @Post("/", "application/json", "application/json")
     context(provider: Provider, database: Database)
-    fun createSession(
-        @Body body: JsonNode,
-        @Header("user-agent") agent: String?,
-    ): Session {
+    fun createSession(@Body body: JsonNode): Jwt {
         val username = body["username"].get<String>()
         val password = body["password"].get<String>()
 
@@ -58,38 +53,30 @@ class SessionRest {
             }
         }
 
-        val bytes = ByteArray(24) { 0 }
-        random.nextBytes(bytes)
+        val role = user?.role ?: UserRole.ADMIN
 
-        val token = Base64.encode(bytes)
-
-        val createdAt = now()
+        val createdAt = Clock.System.now()
         val expiresAt = createdAt + ofMinutes(60).toKotlinDuration()
 
-        return transaction(database) {
-            Session.new {
-                this.user = user
-                this.token = token
-                this.createdAt = createdAt
-                this.expiresAt = expiresAt
-                this.agent = agent
-            }
-        }
-    }
+        val jwt = Jwt.encode(
+            JwtHeader(
+                alg = "HS256",
+            ),
+            JwtPayload(
+                jti = user?.id?.toString(),
+                sub = user?.name,
+                iat = createdAt,
+                exp = expiresAt,
+                aud = "coffee-house",
+                iss = "dev.scriptor.coffee-house", // TODO: change to application domain
 
-    @Get("/", result = "application/json")
-    context(auth: AuthContext, database: Database)
-    fun getCurrentSession(@Header authorization: Authorization): Session =
-        auth.auth(authorization.credentials)
-            ?: throw NotFoundSignal()
+                custom = mapOf(
+                    "role" to role.toString().lowercase(),
+                ),
+            ),
+            "hello-world-secret", // TODO: change to something more secure
+        )
 
-    @Delete("/", result = "application/json")
-    context(auth: AuthContext, database: Database)
-    fun deleteCurrentSession(@Header authorization: Authorization): Session {
-        val session = auth.auth(authorization.credentials)
-            ?: throw NotFoundSignal()
-
-        transaction(database) { session.delete() }
-        return session
+        return jwt
     }
 }

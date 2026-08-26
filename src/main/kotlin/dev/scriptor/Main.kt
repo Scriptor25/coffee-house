@@ -2,13 +2,14 @@ package dev.scriptor
 
 import dev.scriptor.model.ffmpeg.CodecId
 import dev.scriptor.model.media.*
-import dev.scriptor.model.user.Session
-import dev.scriptor.model.user.SessionTable
 import dev.scriptor.model.user.UserTable
 import dev.scriptor.server.Provider
 import dev.scriptor.server.http.Server
 import dev.scriptor.server.scan
-import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.core.Column
+import org.jetbrains.exposed.v1.core.IColumnType
+import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.core.notInList
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.select
@@ -21,7 +22,6 @@ import java.sql.Timestamp
 import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.io.path.*
-import kotlin.time.Clock.System.now
 import kotlin.time.Instant
 import kotlin.time.toKotlinInstant
 
@@ -333,7 +333,6 @@ fun main() {
             SubtitleTrackTable,
             ChapterTable,
             UserTable,
-            SessionTable,
         )
     }
 
@@ -384,15 +383,6 @@ fun main() {
 
     server.use { server ->
         scan(server, "dev.scriptor")
-
-        server.register("session-reaper", 0L, 10L * 60L * 1000L) {
-            transaction(database) {
-                val now = now()
-                Session
-                    .find { SessionTable.expiresAt lessEq now }
-                    .forEach { it.delete() }
-            }
-        }
 
         server.start()
     }

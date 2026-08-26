@@ -94,7 +94,7 @@ class TranscodingCache(
             if (decoder != null) when (val x = VideoDecoder.find(decoder)) {
                 null -> {
                     log.warning("decoder '$decoder' not implemented")
-                    VideoDecoder.Generic(decoder, input)
+                    VideoDecoder.Generic(decoder, input, device)
                 }
 
                 else -> x

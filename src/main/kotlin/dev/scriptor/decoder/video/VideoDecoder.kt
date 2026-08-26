@@ -2,6 +2,7 @@ package dev.scriptor.decoder.video
 
 import dev.scriptor.decoder.Decoder
 import dev.scriptor.model.ffmpeg.CodecId
+import dev.scriptor.model.ffmpeg.DeviceId
 import dev.scriptor.model.ffmpeg.ImplementationId
 
 sealed interface VideoDecoder : Decoder {
@@ -25,8 +26,14 @@ sealed interface VideoDecoder : Decoder {
     data class Generic(
         override val id: ImplementationId,
         override val codec: CodecId,
+        val device: DeviceId? = null,
     ) : VideoDecoder {
 
-        override fun invoke(index: Int): List<String> = emptyList()
+        override fun invoke(index: Int): List<String> =
+            if (device == null) emptyList()
+            else listOf(
+                "-hwaccel", "$device",
+                "-hwaccel_output_format", "$device",
+            )
     }
 }

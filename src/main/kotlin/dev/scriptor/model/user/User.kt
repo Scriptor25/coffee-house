@@ -19,8 +19,6 @@ class User(id: EntityID<Uuid>) : UuidEntity(id) {
     var hash by UserTable.hash
     var role by UserTable.role
 
-    val sessions by Session.Companion optionalReferrersOn SessionTable.user
-
     override fun toString(): String {
         return "User(id=$id, name=$name, hash=$hash, role=$role)"
     }

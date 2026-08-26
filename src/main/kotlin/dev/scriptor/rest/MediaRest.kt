@@ -15,11 +15,9 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.nio.channels.FileChannel
 import java.nio.file.Path
-import java.time.Duration.ofMinutes
 import java.util.logging.Logger
 import kotlin.io.path.bufferedReader
 import kotlin.time.Clock.System.now
-import kotlin.time.toKotlinDuration
 import kotlin.uuid.Uuid
 
 @Controller("/media")
@@ -73,16 +71,11 @@ class MediaRest {
             else -> token
         } ?: throw UnauthorizedSignal()
 
-        val session = auth.auth(token, instant)
+        auth.auth(token, instant)
             ?: throw UnauthorizedSignal()
 
         val item = transaction(database) { Media.findById(id) }
             ?: throw NotFoundSignal()
-
-        transaction(database) {
-            session.access = instant
-            session.expiresAt = instant + ofMinutes(60).toKotlinDuration()
-        }
 
         return item
     }
@@ -119,7 +112,7 @@ class MediaRest {
                     206,
                     "Partial Content",
                     headers = headers,
-                    value = RangeReadableByteChannel(channel, begin until end),
+                    value = RangeReadableByteChannel(channel, begin..end),
                 )
             }
         }
@@ -148,13 +141,8 @@ class MediaRest {
             else -> null
         } ?: throw UnauthorizedSignal()
 
-        val session = auth.auth(token, instant)
+        auth.auth(token, instant)
             ?: throw UnauthorizedSignal()
-
-        transaction(database) {
-            session.access = instant
-            session.expiresAt = instant + ofMinutes(60).toKotlinDuration()
-        }
 
         return transaction(database) {
             Media
@@ -194,7 +182,10 @@ class MediaRest {
     }
 
     @Get("/stream/[id]", result = "video/*")
-    context(database: Database, auth: AuthContext)
+    context(
+        database: Database,
+        auth: AuthContext,
+    )
     fun getMediaStream(
         @PathParameter id: Uuid,
         @QueryParameter token: String,
