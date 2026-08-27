@@ -157,9 +157,6 @@ class TranscodingCache(
             val decodeDevices = capabilities.getDevicesForDecoding(input)
             val encodeDevices = capabilities.getDevicesForEncoding(output)
 
-            // TODO: find most suitable device for decoding/encoding
-            // TODO: find separate device for splitting/scaling if unsupported
-
             val transcodeDevice = decodeDevices
                 .filter(encodeDevices::contains)
                 .toSortedSet(capabilities::compare)

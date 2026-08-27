@@ -5,6 +5,7 @@ import dev.scriptor.TranscodingCache
 import dev.scriptor.context.AuthContext
 import dev.scriptor.jsonOf
 import dev.scriptor.model.Authorization
+import dev.scriptor.model.Cookie
 import dev.scriptor.model.media.Chapter
 import dev.scriptor.model.media.Media
 import dev.scriptor.server.*
@@ -17,7 +18,6 @@ import java.nio.channels.FileChannel
 import java.nio.file.Path
 import java.util.logging.Logger
 import kotlin.io.path.bufferedReader
-import kotlin.time.Clock.System.now
 import kotlin.uuid.Uuid
 
 @Controller("/media")
@@ -64,14 +64,12 @@ class MediaRest {
         authorization: Authorization?,
         token: String? = null,
     ): Media {
-        val instant = now()
-
         val token = when {
             authorization != null && authorization.scheme == "Bearer" -> authorization.credentials
             else -> token
         } ?: throw UnauthorizedSignal()
 
-        auth.auth(token, instant)
+        auth.auth(token)
             ?: throw UnauthorizedSignal()
 
         val item = transaction(database) { Media.findById(id) }
@@ -80,42 +78,41 @@ class MediaRest {
         return item
     }
 
-    private fun stream(range: String?, path: Path): Result {
+    private fun stream(range: String?, path: Path, headers: ParameterList = ParameterList()): Result {
         val channel = FileChannel.open(path)
 
-        return if (range.isNullOrBlank()) {
-            ChannelResult(value = channel)
-        } else {
-            val total = channel.size()
-
-            val range = range
-                .substringAfter("bytes=")
-                .split("-", limit = 2)
-                .filter { it.isNotBlank() }
-
-            val begin = range[0].toLong()
-            val end = if (range.size == 2) range[1].toLong() else (total - 1L)
-
-            if (begin < 0 || end < 0 || begin >= total || end >= total || begin > end) {
-                val headers = ParameterList(
-                    "content-range" to "bytes */$total",
-                )
-
-                RangeNotSatisfiableSignal(headers).generate()
-            } else {
-                val headers = ParameterList(
-                    "content-length" to (end + 1L - begin).toString(),
-                    "content-range" to "bytes $begin-$end/$total",
-                )
-
-                ChannelResult(
-                    206,
-                    "Partial Content",
-                    headers = headers,
-                    value = RangeReadableByteChannel(channel, begin..end),
-                )
-            }
+        if (range.isNullOrBlank()) {
+            return ChannelResult(
+                headers = headers,
+                value = channel,
+            )
         }
+
+        val total = channel.size()
+
+        val range = range
+            .substringAfter("bytes=")
+            .split("-", limit = 2)
+            .filter { it.isNotBlank() }
+
+        val begin = range[0].toLong()
+        val end = if (range.size == 2) range[1].toLong() else (total - 1L)
+
+        if (begin < 0 || end < 0 || begin >= total || end >= total || begin > end) {
+            headers["content-range"] = "bytes */$total"
+
+            throw RangeNotSatisfiableSignal(headers)
+        }
+
+        headers["content-length"] = (end + 1L - begin).toString()
+        headers["content-range"] = "bytes $begin-$end/$total"
+
+        return ChannelResult(
+            206,
+            "Partial Content",
+            headers = headers,
+            value = RangeReadableByteChannel(channel, begin..end),
+        )
     }
 
     @Head("/")
@@ -134,14 +131,7 @@ class MediaRest {
         @QueryParameter limit: Int?,
         @Header authorization: Authorization,
     ): List<Media> {
-        val instant = now()
-
-        val token = when {
-            authorization.scheme == "Bearer" -> authorization.credentials
-            else -> null
-        } ?: throw UnauthorizedSignal()
-
-        auth.auth(token, instant)
+        auth.auth(authorization)
             ?: throw UnauthorizedSignal()
 
         return transaction(database) {
@@ -191,6 +181,7 @@ class MediaRest {
         @QueryParameter token: String,
         @Header authorization: Authorization?,
         @Header range: String?,
+        @Header cookie: Cookie?,
     ): Result {
         val item = mediaSession(id, authorization, token)
 
@@ -271,7 +262,7 @@ class MediaRest {
 
     @Get("/stream/[id]/[name]/[segment].mp4", result = "video/mp4")
     context(
-        _: Logger,
+        log: Logger,
         database: Database,
         transcoding: TranscodingCache,
         auth: AuthContext,
@@ -283,13 +274,22 @@ class MediaRest {
         @QueryParameter token: String,
         @Header authorization: Authorization?,
         @Header range: String?,
+        @Header cookie: Cookie?,
     ): Result {
+
+        val headers = ParameterList()
+        if (cookie != null && "test" in cookie) {
+            log.info("thank you for the cookie!")
+        } else {
+            headers["set-cookie"] = "test=hello-world; max-age=300000; path=/"
+        }
+
         val item = mediaSession(id, authorization, token)
 
         val job = transcoding.job(item)
         val path = job.segment(name, segment)
 
-        return stream(range, path)
+        return stream(range, path, headers)
     }
 
     @Head("/stream/[id]/chapters.json")

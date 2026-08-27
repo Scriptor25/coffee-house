@@ -88,7 +88,7 @@ function downloadBlob(blob, name) {
 }
 
 async function render() {
-    const token = window.sessionStorage.getItem("session")
+    const token = window.localStorage.getItem("session")
 
     loginSectionEl.style.display = "none"
     mediaSectionEl.style.display = "none"
@@ -98,7 +98,7 @@ async function render() {
 
         if (!response.ok) {
             console.log(response.status, response.statusText)
-            window.sessionStorage.removeItem("session")
+            window.localStorage.removeItem("session")
 
             render().then()
             return
@@ -218,10 +218,10 @@ async function render() {
 
         if (!response.ok) {
             console.log(response.status, response.statusText)
-            window.sessionStorage.removeItem("session")
+            window.localStorage.removeItem("session")
         } else {
             const data = await response.text()
-            window.sessionStorage.setItem("session", data)
+            window.localStorage.setItem("session", data)
         }
 
         render().then()

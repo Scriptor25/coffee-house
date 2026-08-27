@@ -23,7 +23,7 @@ class UserRest {
         auth: AuthContext,
     )
     fun getUsers(@Header authorization: Authorization): List<User> {
-        val session = auth.auth(authorization.credentials)
+        val session = auth.auth(authorization)
             ?: throw UnauthorizedSignal()
 
         return when (session.role) {
@@ -40,8 +40,11 @@ class UserRest {
         database: Database,
         auth: AuthContext,
     )
-    fun createUser(@Header authorization: Authorization, @Body value: JsonNode): User {
-        val session = auth.auth(authorization.credentials)
+    fun createUser(
+        @Header authorization: Authorization,
+        @Body value: JsonNode,
+    ): User {
+        val session = auth.auth(authorization)
             ?: throw UnauthorizedSignal()
 
         if (session.role != UserRole.ADMIN) {
@@ -66,8 +69,11 @@ class UserRest {
         database: Database,
         auth: AuthContext,
     )
-    fun getUser(@PathParameter id: Uuid, @Header authorization: Authorization): User {
-        val session = auth.auth(authorization.credentials)
+    fun getUser(
+        @PathParameter id: Uuid,
+        @Header authorization: Authorization,
+    ): User {
+        val session = auth.auth(authorization)
             ?: throw UnauthorizedSignal()
 
         if (session.role != UserRole.ADMIN && session.id != id) {
@@ -83,8 +89,12 @@ class UserRest {
         database: Database,
         auth: AuthContext,
     )
-    fun updateUser(@PathParameter id: Uuid, @Header authorization: Authorization, @Body value: JsonNode): User {
-        val session = auth.auth(authorization.credentials)
+    fun updateUser(
+        @PathParameter id: Uuid,
+        @Header authorization: Authorization,
+        @Body value: JsonNode,
+    ): User {
+        val session = auth.auth(authorization)
             ?: throw UnauthorizedSignal()
 
         if (session.role != UserRole.ADMIN && session.id != id) {
@@ -94,7 +104,6 @@ class UserRest {
         val username: String = value["username"].get()
         val role: String = value["role"].get()
 
-        // TODO: only update role if current.role is higher than user.role
         // TODO: separate route for updating password
 
         return transaction(database) {
@@ -110,8 +119,11 @@ class UserRest {
         database: Database,
         auth: AuthContext,
     )
-    fun deleteUser(@PathParameter id: Uuid, @Header authorization: Authorization): User {
-        val session = auth.auth(authorization.credentials)
+    fun deleteUser(
+        @PathParameter id: Uuid,
+        @Header authorization: Authorization,
+    ): User {
+        val session = auth.auth(authorization)
             ?: throw UnauthorizedSignal()
 
         if (session.role != UserRole.ADMIN && session.id != id) {

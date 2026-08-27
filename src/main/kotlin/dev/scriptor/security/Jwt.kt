@@ -108,7 +108,7 @@ data class JwtPayload(
 data class Jwt(
     val header: JwtHeader,
     val payload: JwtPayload,
-    val signature: String? = null,
+    val signature: ByteArray? = null,
 ) {
     companion object {
         fun encode(header: JwtHeader, payload: JwtPayload, secret: String?): Jwt {
@@ -116,7 +116,7 @@ data class Jwt(
                 header,
                 payload,
                 if (secret != null)
-                    encode(
+                    sign(
                         header.alg,
                         "$header.$payload",
                         secret,
@@ -144,7 +144,7 @@ data class Jwt(
                     Jwt(
                         JwtHeader.decode(header),
                         JwtPayload.decode(payload),
-                        signature,
+                        BASE64.decode(signature),
                     )
                 }
 
@@ -154,23 +154,50 @@ data class Jwt(
     }
 
     fun verify(secret: String): Boolean {
-        val sig = encode(
+        if (signature == null) {
+            return false
+        }
+
+        val sig = sign(
             header.alg,
             "$header.$payload",
             secret,
         )
 
-        return sig == signature
+        var result = true
+        for (i in sig.indices) {
+            result = result && (i < signature.size) && (sig[i] == signature[i])
+        }
+
+        return result
     }
 
     override fun toString(): String =
         if (signature != null)
-            "$header.$payload.$signature"
+            "$header.$payload.${BASE64.encode(signature)}"
         else
             "$header.$payload"
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is Jwt) return false
+
+        if (header != other.header) return false
+        if (payload != other.payload) return false
+        if (!signature.contentEquals(other.signature)) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = header.hashCode()
+        result = 31 * result + payload.hashCode()
+        result = 31 * result + (signature?.contentHashCode() ?: 0)
+        return result
+    }
 }
 
-private fun encode(alg: String, message: String, secret: String): String {
+private fun sign(alg: String, message: String, secret: String): ByteArray {
     val algorithm = when (alg) {
         "HS256" -> "HmacSHA256"
         "HS384" -> "HmacSHA384"
@@ -184,7 +211,5 @@ private fun encode(alg: String, message: String, secret: String): String {
 
     mac.init(secretKey)
 
-    val digest = mac.doFinal(message.encodeToByteArray())
-
-    return BASE64.encode(digest)
+    return mac.doFinal(message.encodeToByteArray())
 }

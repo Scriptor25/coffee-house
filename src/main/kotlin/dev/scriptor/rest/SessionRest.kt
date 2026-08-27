@@ -1,18 +1,17 @@
 package dev.scriptor.rest
 
 import dev.scriptor.JsonNode
+import dev.scriptor.context.AuthContext
 import dev.scriptor.get
+import dev.scriptor.model.Authorization
 import dev.scriptor.model.user.User
-import dev.scriptor.model.user.UserRole
 import dev.scriptor.model.user.UserTable
 import dev.scriptor.security.Jwt
 import dev.scriptor.security.JwtHeader
 import dev.scriptor.security.JwtPayload
 import dev.scriptor.server.Provider
 import dev.scriptor.server.UnauthorizedSignal
-import dev.scriptor.server.annotation.Body
-import dev.scriptor.server.annotation.Controller
-import dev.scriptor.server.annotation.Post
+import dev.scriptor.server.annotation.*
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -23,8 +22,11 @@ import kotlin.time.toKotlinDuration
 @Controller("/session")
 class SessionRest {
 
-    @Post("/", "application/json", "application/json")
-    context(provider: Provider, database: Database)
+    @Post("/", "application/json", "text/plain")
+    context(
+        provider: Provider,
+        database: Database,
+    )
     fun createSession(@Body body: JsonNode): Jwt {
         val username = body["username"].get<String>()
         val password = body["password"].get<String>()
@@ -53,8 +55,6 @@ class SessionRest {
             }
         }
 
-        val role = user?.role ?: UserRole.ADMIN
-
         val createdAt = Clock.System.now()
         val expiresAt = createdAt + ofHours(24).toKotlinDuration()
 
@@ -63,20 +63,41 @@ class SessionRest {
                 alg = "HS256",
             ),
             JwtPayload(
-                jti = user?.id?.toString(),
-                sub = user?.name,
+                sub = user?.id?.toString(),
                 iat = createdAt,
                 exp = expiresAt,
                 aud = "coffee-house",
                 iss = "dev.scriptor.coffee-house", // TODO: change to application domain
-
-                custom = mapOf(
-                    "role" to role.toString().lowercase(),
-                ),
             ),
             "hello-world-secret", // TODO: change to something more secure
         )
 
         return jwt
+    }
+
+    @Get("/renew", "text/plain")
+    context(
+        database: Database,
+        auth: AuthContext,
+    )
+    fun renewSession(@Header authorization: Authorization): Jwt {
+
+        val instant = Clock.System.now()
+
+        val session = auth.auth(authorization, instant)
+            ?: throw UnauthorizedSignal()
+
+        val jwt = session.jwt
+
+        val expiresAt = instant + ofHours(24).toKotlinDuration()
+
+        return Jwt.encode(
+            jwt.header,
+            jwt.payload.copy(
+                iat = instant,
+                exp = expiresAt,
+            ),
+            "hello-world-secret", // TODO: change to something more secure
+        )
     }
 }
