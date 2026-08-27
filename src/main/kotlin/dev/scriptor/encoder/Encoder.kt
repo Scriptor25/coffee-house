@@ -1,6 +1,20 @@
 package dev.scriptor.encoder
 
+import dev.scriptor.encoder.audio.AudioEncoder
+import dev.scriptor.encoder.subtitle.SubtitleEncoder
+import dev.scriptor.encoder.video.VideoEncoder
+import dev.scriptor.model.ffmpeg.CodecId
+import dev.scriptor.model.ffmpeg.ImplementationId
+
 interface Encoder {
 
-    val name: String
+    companion object {
+        fun find(id: ImplementationId): Encoder? =
+            VideoEncoder.find(id)
+                ?: AudioEncoder.find(id)
+                ?: SubtitleEncoder.find(id)
+    }
+
+    val id: ImplementationId
+    val codec: CodecId
 }

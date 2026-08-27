@@ -2,7 +2,7 @@ package dev.scriptor.converter
 
 import dev.scriptor.JsonNode
 import dev.scriptor.jsonOf
-import dev.scriptor.model.AudioTrack
+import dev.scriptor.model.media.AudioTrack
 import dev.scriptor.server.Provider
 import dev.scriptor.server.converter.Converter
 

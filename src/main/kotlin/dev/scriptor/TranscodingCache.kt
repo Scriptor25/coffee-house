@@ -1,19 +1,26 @@
 package dev.scriptor
 
-import dev.scriptor.backend.*
-import dev.scriptor.codec.VideoCodec
-import dev.scriptor.model.Media
-import dev.scriptor.model.VideoTrack
+import dev.scriptor.backend.VideoBackend
+import dev.scriptor.decoder.video.VideoDecoder
+import dev.scriptor.encoder.video.VideoEncoder
+import dev.scriptor.model.ffmpeg.Capabilities
+import dev.scriptor.model.ffmpeg.CodecId
+import dev.scriptor.model.ffmpeg.DeviceBackend
+import dev.scriptor.model.ffmpeg.DeviceId
+import dev.scriptor.model.media.Media
+import dev.scriptor.model.media.VideoTrack
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
+import java.util.logging.Logger
 import kotlin.uuid.Uuid
 
 class TranscodingCache(
+    private val log: Logger,
     private val ffmpeg: String,
     private val base: Path,
-    private val capabilities: TranscodingCapabilities,
+    private val capabilities: Capabilities,
     private val requirements: TranscodingRequirements,
     private val allowed: Set<String> = setOf("2160p", "1440p", "1080p", "720p", "480p", "360p", "144p"),
 ) {
@@ -72,39 +79,126 @@ class TranscodingCache(
         return result
     }
 
-    fun supportsEncoding(name: String, codec: VideoCodec): Boolean {
-        return capabilities.encoders
-            .any { it.type == CodecType.VIDEO && "${codec.name.lowercase()}_$name" in it.name }
-    }
+    private fun createBackend(device: DeviceId?, input: CodecId, output: CodecId): VideoBackend {
+        val decoders = capabilities.getDecoders(input, device)
+        val encoders = capabilities.getEncoders(output, device)
 
-    fun selectBackend(codec: VideoCodec): VideoBackend = when {
-        "cuda" in capabilities.devices && supportsEncoding("nvenc", codec) -> NvidiaVideoBackend
-        "qsv" in capabilities.devices && supportsEncoding("qsv", codec) -> IntelVideoBackend
-        "amf" in capabilities.devices && supportsEncoding("amf", codec) -> AmdVideoBackend
-        "vaapi" in capabilities.devices && supportsEncoding("vaapi", codec) -> VaapiVideoBackend
-        "vulkan" in capabilities.devices && supportsEncoding("vulkan", codec) -> VulkanVideoBackend
-        else -> SoftwareVideoBackend
+        val decoder = decoders
+            .toSortedSet(capabilities::compare)
+            .firstOrNull()
+        val encoder = encoders
+            .toSortedSet(capabilities::compare)
+            .firstOrNull()
+
+        val videoDecoder =
+            if (decoder != null) when (val x = VideoDecoder.find(decoder)) {
+                null -> {
+                    log.warning("decoder '$decoder' not implemented")
+                    VideoDecoder.Generic(decoder, input, device)
+                }
+
+                else -> x
+            }
+            else VideoDecoder.Null
+        val videoEncoder =
+            if (encoder != null) when (val x = VideoEncoder.find(encoder)) {
+                null -> {
+                    log.warning("encoder '$encoder' not implemented")
+                    VideoEncoder.Generic(encoder, output)
+                }
+
+                else -> x
+            }
+            else VideoEncoder.Null
+
+        return when (device) {
+            null -> object : VideoBackend {
+                override val device = device
+
+                override val decoder = videoDecoder
+                override val encoder = videoEncoder
+
+                override fun upload(): List<String> = emptyList()
+                override fun download(): List<String> = emptyList()
+
+                override fun scale(width: Int, height: Int): List<String> = listOf("scale=w=$width:h=$height")
+            }
+
+            else -> {
+                val backend = DeviceBackend.find(device)
+                    ?: error("device '$device' not implemented")
+
+                val scale = backend.scale
+
+                object : VideoBackend {
+                    override val device = device
+
+                    override val decoder = videoDecoder
+                    override val encoder = videoEncoder
+
+                    override fun upload(): List<String> = listOf("format=nv12", "hwupload")
+                    override fun download(): List<String> = listOf("hwdownload", "format=nv12")
+
+                    override fun scale(width: Int, height: Int): List<String> = listOf("$scale=w=$width:h=$height")
+                }
+            }
+        }
     }
 
     context(database: Database)
     fun job(item: Media): TranscodingJob = jobs.computeIfAbsent(item.id.value) {
         transaction(database) {
-            val backend = selectBackend(requirements.video)
 
-            val pipeline = Pipeline(
-                8,
-                SoftwareVideoBackend,
-                backend,
-                backend,
-                backend,
-            )
+            val video = item.video.first { it.index == 0 }
+
+            val input = CodecId(video.codec)
+            val output = requirements.video
+
+            val decodeDevices = capabilities.getDevicesForDecoding(input)
+            val encodeDevices = capabilities.getDevicesForEncoding(output)
+
+            // TODO: find most suitable device for decoding/encoding
+            // TODO: find separate device for splitting/scaling if unsupported
+
+            val transcodeDevice = decodeDevices
+                .filter(encodeDevices::contains)
+                .toSortedSet(capabilities::compare)
+                .firstOrNull()
+
+            val pipeline = if (transcodeDevice == null) {
+
+                val decodeDevice = decodeDevices
+                    .toSortedSet(capabilities::compare)
+                    .firstOrNull()
+                val encodeDevice = encodeDevices
+                    .toSortedSet(capabilities::compare)
+                    .firstOrNull()
+
+                val decodeBackend = createBackend(decodeDevice, input, output)
+                val encodeBackend =
+                    if (decodeDevice == encodeDevice) decodeBackend
+                    else createBackend(encodeDevice, input, output)
+
+                Pipeline(
+                    capabilities,
+                    decodeBackend,
+                    encodeBackend,
+                    encodeBackend,
+                    encodeBackend,
+                )
+            } else {
+                val backend = createBackend(transcodeDevice, input, output)
+
+                Pipeline(capabilities, backend)
+            }
 
             TranscodingJob(
                 ffmpeg,
                 item,
                 base.resolve(item.id.value.toHexDashString()),
-                variants(item.video.first { it.index == 0 }),
-                requirements,
+                variants(video),
+                requirements.enable,
+                requirements.device,
                 pipeline,
             )
         }

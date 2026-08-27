@@ -1,13 +1,11 @@
 package dev.scriptor
 
-import dev.scriptor.codec.AudioCodec
-import dev.scriptor.codec.SubtitleCodec
-import dev.scriptor.codec.VideoCodec
+import dev.scriptor.model.ffmpeg.CodecId
 
 data class TranscodingRequirements(
     val enable: Boolean,
     val device: String?,
-    val video: VideoCodec,
-    val audio: AudioCodec,
-    val subtitle: SubtitleCodec,
+    val video: CodecId,
+    val audio: CodecId,
+    val subtitle: CodecId,
 )

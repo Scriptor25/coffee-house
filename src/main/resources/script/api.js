@@ -8,9 +8,9 @@ export async function fetchAPI(resource, init, session = true) {
     const endpoint = window.location.origin
 
     if (session) {
-        const token = window.localStorage.getItem("session")
+        const token = window.sessionStorage.getItem("session")
 
-        return fetch(`${endpoint}/${resource}`, {
+        return await fetch(`${endpoint}/${resource}`, {
             ...init,
             headers: {
                 ...init?.headers,
@@ -19,5 +19,5 @@ export async function fetchAPI(resource, init, session = true) {
         })
     }
 
-    return fetch(`${endpoint}/${resource}`, init)
+    return await fetch(`${endpoint}/${resource}`, init)
 }

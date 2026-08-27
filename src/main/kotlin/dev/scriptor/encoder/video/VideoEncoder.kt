@@ -1,15 +1,27 @@
 package dev.scriptor.encoder.video
 
 import dev.scriptor.Profile
-import dev.scriptor.backend.SoftwareVideoBackend
-import dev.scriptor.backend.VideoBackend
-import dev.scriptor.codec.VideoCodec
 import dev.scriptor.encoder.Encoder
+import dev.scriptor.model.ffmpeg.CodecId
+import dev.scriptor.model.ffmpeg.ImplementationId
 
-interface VideoEncoder : Encoder {
+sealed interface VideoEncoder : Encoder {
 
-    val backend: VideoBackend
-    val codec: VideoCodec
+    companion object {
+        fun find(id: ImplementationId): VideoEncoder? = when (id) {
+            AV1.id -> AV1
+            VP8.id -> VP8
+            VP9.id -> VP9
+            H264.id -> H264
+            HEVC.id -> HEVC
+
+            else -> AmdVideoEncoder.find(id)
+                ?: IntelVideoEncoder.find(id)
+                ?: NvidiaVideoEncoder.find(id)
+                ?: VaapiVideoEncoder.find(id)
+                ?: VulkanVideoEncoder.find(id)
+        }
+    }
 
     operator fun invoke(
         index: Int,
@@ -17,12 +29,37 @@ interface VideoEncoder : Encoder {
         bitrate: Long,
     ): List<String>
 
+    data object Null : VideoEncoder {
+
+        override val id = ImplementationId("null")
+        override val codec = CodecId("null")
+
+        override fun invoke(
+            index: Int,
+            profile: Profile,
+            bitrate: Long,
+        ): List<String> = error("null")
+    }
+
+    data class Generic(
+        override val id: ImplementationId,
+        override val codec: CodecId,
+    ) : VideoEncoder {
+
+        override fun invoke(
+            index: Int,
+            profile: Profile,
+            bitrate: Long,
+        ): List<String> = listOf(
+            "-maxrate:v:$index", bitrate.toString(),
+            "-bufsize:v:$index", (bitrate * 2).toString(),
+        )
+    }
+
     data object AV1 : VideoEncoder {
 
-        override val name = "libsvtav1"
-
-        override val backend = SoftwareVideoBackend
-        override val codec = VideoCodec.AV1
+        override val id = ImplementationId("libsvtav1")
+        override val codec = CodecId("av1")
 
         override fun invoke(
             index: Int,
@@ -54,10 +91,8 @@ interface VideoEncoder : Encoder {
 
     data object VP8 : VideoEncoder {
 
-        override val name = "libvpx-vp8"
-
-        override val backend = SoftwareVideoBackend
-        override val codec = VideoCodec.VP8
+        override val id = ImplementationId("libvpx-vp8")
+        override val codec = CodecId("vp8")
 
         override fun invoke(
             index: Int,
@@ -90,10 +125,8 @@ interface VideoEncoder : Encoder {
 
     data object VP9 : VideoEncoder {
 
-        override val name = "libvpx-vp9"
-
-        override val backend = SoftwareVideoBackend
-        override val codec = VideoCodec.VP9
+        override val id = ImplementationId("libvpx-vp9")
+        override val codec = CodecId("vp9")
 
         override fun invoke(
             index: Int,
@@ -126,10 +159,8 @@ interface VideoEncoder : Encoder {
 
     data object H264 : VideoEncoder {
 
-        override val name = "libx264"
-
-        override val backend = SoftwareVideoBackend
-        override val codec = VideoCodec.H264
+        override val id = ImplementationId("libx264")
+        override val codec = CodecId("h264")
 
         override fun invoke(
             index: Int,
@@ -162,10 +193,8 @@ interface VideoEncoder : Encoder {
 
     data object HEVC : VideoEncoder {
 
-        override val name = "libx265"
-
-        override val backend = SoftwareVideoBackend
-        override val codec = VideoCodec.HEVC
+        override val id = ImplementationId("libx265")
+        override val codec = CodecId("hevc")
 
         override fun invoke(
             index: Int,

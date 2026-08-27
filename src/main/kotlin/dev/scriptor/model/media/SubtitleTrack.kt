@@ -1,4 +1,4 @@
-package dev.scriptor.model
+package dev.scriptor.model.media
 
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
@@ -24,7 +24,7 @@ object SubtitleTrackTable : UuidTable("subtitle_track") {
 class SubtitleTrack(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<SubtitleTrack>(SubtitleTrackTable)
 
-    var media by Media referencedOn SubtitleTrackTable.media
+    var media by Media.Companion referencedOn SubtitleTrackTable.media
     var index by SubtitleTrackTable.index
     var codec by SubtitleTrackTable.codec
     var language by SubtitleTrackTable.language

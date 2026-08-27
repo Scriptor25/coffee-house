@@ -1,24 +1,42 @@
 package dev.scriptor.encoder.subtitle
 
-import dev.scriptor.codec.SubtitleCodec
 import dev.scriptor.encoder.Encoder
+import dev.scriptor.model.ffmpeg.CodecId
+import dev.scriptor.model.ffmpeg.ImplementationId
 
-interface SubtitleEncoder : Encoder {
+sealed interface SubtitleEncoder : Encoder {
 
-    val codec: SubtitleCodec
+    companion object {
+        fun find(id: ImplementationId): SubtitleEncoder? = when (id) {
+            WebVtt.id -> WebVtt
 
-    operator fun invoke(
-        index: Int,
-    ): List<String>
+            else -> null
+        }
+    }
+
+    operator fun invoke(index: Int): List<String>
+
+    data object Null : SubtitleEncoder {
+
+        override val id = ImplementationId("null")
+        override val codec = CodecId("null")
+
+        override fun invoke(index: Int): List<String> = error("null")
+    }
+
+    data class Generic(
+        override val id: ImplementationId,
+        override val codec: CodecId,
+    ) : SubtitleEncoder {
+
+        override fun invoke(index: Int): List<String> = emptyList()
+    }
 
     data object WebVtt : SubtitleEncoder {
 
-        override val name = "webvtt"
+        override val id = ImplementationId("webvtt")
+        override val codec = CodecId("webvtt")
 
-        override val codec = SubtitleCodec.WEBVTT
-
-        override fun invoke(
-            index: Int,
-        ): List<String> = emptyList()
+        override fun invoke(index: Int): List<String> = emptyList()
     }
 }

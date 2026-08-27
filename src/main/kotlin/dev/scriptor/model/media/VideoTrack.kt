@@ -1,4 +1,4 @@
-package dev.scriptor.model
+package dev.scriptor.model.media
 
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
@@ -30,7 +30,7 @@ object VideoTrackTable : UuidTable("video_track") {
 class VideoTrack(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<VideoTrack>(VideoTrackTable)
 
-    var media by Media referencedOn VideoTrackTable.media
+    var media by Media.Companion referencedOn VideoTrackTable.media
     var index by VideoTrackTable.index
     var codec by VideoTrackTable.codec
     var width by VideoTrackTable.width

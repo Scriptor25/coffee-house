@@ -1,68 +1,78 @@
 package dev.scriptor.encoder.audio
 
-import dev.scriptor.codec.AudioCodec
 import dev.scriptor.encoder.Encoder
+import dev.scriptor.model.ffmpeg.CodecId
+import dev.scriptor.model.ffmpeg.ImplementationId
 
-interface AudioEncoder : Encoder {
+sealed interface AudioEncoder : Encoder {
 
-    val codec: AudioCodec
+    companion object {
+        fun find(id: ImplementationId): AudioEncoder? = when (id) {
+            Aac.id -> Aac
+            Opus.id -> Opus
+            Mp3.id -> Mp3
+            Vorbis.id -> Vorbis
+            Flac.id -> Flac
 
-    operator fun invoke(
-        index: Int,
-    ): List<String>
+            else -> null
+        }
+    }
+
+    operator fun invoke(index: Int): List<String>
+
+    data object Null : AudioEncoder {
+
+        override val id = ImplementationId("null")
+        override val codec = CodecId("null")
+
+        override fun invoke(index: Int): List<String> = error("null")
+    }
+
+    data class Generic(
+        override val id: ImplementationId,
+        override val codec: CodecId,
+    ) : AudioEncoder {
+
+        override fun invoke(index: Int): List<String> = emptyList()
+    }
 
     data object Aac : AudioEncoder {
 
-        override val name = "aac"
+        override val id = ImplementationId("aac")
+        override val codec = CodecId("aac")
 
-        override val codec = AudioCodec.AAC
-
-        override fun invoke(
-            index: Int,
-        ): List<String> = emptyList()
+        override fun invoke(index: Int): List<String> = emptyList()
     }
 
     data object Opus : AudioEncoder {
 
-        override val name = "libopus"
+        override val id = ImplementationId("libopus")
+        override val codec = CodecId("opus")
 
-        override val codec = AudioCodec.OPUS
-
-        override fun invoke(
-            index: Int,
-        ): List<String> = emptyList()
+        override fun invoke(index: Int): List<String> = emptyList()
     }
 
     data object Mp3 : AudioEncoder {
 
-        override val name = "libmp3lame"
+        override val id = ImplementationId("libmp3lame")
+        override val codec = CodecId("mp3")
 
-        override val codec = AudioCodec.MP3
-
-        override fun invoke(
-            index: Int,
-        ): List<String> = emptyList()
+        override fun invoke(index: Int): List<String> = emptyList()
     }
 
     data object Vorbis : AudioEncoder {
 
-        override val name = "libvorbis"
+        override val id = ImplementationId("libvorbis")
+        override val codec = CodecId("vorbis")
 
-        override val codec = AudioCodec.VORBIS
-
-        override fun invoke(
-            index: Int,
-        ): List<String> = emptyList()
+        override fun invoke(index: Int): List<String> = emptyList()
     }
 
     data object Flac : AudioEncoder {
 
-        override val name = "flac"
+        override val id = ImplementationId("flac")
+        override val codec = CodecId("flac")
 
-        override val codec = AudioCodec.FLAC
-
-        override fun invoke(
-            index: Int,
-        ): List<String> = emptyList()
+        override fun invoke(index: Int): List<String> = emptyList()
     }
 }

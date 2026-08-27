@@ -1,92 +1,67 @@
 package dev.scriptor
 
-import dev.scriptor.backend.SoftwareVideoBackend
 import dev.scriptor.backend.VideoBackend
+import dev.scriptor.model.ffmpeg.Capabilities
 
 data class Pipeline(
-    val bitDepth: Int,
+    val capabilities: Capabilities,
     val decode: VideoBackend,
     val split: VideoBackend,
     val scale: VideoBackend,
     val encode: VideoBackend,
 ) {
+    constructor(capabilities: Capabilities, backend: VideoBackend) : this(
+        capabilities,
+        backend,
+        backend,
+        backend,
+        backend,
+    )
 
-    val devices: Set<String>
-        get() = buildSet {
-            if (decode !is SoftwareVideoBackend) {
-                this += decode.name
-            }
-            if (split !is SoftwareVideoBackend) {
-                this += split.name
-            }
-            if (scale !is SoftwareVideoBackend) {
-                this += scale.name
-            }
-            if (encode !is SoftwareVideoBackend) {
-                this += encode.name
-            }
-        }
+    val devices = setOfNotNull(decode.device, split.device, scale.device, encode.device)
 
-    fun buildSplit(count: Int): String = buildList<String> {
-        this += transition(decode, split, true)
-        this += "split=$count"
+    fun filter(name: String, vararg args: Pair<String?, Any?>): String {
+        val args = args
+            .filter { it.second != null }
+            .joinToString(":") { (k, v) -> if (k == null) "$v" else "$k=$v" }
+        return "$name=$args"
     }
-        .joinToString(",")
 
-    fun buildEncode(): String =
-        transition(split, encode, true)
-            .ifEmpty { listOf("null") }
-            .joinToString(",")
+    fun split(count: Int): List<String> =
+        transition(decode, split) + filter("split", null to count)
 
-    fun buildScaleEncode(
+    fun encode(): List<String> =
+        transition(split, encode)
+
+    fun scaleEncode(
         width: Int,
         height: Int,
-    ): String = buildList<String> {
-        this += transition(split, scale, true)
-
-        val scaleAndFormat = scale.supportScaleAndFormat && transitionRequiresFormat(scale, encode)
-
-        if (scaleAndFormat) {
-            this += scale.scale(width, height, encode.format(bitDepth))
-        } else {
-            this += scale.scale(width, height, null)
-        }
-
-        this += transition(scale, encode, !scaleAndFormat)
-    }
-        .ifEmpty { listOf("null") }
-        .joinToString(",")
-
-    private fun transitionRequiresFormat(
-        src: VideoBackend,
-        dst: VideoBackend,
-    ): Boolean = when (src) {
-        dst -> false
-
-        else -> {
-            val srcFormat = src.format(bitDepth)
-            val dstFormat = dst.format(bitDepth)
-
-            return srcFormat != dstFormat
-        }
-    }
+    ): List<String> =
+        transition(split, scale) + scale.scale(width, height) + transition(scale, encode)
 
     private fun transition(
         src: VideoBackend,
         dst: VideoBackend,
-        format: Boolean,
-    ): List<String> = when (src) {
-        dst -> emptyList()
+    ): List<String> {
+        val sd = src.device
+        val dd = dst.device
 
-        else -> {
-            val srcFormat = src.format(bitDepth)
-            val dstFormat = dst.format(bitDepth)
+        return when {
+            sd == dd -> emptyList()
 
-            listOfNotNull(
-                src.download,
-                if (srcFormat != dstFormat && format) "format=$dstFormat" else null,
-                dst.upload,
-            )
+            else -> {
+                val interop =
+                    if (sd == null || dd == null) null
+                    else capabilities.getInterop(sd, dd)
+
+                if (interop == null || !interop.derivable) {
+                    src.download() + dst.upload()
+                } else if (!interop.direct) {
+                    listOf(filter("hwmap", "derive_device" to dd))
+                } else {
+                    listOf(filter("hwmap", "derive_device" to dd, "mode" to "direct"))
+                }
+            }
         }
     }
 }

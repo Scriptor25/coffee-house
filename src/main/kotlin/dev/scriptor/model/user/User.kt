@@ -1,4 +1,4 @@
-package dev.scriptor.model
+package dev.scriptor.model.user
 
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.UuidTable
@@ -18,8 +18,6 @@ class User(id: EntityID<Uuid>) : UuidEntity(id) {
     var name by UserTable.name
     var hash by UserTable.hash
     var role by UserTable.role
-
-    val sessions by Session optionalReferrersOn SessionTable.user
 
     override fun toString(): String {
         return "User(id=$id, name=$name, hash=$hash, role=$role)"

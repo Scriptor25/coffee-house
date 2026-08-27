@@ -1,6 +1,6 @@
 package dev.scriptor.converter
 
-import dev.scriptor.model.UserRole
+import dev.scriptor.model.user.UserRole
 import dev.scriptor.server.Provider
 import dev.scriptor.server.converter.Converter
 

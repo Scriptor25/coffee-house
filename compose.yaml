@@ -19,7 +19,6 @@ services:
       USERNAME: "root"
       PASSWORD: "root"
       TRANSCODING: "true"
-      PREFERRED_VIDEO_CODEC: "AV1"
 
     devices:
       - /dev/dri:/dev/dri

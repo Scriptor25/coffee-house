@@ -1,6 +1,6 @@
 package dev.scriptor
 
-import dev.scriptor.model.Media
+import dev.scriptor.model.media.Media
 import java.nio.file.Path
 import java.util.logging.Logger
 import kotlin.io.path.createDirectories
@@ -11,7 +11,8 @@ data class TranscodingJob(
     val metadata: Media,
     val cache: Path,
     val variants: List<Variant>,
-    val requirements: TranscodingRequirements,
+    val enable: Boolean,
+    val device: String?,
     val pipeline: Pipeline,
 ) {
     private enum class State {
@@ -89,21 +90,17 @@ data class TranscodingJob(
                 variants.forEach {
                     when (it) {
                         is OriginalVariant -> {
-                            if (requirements.enable) {
-                                transcode(
-                                    it.name,
-                                    requirements.video,
-                                )
+                            if (enable) {
+                                transcode(it.name)
                             } else {
                                 copy(it.name)
                             }
                         }
 
                         is ScaleVariant -> {
-                            if (requirements.enable) {
+                            if (enable) {
                                 transcode(
                                     it.name,
-                                    requirements.video,
                                     it.profile,
                                     it.bitrate,
                                     it.width,
@@ -123,8 +120,8 @@ data class TranscodingJob(
 
             metadata.audio.forEach {
                 audio(it) {
-                    if (requirements.enable) {
-                        transcode(codec = requirements.audio)
+                    if (enable) {
+                        transcode()
                     } else {
                         copy()
                     }
@@ -133,6 +130,7 @@ data class TranscodingJob(
 
             metadata.subtitles.filter {
                 // TODO: HLS does not support bitmap subtitles?
+                // TODO: use ocr filter for preprocessing bitmap subtitles
                 when (it.codec) {
                     "subrip",
                     "ass",
@@ -143,8 +141,8 @@ data class TranscodingJob(
                 }
             }.forEach {
                 subtitle(it) {
-                    if (requirements.enable) {
-                        transcode(codec = requirements.subtitle)
+                    if (enable) {
+                        transcode()
                     } else {
                         copy()
                     }
@@ -154,8 +152,8 @@ data class TranscodingJob(
 
         return CommandBuilder(
             ffmpeg,
-            requirements.enable,
-            requirements.device,
+            enable,
+            device,
             metadata.path,
             cache,
             outputs,

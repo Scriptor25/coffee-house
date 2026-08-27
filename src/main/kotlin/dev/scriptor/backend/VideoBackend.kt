@@ -1,26 +1,17 @@
 package dev.scriptor.backend
 
-import dev.scriptor.codec.VideoCodec
+import dev.scriptor.decoder.video.VideoDecoder
 import dev.scriptor.encoder.video.VideoEncoder
+import dev.scriptor.model.ffmpeg.DeviceId
 
 interface VideoBackend {
+    val device: DeviceId?
 
-    val name: String
+    val decoder: VideoDecoder
+    val encoder: VideoEncoder
 
-    val upload: String?
-    val download: String?
+    fun upload(): List<String>
+    fun download(): List<String>
 
-    val supportScaleAndFormat: Boolean
-
-    fun format(bitDepth: Int): String
-    fun scale(width: Int, height: Int, format: String?): String
-
-    fun encoder(codec: VideoCodec): VideoEncoder
-
-    fun filter(filter: String, vararg args: Pair<String, Any?>): String {
-        val args = args
-            .filter { it.second != null }
-            .joinToString(":") { (key, value) -> "$key=$value" }
-        return "$filter=$args"
-    }
+    fun scale(width: Int, height: Int): List<String>
 }

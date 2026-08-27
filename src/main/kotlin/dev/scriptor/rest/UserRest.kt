@@ -3,9 +3,9 @@ package dev.scriptor.rest
 import dev.scriptor.JsonNode
 import dev.scriptor.context.AuthContext
 import dev.scriptor.get
-import dev.scriptor.model.Bearer
-import dev.scriptor.model.User
-import dev.scriptor.model.UserRole
+import dev.scriptor.model.Authorization
+import dev.scriptor.model.user.User
+import dev.scriptor.model.user.UserRole
 import dev.scriptor.server.ForbiddenSignal
 import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.UnauthorizedSignal
@@ -22,16 +22,16 @@ class UserRest {
         database: Database,
         auth: AuthContext,
     )
-    fun getUsers(@Header authorization: Bearer): List<User> {
-        val session = auth.auth(authorization.token)
+    fun getUsers(@Header authorization: Authorization): List<User> {
+        val session = auth.auth(authorization.credentials)
             ?: throw UnauthorizedSignal()
 
-        val current = session.user
-
-        return if (current == null || current.role == UserRole.ADMIN) {
-            transaction(database) { User.all().toList() }
-        } else {
-            listOf(current)
+        return when (session.role) {
+            UserRole.ADMIN -> transaction(database) { User.all().toList() }
+            UserRole.USER -> {
+                val self = transaction(database) { User.findById(session.id!!) }
+                listOfNotNull(self)
+            }
         }
     }
 
@@ -40,12 +40,11 @@ class UserRest {
         database: Database,
         auth: AuthContext,
     )
-    fun createUser(@Header authorization: Bearer, @Body value: JsonNode): User {
-        val session = auth.auth(authorization.token)
+    fun createUser(@Header authorization: Authorization, @Body value: JsonNode): User {
+        val session = auth.auth(authorization.credentials)
             ?: throw UnauthorizedSignal()
 
-        val current = session.user
-        if (current != null && current.role != UserRole.ADMIN) {
+        if (session.role != UserRole.ADMIN) {
             throw ForbiddenSignal()
         }
 
@@ -67,16 +66,11 @@ class UserRest {
         database: Database,
         auth: AuthContext,
     )
-    fun getUser(@PathParameter id: Uuid, @Header authorization: Bearer): User {
-        val session = auth.auth(authorization.token)
+    fun getUser(@PathParameter id: Uuid, @Header authorization: Authorization): User {
+        val session = auth.auth(authorization.credentials)
             ?: throw UnauthorizedSignal()
 
-        val current = session.user
-        if (
-            current != null
-            && current.role != UserRole.ADMIN
-            && current.id.value != id
-        ) {
+        if (session.role != UserRole.ADMIN && session.id != id) {
             throw ForbiddenSignal()
         }
 
@@ -89,16 +83,11 @@ class UserRest {
         database: Database,
         auth: AuthContext,
     )
-    fun updateUser(@PathParameter id: Uuid, @Header authorization: Bearer, @Body value: JsonNode): User {
-        val session = auth.auth(authorization.token)
+    fun updateUser(@PathParameter id: Uuid, @Header authorization: Authorization, @Body value: JsonNode): User {
+        val session = auth.auth(authorization.credentials)
             ?: throw UnauthorizedSignal()
 
-        val current = session.user
-        if (
-            current != null
-            && current.role != UserRole.ADMIN
-            && current.id.value != id
-        ) {
+        if (session.role != UserRole.ADMIN && session.id != id) {
             throw ForbiddenSignal()
         }
 
@@ -121,16 +110,11 @@ class UserRest {
         database: Database,
         auth: AuthContext,
     )
-    fun deleteUser(@PathParameter id: Uuid, @Header authorization: Bearer): User {
-        val session = auth.auth(authorization.token)
+    fun deleteUser(@PathParameter id: Uuid, @Header authorization: Authorization): User {
+        val session = auth.auth(authorization.credentials)
             ?: throw UnauthorizedSignal()
 
-        val current = session.user
-        if (
-            current != null
-            && current.role != UserRole.ADMIN
-            && current.id.value != id
-        ) {
+        if (session.role != UserRole.ADMIN && session.id != id) {
             throw ForbiddenSignal()
         }
 
