@@ -8,7 +8,7 @@ enum class JsonType {
     VALUE,
 }
 
-sealed interface JsonNode {
+sealed interface JsonNode : Iterable<JsonNode> {
 
     val type: JsonType
 
@@ -22,7 +22,7 @@ sealed interface JsonNode {
         get() = throw UnsupportedOperationException()
 
     operator fun get(index: Int): JsonNode = throw UnsupportedOperationException()
-    operator fun iterator(): Iterator<JsonNode> = throw UnsupportedOperationException()
+    override fun iterator(): Iterator<JsonNode> = throw UnsupportedOperationException()
 
     operator fun invoke(): Any? = throw UnsupportedOperationException()
 

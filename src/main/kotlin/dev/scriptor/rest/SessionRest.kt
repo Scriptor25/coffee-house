@@ -15,10 +15,11 @@ import dev.scriptor.server.annotation.*
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import java.time.Duration.ofHours
+import java.time.Duration.ofMinutes
 import kotlin.time.Clock
 import kotlin.time.toKotlinDuration
 
+@Suppress("unused")
 @Controller("/session")
 class SessionRest {
 
@@ -56,7 +57,7 @@ class SessionRest {
         }
 
         val createdAt = Clock.System.now()
-        val expiresAt = createdAt + ofHours(24).toKotlinDuration()
+        val expiresAt = createdAt + ofMinutes(60).toKotlinDuration()
 
         val jwt = Jwt.encode(
             JwtHeader(
@@ -89,7 +90,7 @@ class SessionRest {
 
         val jwt = session.jwt
 
-        val expiresAt = instant + ofHours(24).toKotlinDuration()
+        val expiresAt = instant + ofMinutes(60).toKotlinDuration()
 
         return Jwt.encode(
             jwt.header,

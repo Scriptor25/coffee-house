@@ -22,7 +22,11 @@
 </section>
 
 <section id="media" style="display: none">
-    <div>Playlist (<button id="playlist-direct" type="button">Direct</button>, <button id="playlist-hls" type="button">HLS</button>)</div>
+    <div style="display: flex; flex-flow: row wrap; align-items: center; gap: 10px;">
+        <span>Playlist</span>
+        <button id="playlist-direct" type="button">direct</button>
+        <button id="playlist-hls" type="button">hls</button>
+    </div>
     <ul id="list"></ul>
 </section>
 

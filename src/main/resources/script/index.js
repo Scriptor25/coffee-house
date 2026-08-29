@@ -1,4 +1,4 @@
-import {fetchAPI} from "./api.js"
+import {createPlayback, fetchAPI} from "./api.js"
 import {buildTree, DirectoryNode, getCommonBase, MediaNode, segments} from "./tree.js"
 
 const loginSectionEl = document.getElementById("login")
@@ -30,61 +30,66 @@ function createSimpleListItem(
 }
 
 /**
- * @param {string} content
- * @param {string} primaryText
- * @param {string} primaryHref
- * @param {string=} secondaryText
- * @param {string=} secondaryHref
+ * @param {MediaNode} node
  * @returns {HTMLElement}
  */
-function createListItem(
-    content,
-    primaryText,
-    primaryHref,
-    secondaryText,
-    secondaryHref,
-) {
-    const listItemEl = document.createElement("li")
+function createListItem(node) {
 
-    const spanEl = document.createElement("span")
-    spanEl.innerText = content
+    /**
+     * @param {boolean} direct
+     * @returns {Promise<void>}
+     */
+    const copySingleUrl = async (direct) => {
+        const base = await createPlayback(node.item.title, [node.item.id])
+        if (!base) return null
 
-    listItemEl.appendChild(spanEl)
-    listItemEl.appendChild(document.createTextNode(" ("))
+        const pathname = direct ? `${base}/0` : `${base}/0/master.m3u8`
+        const url = new URL(pathname, window.location.origin)
 
-    const primaryAnchorEl = document.createElement("a")
-    primaryAnchorEl.innerText = primaryText
-    primaryAnchorEl.href = primaryHref
-
-    listItemEl.appendChild(primaryAnchorEl)
-
-    if (secondaryText && secondaryHref) {
-        const secondaryAnchorEl = document.createElement("a")
-        secondaryAnchorEl.innerText = secondaryText
-        secondaryAnchorEl.href = secondaryHref
-
-        listItemEl.appendChild(document.createTextNode(", "))
-        listItemEl.appendChild(secondaryAnchorEl)
+        await copyUrl(url)
     }
 
-    listItemEl.appendChild(document.createTextNode(")"))
+    const li = document.createElement("li")
 
-    return listItemEl
+    {
+        const div = document.createElement("div")
+        div.style = "display: inline-flex; flex-flow: row wrap; align-items: center; gap: 10px;"
+
+        {
+            const span = document.createElement("span")
+            span.innerText = node.name
+
+            div.appendChild(span)
+        }
+
+        {
+            const button = document.createElement("button")
+            button.innerText = "direct"
+            button.onclick = () => copySingleUrl(true)
+
+            div.appendChild(button)
+        }
+
+        {
+            const button = document.createElement("button")
+            button.innerText = "hls"
+            button.onclick = () => copySingleUrl(false)
+
+            div.appendChild(button)
+        }
+
+        li.appendChild(div)
+    }
+
+    return li
 }
 
 /**
- * @param {Blob} blob
- * @param {string} name
+ * @param {URL} url
+ * @returns {Promise<void>}
  */
-function downloadBlob(blob, name) {
-    const objectURL = URL.createObjectURL(blob)
-
-    const anchorEl = document.createElement("a")
-    anchorEl.href = objectURL
-    anchorEl.download = name
-    anchorEl.click()
-
-    URL.revokeObjectURL(objectURL)
+async function copyUrl(url) {
+    return window.navigator.clipboard.writeText(url.toString())
 }
 
 async function render() {
@@ -130,18 +135,10 @@ async function render() {
             const sorted = node.children
                 .toSorted((a, b) => a.name.localeCompare(b.name))
 
-            const listItemEls = sorted
+            const listItems = sorted
                 .map(node => {
                     if (node instanceof MediaNode) {
-                        const directUri = `/media/stream/${node.item.id}?token=${token}`
-                        const hlsUri = `/media/stream/${node.item.id}/master.m3u8?token=${token}`
-                        return createListItem(
-                            node.name,
-                            "Direct",
-                            encodeURI(directUri),
-                            "HLS",
-                            encodeURI(hlsUri),
-                        )
+                        return createListItem(node)
                     } else {
                         const uri = `/#${slug.length ? "/" + slug.join("/") : ""}/${node.name}`
                         return createSimpleListItem(node.name, encodeURI(uri))
@@ -152,51 +149,32 @@ async function render() {
                 const target = slug.slice(0, -1)
 
                 const uri = `/#${target.length ? "/" + target.join("/") : ""}`
-                const listItemEl = createSimpleListItem("..", encodeURI(uri))
-                listItemEls.unshift(listItemEl)
+                const listItem = createSimpleListItem("..", encodeURI(uri))
+                listItems.unshift(listItem)
             }
 
-            listEl.replaceChildren(...listItemEls)
+            listEl.replaceChildren(...listItems)
 
-            const playlist = sorted
-                .filter(item => item instanceof MediaNode)
-                .map(
-                    /**
-                     * @param {MediaNode} item
-                     * @return {Media}
-                     */
-                    item => item.item)
+            /**
+             * @param {boolean} direct
+             * @returns {Promise<void>}
+             */
+            const copyPlaylistUrl = async (direct) => {
+                const playlist = sorted
+                    .filter(item => item instanceof MediaNode)
+                    .map(/** @param {MediaNode} item */item => item.item.id)
 
-            const directLines = playlist.flatMap(item => {
-                const url = new URL(
-                    encodeURI(`/media/stream/${item.id}?token=${token}`),
-                    window.location.origin,
-                )
-                return [`#EXTINF:${item.duration},${item.title}`, url.toString()]
-            })
+                const base = await createPlayback(node.name, playlist)
+                if (!base) return null
 
-            const hlsLines = playlist.flatMap(item => {
-                const url = new URL(
-                    encodeURI(`/media/stream/${item.id}/master.m3u8?token=${token}`),
-                    window.location.origin,
-                )
-                return [`#EXTINF:${item.duration},${item.title}`, url.toString()]
-            })
+                const pathname = `${base}/playlist.m3u8?direct=${direct}`
+                const url = new URL(pathname, window.location.origin)
 
-            const directPlaylist = `#EXTM3U\r\n#PLAYLIST:${node.name}\r\n${directLines.join("\r\n")}`
-            const hlsPlaylist = `#EXTM3U\r\n#PLAYLIST:${node.name}\r\n${hlsLines.join("\r\n")}`
-
-            playlistDirectButtonEl.onclick = async () => {
-                const blob = new Blob([directPlaylist], {type: "application/x-mpegurl"})
-
-                downloadBlob(blob, `${node.name}.m3u8`)
+                await copyUrl(url)
             }
 
-            playlistHLSButtonEl.onclick = async () => {
-                const blob = new Blob([hlsPlaylist], {type: "application/x-mpegurl"})
-
-                downloadBlob(blob, `${node.name}.m3u8`)
-            }
+            playlistDirectButtonEl.onclick = () => copyPlaylistUrl(true)
+            playlistHLSButtonEl.onclick = () => copyPlaylistUrl(false)
         }
 
         mediaSectionEl.style.display = "block"

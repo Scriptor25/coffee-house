@@ -8,6 +8,7 @@ import dev.scriptor.server.annotation.Get
 import dev.scriptor.server.annotation.PathParameter
 import dev.scriptor.server.result.StreamResult
 
+@Suppress("unused")
 @Controller("/")
 class DashboardRest {
 

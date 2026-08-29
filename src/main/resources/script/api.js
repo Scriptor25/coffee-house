@@ -21,3 +21,21 @@ export async function fetchAPI(resource, init, session = true) {
 
     return await fetch(`${endpoint}/${resource}`, init)
 }
+
+/**
+ * @param {string} name
+ * @param {string[]} items
+ * @returns {Promise<string | null>}
+ */
+export async function createPlayback(name, items) {
+    const response = await fetchAPI("playback", {
+        method: "POST",
+        body: JSON.stringify({name, items}),
+    })
+
+    if (!response.ok) {
+        return null
+    }
+
+    return `/playback/${await response.text()}`
+}
