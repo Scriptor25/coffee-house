@@ -1,23 +1,25 @@
 package dev.scriptor.rest
 
-import dev.scriptor.JsonNode
 import dev.scriptor.TranscodingCache
 import dev.scriptor.context.AuthContext
 import dev.scriptor.jsonOf
 import dev.scriptor.model.Authorization
 import dev.scriptor.model.Cookie
+import dev.scriptor.model.Session
 import dev.scriptor.model.media.Chapter
 import dev.scriptor.model.media.Media
 import dev.scriptor.server.*
 import dev.scriptor.server.annotation.*
 import dev.scriptor.server.result.ChannelResult
 import dev.scriptor.server.result.Result
+import dev.scriptor.server.result.StringResult
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.nio.channels.FileChannel
 import java.nio.file.Path
 import java.util.logging.Logger
 import kotlin.io.path.bufferedReader
+import kotlin.io.path.readLines
 import kotlin.uuid.Uuid
 
 @Controller("/media")
@@ -31,29 +33,36 @@ class MediaRest {
         return "${uri}${separator}token=${token}"
     }
 
-    private fun appendToken(path: Path, token: String): List<String> = path
-        .bufferedReader()
-        .useLines { lines ->
-            lines
-                .map { line ->
-                    when {
-                        hlsUriLine.matches(line) -> hlsUriLine.replace(line) { match ->
-                            appendToken(match.value, token)
-                        }
-
-                        "URI=" in line -> hlsUriTag.replace(line) { match ->
-                            buildString {
-                                append(match.groupValues[1])
-                                append(appendToken(match.groupValues[2], token))
-                                append(match.groupValues[3])
+    private fun appendToken(path: Path, token: String?): List<String> =
+        if (token == null) path.readLines()
+        else path
+            .bufferedReader()
+            .useLines { lines ->
+                lines
+                    .map { line ->
+                        when {
+                            hlsUriLine.matches(line) -> hlsUriLine.replace(line) { match ->
+                                appendToken(match.value, token)
                             }
-                        }
 
-                        else -> line
+                            "URI=" in line -> hlsUriTag.replace(line) { match ->
+                                buildString {
+                                    append(match.groupValues[1])
+                                    append(appendToken(match.groupValues[2], token))
+                                    append(match.groupValues[3])
+                                }
+                            }
+
+                            else -> line
+                        }
                     }
-                }
-                .toList()
-        }
+                    .toList()
+            }
+
+    private data class MediaSession(
+        val media: Media,
+        val session: Session,
+    )
 
     context(
         database: Database,
@@ -62,20 +71,22 @@ class MediaRest {
     private fun mediaSession(
         id: Uuid,
         authorization: Authorization?,
+        cookie: Cookie?,
         token: String? = null,
-    ): Media {
+    ): MediaSession {
         val token = when {
             authorization != null && authorization.scheme == "Bearer" -> authorization.credentials
+            cookie != null && "session" in cookie -> cookie["session"]
             else -> token
         } ?: throw UnauthorizedSignal()
 
-        auth.auth(token)
+        val session = auth.auth(token)
             ?: throw UnauthorizedSignal()
 
-        val item = transaction(database) { Media.findById(id) }
+        val media = transaction(database) { Media.findById(id) }
             ?: throw NotFoundSignal()
 
-        return item
+        return MediaSession(media, session)
     }
 
     private fun stream(range: String?, path: Path, headers: ParameterList = ParameterList()): Result {
@@ -125,7 +136,10 @@ class MediaRest {
     }
 
     @Get("/", result = "application/json")
-    context(database: Database, auth: AuthContext)
+    context(
+        database: Database,
+        auth: AuthContext,
+    )
     fun getMediaList(
         @QueryParameter offset: Long?,
         @QueryParameter limit: Int?,
@@ -153,12 +167,16 @@ class MediaRest {
     }
 
     @Get("/[id]", result = "application/json")
-    context(database: Database, auth: AuthContext)
+    context(
+        _: Database,
+        _: AuthContext,
+    )
     fun getMedia(
         @PathParameter id: Uuid,
         @Header authorization: Authorization,
+        @Header cookie: Cookie?,
     ): Media {
-        return mediaSession(id, authorization)
+        return mediaSession(id, authorization, cookie).media
     }
 
     @Head("/stream/[id]")
@@ -173,19 +191,21 @@ class MediaRest {
 
     @Get("/stream/[id]", result = "video/*")
     context(
-        database: Database,
-        auth: AuthContext,
+        _: Database,
+        _: AuthContext,
     )
     fun getMediaStream(
         @PathParameter id: Uuid,
-        @QueryParameter token: String,
+        @QueryParameter token: String?,
         @Header authorization: Authorization?,
-        @Header range: String?,
         @Header cookie: Cookie?,
+        @Header range: String?,
     ): Result {
-        val item = mediaSession(id, authorization, token)
+        val (item, session) = mediaSession(id, authorization, cookie, token)
 
-        return stream(range, item.path)
+        val headers = ParameterList("set-cookie" to "session=${session.jwt}; max-age=${session.maxAge}; path=/")
+
+        return stream(range, item.path, headers)
     }
 
     @Head("/stream/[id]/master.m3u8")
@@ -200,16 +220,19 @@ class MediaRest {
     @Get("/stream/[id]/master.m3u8", result = "application/vnd.apple.mpegurl")
     context(
         _: Logger,
-        database: Database,
+        _: Database,
+        _: AuthContext,
         transcoding: TranscodingCache,
-        auth: AuthContext,
     )
     fun getMediaStreamMaster(
         @PathParameter id: Uuid,
-        @QueryParameter token: String,
+        @QueryParameter token: String?,
         @Header authorization: Authorization?,
-    ): String {
-        val item = mediaSession(id, authorization, token)
+        @Header cookie: Cookie?,
+    ): Result {
+        val (item, session) = mediaSession(id, authorization, cookie, token)
+
+        val headers = ParameterList("set-cookie" to "session=${session.jwt}; max-age=${session.maxAge}; path=/")
 
         val job = transcoding.job(item)
         val path = job.master()
@@ -217,7 +240,12 @@ class MediaRest {
         val manifest = appendToken(path, token).toMutableList()
         manifest += """#EXT-X-SESSION-DATA:DATA-ID="com.apple.hls.chapters",URI="chapters.json?token=$token""""
 
-        return manifest.joinToString("\n")
+        val value = manifest.joinToString("\n")
+
+        return StringResult(
+            headers = headers,
+            value = value,
+        )
     }
 
     @Head("/stream/[id]/[name]/index.m3u8")
@@ -232,22 +260,30 @@ class MediaRest {
     @Get("/stream/[id]/[name]/index.m3u8", result = "application/vnd.apple.mpegurl")
     context(
         _: Logger,
-        database: Database,
+        _: Database,
+        _: AuthContext,
         transcoding: TranscodingCache,
-        auth: AuthContext,
     )
     fun getMediaStreamIndex(
         @PathParameter id: Uuid,
         @PathParameter name: String,
-        @QueryParameter token: String,
+        @QueryParameter token: String?,
         @Header authorization: Authorization?,
-    ): String {
-        val item = mediaSession(id, authorization, token)
+        @Header cookie: Cookie?,
+    ): Result {
+        val (item, session) = mediaSession(id, authorization, cookie, token)
+
+        val headers = ParameterList("set-cookie" to "session=${session.jwt}; max-age=${session.maxAge}; path=/")
 
         val job = transcoding.job(item)
         val path = job.index(name)
 
-        return appendToken(path, token).joinToString("\n")
+        val value = appendToken(path, token).joinToString("\n")
+
+        return StringResult(
+            headers = headers,
+            value = value,
+        )
     }
 
     @Head("/stream/[id]/[name]/[segment].mp4")
@@ -262,29 +298,23 @@ class MediaRest {
 
     @Get("/stream/[id]/[name]/[segment].mp4", result = "video/mp4")
     context(
-        log: Logger,
-        database: Database,
+        _: Logger,
+        _: Database,
+        _: AuthContext,
         transcoding: TranscodingCache,
-        auth: AuthContext,
     )
     fun getMediaStreamSegment(
         @PathParameter id: Uuid,
         @PathParameter name: String,
         @PathParameter segment: String,
-        @QueryParameter token: String,
+        @QueryParameter token: String?,
         @Header authorization: Authorization?,
-        @Header range: String?,
         @Header cookie: Cookie?,
+        @Header range: String?,
     ): Result {
+        val (item, session) = mediaSession(id, authorization, cookie, token)
 
-        val headers = ParameterList()
-        if (cookie != null && "test" in cookie) {
-            log.info("thank you for the cookie!")
-        } else {
-            headers["set-cookie"] = "test=hello-world; max-age=300000; path=/"
-        }
-
-        val item = mediaSession(id, authorization, token)
+        val headers = ParameterList("set-cookie" to "session=${session.jwt}; max-age=${session.maxAge}; path=/")
 
         val job = transcoding.job(item)
         val path = job.segment(name, segment)
@@ -302,17 +332,23 @@ class MediaRest {
     }
 
     @Get("/stream/[id]/chapters.json", result = "application/json")
-    context(database: Database, auth: AuthContext)
+    context(
+        database: Database,
+        _: AuthContext,
+    )
     fun getMediaStreamChapters(
         @PathParameter id: Uuid,
         @QueryParameter token: String?,
         @Header authorization: Authorization?,
-    ): JsonNode {
-        val item = mediaSession(id, authorization, token)
+        @Header cookie: Cookie?,
+    ): Result {
+        val (item, session) = mediaSession(id, authorization, cookie, token)
+
+        val headers = ParameterList("set-cookie" to "session=${session.jwt}; max-age=${session.maxAge}; path=/")
 
         val chapters = transaction(database) { item.chapters.toList() }
 
-        return jsonOf(
+        val json = jsonOf(
             *chapters
                 .sortedBy(Chapter::index)
                 .mapIndexed { index, chapter ->
@@ -329,6 +365,11 @@ class MediaRest {
                     )
                 }
                 .toTypedArray()
+        )
+
+        return StringResult(
+            headers = headers,
+            value = json.toString(),
         )
     }
 }

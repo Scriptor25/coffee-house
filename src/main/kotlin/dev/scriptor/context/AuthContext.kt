@@ -27,8 +27,15 @@ class AuthContext {
             return null
         }
 
-        if (jwt.payload.exp != null && jwt.payload.exp < instant) {
-            return null
+        var maxAge: Long? = null
+        if (jwt.payload.exp != null) {
+            val delta = jwt.payload.exp - instant
+
+            if (delta.isNegative()) {
+                return null
+            }
+
+            maxAge = delta.inWholeSeconds
         }
 
         val id =
@@ -41,7 +48,7 @@ class AuthContext {
             if (id == null) null
             else transaction(database) { User.findById(id) }
 
-        return Session(jwt, id, user)
+        return Session(token, jwt, maxAge, id, user)
     }
 
     context(_: Database)

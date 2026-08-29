@@ -6,7 +6,9 @@ import dev.scriptor.security.Jwt
 import kotlin.uuid.Uuid
 
 data class Session(
+    val raw: String,
     val jwt: Jwt,
+    val maxAge: Long?,
     val id: Uuid?,
     val user: User?,
 ) {
