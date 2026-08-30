@@ -3,6 +3,7 @@ package dev.scriptor.rest
 import dev.scriptor.JsonNode
 import dev.scriptor.TranscodingCache
 import dev.scriptor.context.AuthContext
+import dev.scriptor.context.PlaybackContext
 import dev.scriptor.get
 import dev.scriptor.jsonOf
 import dev.scriptor.model.Authorization
@@ -16,50 +17,22 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.nio.channels.FileChannel
 import java.nio.file.Path
-import java.security.SecureRandom
-import java.time.Duration.ofHours
 import java.util.logging.Logger
-import kotlin.io.encoding.Base64
 import kotlin.io.path.readText
 import kotlin.io.path.useLines
-import kotlin.time.Clock
-import kotlin.time.Instant
-import kotlin.time.toKotlinDuration
 import kotlin.uuid.Uuid
 
 @Suppress("unused")
 @Controller("/playback")
 class PlaybackRest {
 
-    private data class Playback(
-        val userId: Uuid?,
-        val name: String,
-        val items: List<Uuid>,
-        val createdAt: Instant,
-        val expiresAt: Instant,
+    context(
+        database: Database,
+        context: PlaybackContext,
     )
-
-    private val random = SecureRandom()
-    private val base64 = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT_OPTIONAL)
-
-    private val map = mutableMapOf<String, Playback>()
-
-    private fun playback(token: String): Playback {
-        val playback = map[token]
-            ?: throw UnauthorizedSignal()
-
-        val delta = playback.expiresAt - Clock.System.now()
-        if (delta.isNegative()) {
-            map.remove(token)
-            throw UnauthorizedSignal()
-        }
-
-        return playback
-    }
-
-    context(database: Database)
     private fun item(token: String, index: Int): Media {
-        val playback = playback(token)
+        val playback = context.getPlayback(token)
+            ?: throw NotFoundSignal()
 
         if (index !in playback.items.indices) {
             throw NotFoundSignal()
@@ -110,15 +83,13 @@ class PlaybackRest {
     context(
         database: Database,
         auth: AuthContext,
+        context: PlaybackContext,
     )
     fun createPlayback(
         @Header authorization: Authorization,
         @Body node: JsonNode,
     ): String {
-        val createdAt = Clock.System.now()
-        val expiresAt = createdAt + ofHours(24).toKotlinDuration()
-
-        val session = auth.auth(authorization, createdAt)
+        val session = auth.auth(authorization)
             ?: throw UnauthorizedSignal()
 
         val userId = session.user?.id?.value
@@ -129,34 +100,22 @@ class PlaybackRest {
         val name = nameNode.get<String>()
         val items = itemsNode.map { Uuid.parseHexDash(it.get()) }
 
-        while (true) {
-            val bytes = ByteArray(32)
-            random.nextBytes(bytes)
-
-            val token = base64.encode(bytes)
-            if (token in map) continue
-
-            map[token] = Playback(
-                userId,
-                name,
-                items,
-                createdAt,
-                expiresAt,
-            )
-
-            return token
-        }
+        return context.createPlayback(userId, name, items)
     }
 
     @Get("/[token]/playlist.m3u8", "application/x-mpegurl")
-    context(database: Database)
+    context(
+        database: Database,
+        context: PlaybackContext,
+    )
     fun getPlaylist(
         @PathParameter token: String,
         @QueryParameter direct: Boolean?,
     ): String {
         val direct = direct ?: false
 
-        val playback = playback(token)
+        val playback = context.getPlayback(token)
+            ?: throw NotFoundSignal()
 
         val items = transaction(database) {
             playback.items.map { Media.findById(it) }
@@ -177,7 +136,10 @@ class PlaybackRest {
     }
 
     @Get("/[token]/[index]", "video/*")
-    context(_: Database)
+    context(
+        _: Database,
+        _: PlaybackContext,
+    )
     fun getStream(
         @PathParameter token: String,
         @PathParameter index: Int,
@@ -192,6 +154,7 @@ class PlaybackRest {
     context(
         _: Logger,
         database: Database,
+        _: PlaybackContext,
         transcoding: TranscodingCache,
     )
     fun getMaster(
@@ -215,6 +178,7 @@ class PlaybackRest {
     context(
         _: Logger,
         database: Database,
+        _: PlaybackContext,
         transcoding: TranscodingCache,
     )
     fun getIndex(
@@ -234,6 +198,7 @@ class PlaybackRest {
     context(
         _: Logger,
         database: Database,
+        _: PlaybackContext,
         transcoding: TranscodingCache,
     )
     fun getSegment(
@@ -254,6 +219,7 @@ class PlaybackRest {
     @Get("/[token]/[index]/chapters.json", "application/json")
     context(
         database: Database,
+        _: PlaybackContext,
     )
     fun getChapters(
         @PathParameter token: String,

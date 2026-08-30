@@ -1,5 +1,6 @@
 package dev.scriptor
 
+import dev.scriptor.context.PlaybackContext
 import dev.scriptor.model.ffmpeg.CodecId
 import dev.scriptor.model.media.*
 import dev.scriptor.model.user.UserTable
@@ -19,10 +20,13 @@ import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
 import java.sql.DriverManager
 import java.sql.Timestamp
+import java.time.Duration.ofMinutes
 import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.io.path.*
+import kotlin.time.Duration
 import kotlin.time.Instant
+import kotlin.time.toKotlinDuration
 import kotlin.time.toKotlinInstant
 
 fun Table.instant(name: String): Column<Instant> = registerColumn(
@@ -264,8 +268,8 @@ fun getMetadata(
 fun main() {
     val env = getEnvironment()
 
-    val hostname = env["HOSTNAME"] ?: "0.0.0.0"
-    val port = env["PORT"]?.toInt() ?: 8080
+    val host = env["HOST"]
+    val port = env["PORT"]?.toInt()
 
     val data = Path(env["DATA"] ?: "/data")
     val cache = Path(env["CACHE"] ?: "/cache")
@@ -370,7 +374,13 @@ fun main() {
         }
     }
 
-    val server = Server(log, provider, hostname, port)
+    val server = when {
+        host == null && port == null -> Server(log, provider)
+        host == null && port != null -> Server(log, provider, port)
+        host != null && port == null -> Server(log, provider, host, 0)
+        host != null && port != null -> Server(log, provider, host, port)
+        else -> Server(log, provider)
+    }
 
     Runtime.getRuntime().addShutdownHook(Thread {
         try {
@@ -383,6 +393,16 @@ fun main() {
 
     server.use { server ->
         scan(server, "dev.scriptor")
+
+        server.register(
+            "delete-expired-playbacks",
+            Duration.ZERO,
+            ofMinutes(60L).toKotlinDuration(),
+        ) {
+            val context: PlaybackContext = provider.getContextT()
+                ?: error("missing playback context")
+            context.deleteExpiredPlaybacks()
+        }
 
         server.start()
     }
