@@ -147,17 +147,28 @@ class Probe(
     private fun probeImplementations(implementations: List<ImplementationCapabilities>): List<ImplementationCapabilities> {
         log.fine("probe implementations (${implementations.size})")
 
-        val executor = Executors.newFixedThreadPool(
-            minOf(4, Runtime.getRuntime().availableProcessors()),
-        )
-
         val result = arrayOfNulls<ImplementationCapabilities>(implementations.size)
-        for ((index, implementation) in implementations.withIndex()) {
-            executor.execute { result[index] = probeImplementation(implementation) }
-        }
+        val executed = mutableSetOf<Int>()
 
-        executor.shutdown()
-        executor.awaitTermination(1, TimeUnit.MINUTES)
+        while (true) {
+            val executor = Executors.newFixedThreadPool(
+                minOf(
+                    4,
+                    Runtime.getRuntime().availableProcessors(),
+                ),
+            )
+
+            for ((index, implementation) in implementations.withIndex()) {
+                if (index in executed) continue
+                executor.execute {
+                    result[index] = probeImplementation(implementation)
+                    executed.add(index)
+                }
+            }
+
+            executor.shutdown()
+            if (executor.awaitTermination(60, TimeUnit.SECONDS)) break
+        }
 
         return result.filterNotNull()
     }

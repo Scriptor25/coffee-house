@@ -21,8 +21,13 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.sql.DriverManager
 import java.sql.Timestamp
 import java.time.Duration.ofMinutes
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.logging.Level
 import java.util.logging.Logger
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
+import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.io.path.*
 import kotlin.time.Duration
 import kotlin.time.Instant
@@ -78,10 +83,12 @@ fun parseFrameRate(value: String?): Double {
     return if (den == 0.0) 0.0 else num / den
 }
 
-context(parent: Logger)
+context(
+    parent: Logger,
+    database: Database,
+)
 fun getMetadata(
     ffprobe: String,
-    database: Database,
     path: Path,
     createdAt: Instant,
     modifiedAt: Instant,
@@ -265,6 +272,57 @@ fun getMetadata(
     }
 }
 
+@OptIn(ExperimentalAtomicApi::class)
+context(
+    log: Logger,
+    database: Database,
+)
+fun getMetadata(
+    ffprobe: String,
+    paths: List<Path>,
+) {
+    while (true) {
+        val existing = transaction(database) {
+            MediaTable
+                .select(MediaTable.path)
+                .map { it[MediaTable.path] }
+                .toSet()
+        }
+
+        val revalidate = paths.filterNot { it in existing }
+
+        val executor = Executors.newFixedThreadPool(
+            minOf(
+                4,
+                Runtime.getRuntime().availableProcessors(),
+            ),
+        )
+
+        val index = AtomicInt(0)
+
+        for (path in revalidate) {
+            val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
+
+            val createdAt = attributes.creationTime().toInstant().toKotlinInstant()
+            val modifiedAt = attributes.lastModifiedTime().toInstant().toKotlinInstant()
+
+            executor.execute {
+                log.info("${index.incrementAndFetch()} / ${revalidate.size}")
+
+                getMetadata(
+                    ffprobe,
+                    path,
+                    createdAt,
+                    modifiedAt,
+                )
+            }
+        }
+
+        executor.shutdown()
+        if (executor.awaitTermination(60, TimeUnit.MINUTES)) break
+    }
+}
+
 fun main() {
     val env = getEnvironment()
 
@@ -346,32 +404,8 @@ fun main() {
             .forEach { it.delete() }
     }
 
-    val existing = transaction {
-        MediaTable
-            .select(MediaTable.path)
-            .map { it[MediaTable.path] }
-            .toSet()
-    }
-
-    val revalidate = paths.filter { it !in existing }
-
-    for ((index, path) in revalidate.withIndex()) {
-        log.info("${index + 1} / ${revalidate.size}")
-
-        val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
-
-        val createdAt = attributes.creationTime().toInstant().toKotlinInstant()
-        val modifiedAt = attributes.lastModifiedTime().toInstant().toKotlinInstant()
-
-        context(log) {
-            getMetadata(
-                ffprobe,
-                database,
-                path,
-                createdAt,
-                modifiedAt,
-            )
-        }
+    context(log, database) {
+        getMetadata(ffprobe, paths)
     }
 
     val server = when {
