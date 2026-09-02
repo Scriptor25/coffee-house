@@ -5,16 +5,15 @@ import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.ParameterList
 import dev.scriptor.server.jvm.annotation.Controller
 import dev.scriptor.server.jvm.annotation.Get
-import dev.scriptor.server.jvm.annotation.PathParameter
+import dev.scriptor.server.result.Result
 import dev.scriptor.server.result.StreamResult
 
 @Suppress("unused")
 @Controller("/")
 class DashboardRest {
 
-    @Get("/favicon.[]", result = "image/svg+xml")
-    fun getFavicon(): StreamResult {
-        val stream = ClassLoader.getSystemResourceAsStream("favicon.svg")
+    private fun getResource(name: String): Result {
+        val stream = ClassLoader.getSystemResourceAsStream(name)
             ?: throw NotFoundSignal()
 
         val headers = ParameterList(
@@ -25,36 +24,26 @@ class DashboardRest {
             headers = headers,
             value = stream,
         )
+    }
+
+    @Get("/favicon.[]", result = "image/svg+xml")
+    fun getFavicon(): Result {
+        return getResource("favicon.svg")
     }
 
     @Get("/", result = "text/html")
-    fun getDashboard(): StreamResult {
-        val stream = ClassLoader.getSystemResourceAsStream("dashboard.html")
-            ?: throw NotFoundSignal()
-
-        val headers = ParameterList(
-            "cache-control" to "public, max-age=604800, immutable",
-        )
-
-        return StreamResult(
-            headers = headers,
-            value = stream,
-        )
+    fun getDocument(): Result {
+        return getResource("index.html")
     }
 
-    @Get("/script/[slug+].js", result = "text/javascript")
-    fun getScript(@PathParameter slug: Array<String>): StreamResult {
-        val stream = ClassLoader.getSystemResourceAsStream("script/${slug.joinToString("/")}.js")
-            ?: throw NotFoundSignal()
+    @Get("/index.js", result = "text/javascript")
+    fun getScript(): Result {
+        return getResource("index.js")
+    }
 
-        val headers = ParameterList(
-            "cache-control" to "public, max-age=604800, immutable",
-        )
-
-        return StreamResult(
-            headers = headers,
-            value = stream,
-        )
+    @Get("/index.css", result = "text/css")
+    fun getStyle(): Result {
+        return getResource("index.css")
     }
 
     @Get("/health")

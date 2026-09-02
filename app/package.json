@@ -1,0 +1,14 @@
+{
+  "name": "app",
+  "version": "1.0.0",
+  "type": "module",
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "esbuild": "^0.28.2",
+    "node": "^26.8.1",
+    "typescript": "^7.0.2"
+  },
+  "scripts": {
+    "build": "node script/build.js"
+  }
+}
