@@ -130,9 +130,7 @@ export class Computed<T> implements Readable<T> {
   get(): T {
     track(this);
 
-    if (this.dirty) {
-      this.compute();
-    }
+    this.compute();
 
     return this.value;
   }
@@ -150,11 +148,12 @@ export class Computed<T> implements Readable<T> {
   }
 
   private compute(): void {
+    if (!this.dirty) return;
+    this.dirty = false;
+
     this.observer.run(() => {
       this.value = this.fn();
     });
-
-    this.dirty = false;
   }
 
   private invalidate(): void {
