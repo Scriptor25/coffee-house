@@ -5,7 +5,7 @@ import dev.scriptor.model.Authorization
 import dev.scriptor.model.media.Media
 import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.UnauthorizedSignal
-import dev.scriptor.server.annotation.*
+import dev.scriptor.server.jvm.annotation.*
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.uuid.Uuid
@@ -20,9 +20,9 @@ class MediaRest {
         auth: AuthContext,
     )
     fun getMediaList(
-        @QueryParameter offset: Long?,
-        @QueryParameter limit: Int?,
-        @Header authorization: Authorization,
+        @QueryParameter offset: Long = 0L,
+        @QueryParameter limit: Int = Int.MAX_VALUE,
+        @Header authorization: Authorization? = null,
     ): List<Media> {
         auth.auth(authorization)
             ?: throw UnauthorizedSignal()
@@ -30,8 +30,8 @@ class MediaRest {
         return transaction(database) {
             Media
                 .all()
-                .offset(offset ?: 0L)
-                .limit(limit ?: Int.MAX_VALUE)
+                .offset(offset)
+                .limit(limit)
                 .toList()
         }
     }
@@ -43,7 +43,7 @@ class MediaRest {
     )
     fun getMedia(
         @PathParameter id: Uuid,
-        @Header authorization: Authorization?,
+        @Header authorization: Authorization? = null,
     ): Media {
         auth.auth(authorization)
             ?: throw UnauthorizedSignal()

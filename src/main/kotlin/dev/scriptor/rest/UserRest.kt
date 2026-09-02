@@ -9,7 +9,7 @@ import dev.scriptor.model.user.UserRole
 import dev.scriptor.server.ForbiddenSignal
 import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.UnauthorizedSignal
-import dev.scriptor.server.annotation.*
+import dev.scriptor.server.jvm.annotation.*
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.uuid.Uuid
@@ -23,7 +23,7 @@ class UserRest {
         database: Database,
         auth: AuthContext,
     )
-    fun getUsers(@Header authorization: Authorization): List<User> {
+    fun getUsers(@Header authorization: Authorization? = null): List<User> {
         val session = auth.auth(authorization)
             ?: throw UnauthorizedSignal()
 
@@ -42,7 +42,7 @@ class UserRest {
         auth: AuthContext,
     )
     fun createUser(
-        @Header authorization: Authorization,
+        @Header authorization: Authorization? = null,
         @Body value: JsonNode,
     ): User {
         val session = auth.auth(authorization)
@@ -72,7 +72,7 @@ class UserRest {
     )
     fun getUser(
         @PathParameter id: Uuid,
-        @Header authorization: Authorization,
+        @Header authorization: Authorization? = null,
     ): User {
         val session = auth.auth(authorization)
             ?: throw UnauthorizedSignal()
@@ -92,7 +92,7 @@ class UserRest {
     )
     fun updateUser(
         @PathParameter id: Uuid,
-        @Header authorization: Authorization,
+        @Header authorization: Authorization? = null,
         @Body value: JsonNode,
     ): User {
         val session = auth.auth(authorization)
@@ -122,7 +122,7 @@ class UserRest {
     )
     fun deleteUser(
         @PathParameter id: Uuid,
-        @Header authorization: Authorization,
+        @Header authorization: Authorization? = null,
     ): User {
         val session = auth.auth(authorization)
             ?: throw UnauthorizedSignal()

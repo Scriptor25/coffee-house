@@ -6,7 +6,7 @@ import dev.scriptor.model.media.*
 import dev.scriptor.model.user.UserTable
 import dev.scriptor.server.Provider
 import dev.scriptor.server.http.Server
-import dev.scriptor.server.scan
+import dev.scriptor.server.jvm.scan
 import org.jetbrains.exposed.v1.core.Column
 import org.jetbrains.exposed.v1.core.IColumnType
 import org.jetbrains.exposed.v1.core.Table

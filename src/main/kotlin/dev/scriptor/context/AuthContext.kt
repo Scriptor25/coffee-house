@@ -4,7 +4,7 @@ import dev.scriptor.model.Authorization
 import dev.scriptor.model.Session
 import dev.scriptor.model.user.User
 import dev.scriptor.security.Jwt
-import dev.scriptor.server.annotation.Context
+import dev.scriptor.server.jvm.annotation.Context
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.time.Clock

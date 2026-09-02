@@ -11,7 +11,7 @@ import dev.scriptor.security.JwtHeader
 import dev.scriptor.security.JwtPayload
 import dev.scriptor.server.Provider
 import dev.scriptor.server.UnauthorizedSignal
-import dev.scriptor.server.annotation.*
+import dev.scriptor.server.jvm.annotation.*
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -81,7 +81,7 @@ class SessionRest {
         database: Database,
         auth: AuthContext,
     )
-    fun renewSession(@Header authorization: Authorization): Jwt {
+    fun renewSession(@Header authorization: Authorization? = null): Jwt {
 
         val instant = Clock.System.now()
 

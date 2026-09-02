@@ -4,9 +4,13 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>dev.scriptor</groupId>
+    <parent>
+        <groupId>dev.scriptor</groupId>
+        <artifactId>coffee-rest-parent</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
     <artifactId>coffee-house</artifactId>
-    <version>1.0.0</version>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -21,27 +25,24 @@
 
     <dependencies>
         <dependency>
-            <groupId>org.jetbrains</groupId>
-            <artifactId>annotations</artifactId>
-            <version>26.1.0</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.jetbrains.kotlin</groupId>
-            <artifactId>kotlin-stdlib</artifactId>
-            <version>${kotlin.version}</version>
+            <groupId>dev.scriptor</groupId>
+            <artifactId>reflect</artifactId>
         </dependency>
 
         <dependency>
             <groupId>dev.scriptor</groupId>
             <artifactId>coffee-rest</artifactId>
-            <version>1.0.0</version>
         </dependency>
 
         <dependency>
             <groupId>dev.scriptor</groupId>
-            <artifactId>reflect</artifactId>
-            <version>1.0.0</version>
+            <artifactId>coffee-rest-jvm</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jetbrains</groupId>
+            <artifactId>annotations</artifactId>
+            <version>26.1.0</version>
         </dependency>
 
         <dependency>
@@ -71,24 +72,6 @@
 
     <build>
         <plugins>
-            <plugin>
-                <groupId>org.jetbrains.kotlin</groupId>
-                <artifactId>kotlin-maven-plugin</artifactId>
-                <version>${kotlin.version}</version>
-
-                <extensions>true</extensions>
-
-                <executions>
-                    <execution>
-                        <id>compile</id>
-                        <phase>compile</phase>
-                        <goals>
-                            <goal>compile</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>

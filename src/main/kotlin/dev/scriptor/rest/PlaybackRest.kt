@@ -10,7 +10,7 @@ import dev.scriptor.model.Authorization
 import dev.scriptor.model.media.Chapter
 import dev.scriptor.model.media.Media
 import dev.scriptor.server.*
-import dev.scriptor.server.annotation.*
+import dev.scriptor.server.jvm.annotation.*
 import dev.scriptor.server.result.ChannelResult
 import dev.scriptor.server.result.Result
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -86,7 +86,7 @@ class PlaybackRest {
         context: PlaybackContext,
     )
     fun createPlayback(
-        @Header authorization: Authorization,
+        @Header authorization: Authorization? = null,
         @Body node: JsonNode,
     ): String {
         val session = auth.auth(authorization)
@@ -110,10 +110,8 @@ class PlaybackRest {
     )
     fun getPlaylist(
         @PathParameter token: String,
-        @QueryParameter direct: Boolean?,
+        @QueryParameter direct: Boolean = false,
     ): String {
-        val direct = direct ?: false
-
         val playback = context.getPlayback(token)
             ?: throw NotFoundSignal()
 
@@ -143,7 +141,7 @@ class PlaybackRest {
     fun getStream(
         @PathParameter token: String,
         @PathParameter index: Int,
-        @Header range: String?,
+        @Header range: String? = null,
     ): Result {
         val item = item(token, index)
 
@@ -206,7 +204,7 @@ class PlaybackRest {
         @PathParameter index: Int,
         @PathParameter name: String,
         @PathParameter segment: String,
-        @Header range: String?,
+        @Header range: String? = null,
     ): Result {
         val item = item(token, index)
 

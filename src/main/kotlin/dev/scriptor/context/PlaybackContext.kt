@@ -1,7 +1,7 @@
 package dev.scriptor.context
 
 import dev.scriptor.model.Playback
-import dev.scriptor.server.annotation.Context
+import dev.scriptor.server.jvm.annotation.Context
 import java.security.SecureRandom
 import java.time.Duration.ofHours
 import kotlin.io.encoding.Base64

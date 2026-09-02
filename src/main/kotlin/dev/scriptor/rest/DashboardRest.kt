@@ -3,9 +3,9 @@ package dev.scriptor.rest
 import dev.scriptor.server.NoContentSignal
 import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.ParameterList
-import dev.scriptor.server.annotation.Controller
-import dev.scriptor.server.annotation.Get
-import dev.scriptor.server.annotation.PathParameter
+import dev.scriptor.server.jvm.annotation.Controller
+import dev.scriptor.server.jvm.annotation.Get
+import dev.scriptor.server.jvm.annotation.PathParameter
 import dev.scriptor.server.result.StreamResult
 
 @Suppress("unused")
