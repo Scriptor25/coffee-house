@@ -1,0 +1,100 @@
+.item {
+  position: relative;
+
+  display: flex;
+  flex-wrap: nowrap;
+
+  background-color: var(--color-panel);
+
+  border-radius: var(--border-radius);
+  overflow: hidden;
+
+  .thumbnail {
+    display: block;
+    position: relative;
+
+    background-color: #111;
+  }
+
+  .title {
+    margin: var(--space-m);
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+
+    line-clamp: 1;
+
+    font-size: var(--font-size-small);
+
+    text-decoration: none;
+    color: var(--color-foreground);
+    background-color: transparent;
+
+    &::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+    }
+  }
+
+  &[data-mode="grid"] {
+    flex-direction: column;
+
+    .thumbnail {
+      max-width: 100%;
+
+      width: 100%;
+      height: auto;
+
+      aspect-ratio: 5 / 3;
+    }
+
+    .title {
+      text-align: center;
+    }
+  }
+
+  &[data-mode="grid-poster"] {
+    flex-direction: column;
+
+    .thumbnail {
+      max-width: 100%;
+
+      width: 100%;
+      height: auto;
+
+      aspect-ratio: 3 / 4;
+    }
+
+    .title {
+      text-align: center;
+    }
+  }
+
+  &[data-mode="list"] {
+    flex-direction: row;
+
+    align-items: center;
+
+    .thumbnail {
+      width: auto;
+      height: 100%;
+
+      aspect-ratio: 2 / 1;
+    }
+  }
+
+  &:has(.title:is(:hover, :focus-visible)) {
+    background-color: var(--color-panel-active);
+    box-shadow: 5px 5px 10px #111;
+
+    .title {
+      text-decoration: underline;
+    }
+  }
+}

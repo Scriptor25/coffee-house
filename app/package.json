@@ -9,6 +9,7 @@
   },
   "scripts": {
     "format": "prettier --write .",
-    "build": "node script/build.js"
+    "build": "node script/build.js",
+    "dev": "node script/dev.js"
   }
 }

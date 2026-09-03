@@ -41,19 +41,9 @@ class DashboardRest {
         return getResource("index.js")
     }
 
-    @Get("/index.js.map", result = "text/javascript")
-    fun getScriptMap(): Result {
-        return getResource("index.js.map")
-    }
-
     @Get("/index.css", result = "text/css")
     fun getStyle(): Result {
         return getResource("index.css")
-    }
-
-    @Get("/index.css.map", result = "text/css")
-    fun getStyleMap(): Result {
-        return getResource("index.css.map")
     }
 
     @Get("/health")

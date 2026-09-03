@@ -1,12 +1,26 @@
 import { computed } from "@runtime/computed";
-import { Signal, signal } from "@runtime/signal";
-import { createSession } from "../../data/session";
+import { signal } from "@runtime/signal";
+import {
+  createSession,
+  getSessionToken,
+  setSessionToken,
+} from "../data/session";
+import { setMetadata } from "../meta/meta";
 import styles from "./login.module.css";
 
-export function Login(props: { sToken: Signal<string | null> }) {
-  document.title = "Login";
+export function LoginPage() {
+  if (getSessionToken()) {
+    window.location.hash = "";
+    return;
+  }
 
-  const sState = signal<"none" | "pending" | "success" | "error">("none");
+  setMetadata({
+    type: "website",
+    title: "Login",
+    description: "The Login Page",
+  });
+
+  const sPending = signal(false);
 
   const handleSubmit = (event: SubmitEvent) => {
     event.preventDefault();
@@ -18,38 +32,22 @@ export function Login(props: { sToken: Signal<string | null> }) {
     const username = data.get("username") as string;
     const password = data.get("password") as string;
 
-    sState.set("pending");
+    sPending.set(true);
 
     createSession(username, password).then((token) => {
+      setSessionToken(token);
+
       if (token) {
-        sState.set("success");
-        props.sToken.set(token);
-      } else {
-        sState.set("error");
+        window.location.hash = "";
+        return;
       }
 
-      setTimeout(() => {
-        sState.set("none");
-      }, 1000);
+      sPending.set(false);
     });
   };
 
   return computed(() => {
-    const value = sState.get();
-    const disabled = value === "pending";
-
-    const label = (() => {
-      switch (value) {
-        case "none":
-          return "submit";
-        case "pending":
-          return "pending...";
-        case "success":
-          return "success";
-        case "error":
-          return "error";
-      }
-    })();
+    const pending = sPending.get();
 
     return (
       <form onsubmit={handleSubmit} className={styles.form}>
@@ -61,7 +59,7 @@ export function Login(props: { sToken: Signal<string | null> }) {
               name="username"
               autocomplete="username"
               required
-              disabled={disabled}
+              disabled={pending}
             />
           </label>
           <label>
@@ -71,12 +69,12 @@ export function Login(props: { sToken: Signal<string | null> }) {
               name="password"
               autocomplete="current-password"
               required
-              disabled={disabled}
+              disabled={pending}
             />
           </label>
         </div>
-        <button type="submit" disabled={disabled}>
-          {label}
+        <button type="submit" disabled={pending}>
+          {pending ? "pending..." : "submit"}
         </button>
       </form>
     );

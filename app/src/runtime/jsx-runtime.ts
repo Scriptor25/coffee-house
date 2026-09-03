@@ -1,3 +1,4 @@
+import { untracked } from "./internal";
 import { isReadable, type Readable } from "./readable";
 import type { Signal } from "./signal";
 
@@ -53,7 +54,11 @@ function insertReadable(
   const update = () => {
     clear();
 
-    const dispose = insert(node, child.get(), end);
+    const dispose = insert(
+      node,
+      untracked(() => child.get()),
+      end,
+    );
 
     if (dispose) {
       disposers.push(dispose);
@@ -104,7 +109,8 @@ function insert(
     child === undefined ||
     child === null ||
     child === false ||
-    child === true
+    child === true ||
+    child === ""
   ) {
     return;
   }
@@ -151,7 +157,11 @@ function setStaticProperty(node: Element, key: string, value: unknown) {
 
 function setReadableProperty(node: Element, key: string, value: Readable) {
   const update = () => {
-    setStaticProperty(node, key, value.get());
+    setStaticProperty(
+      node,
+      key,
+      untracked(() => value.get()),
+    );
   };
 
   update();
