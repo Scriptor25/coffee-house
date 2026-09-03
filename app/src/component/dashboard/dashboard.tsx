@@ -1,5 +1,8 @@
+import { computed } from "@runtime/computed";
+import { effect } from "@runtime/effect";
 import type { VNode } from "@runtime/jsx-runtime";
-import { computed, effect, signal, type Signal } from "@runtime/state";
+import { reference } from "@runtime/reference";
+import { Signal, signal } from "@runtime/signal";
 import { getAllMedia, type Media } from "../../data/media";
 import { createPlayback } from "../../data/playback";
 import { getOrigin } from "../../util/origin";
@@ -11,8 +14,13 @@ import {
   segments,
 } from "../../util/tree";
 
-async function copyUrl(url: URL) {
-  await window.navigator.clipboard.writeText(url.toString());
+async function copyUrl(open: Signal<URL | null>, url: URL) {
+  if (!!window.navigator.share) {
+    window.navigator.share({ url: url.toString() });
+    return;
+  }
+
+  open.set(url);
 }
 
 function StaticItem(props: { href: string; children?: VNode }) {
@@ -23,25 +31,25 @@ function StaticItem(props: { href: string; children?: VNode }) {
   );
 }
 
-function MediaItem(props: { token: string; data: Media }) {
+function MediaItem(props: { open: Signal<URL | null>; data: Media }) {
   const copySingleUrl = async (direct: boolean) => {
-    const base = await createPlayback(props.token, props.data.title, [
-      props.data.id,
-    ]);
+    const base = await createPlayback(props.data.title, [props.data.id]);
     if (!base) return;
 
     const pathname = direct ? `${base}/0` : `${base}/0/master.m3u8`;
     const url = new URL(pathname, getOrigin());
 
-    await copyUrl(url);
+    await copyUrl(props.open, url);
   };
 
   return (
     <li>
       {props.data.title}
+      &nbsp;
       <button type="button" onclick={() => copySingleUrl(true)}>
         direct
       </button>
+      &nbsp;
       <button type="button" onclick={() => copySingleUrl(false)}>
         hls
       </button>
@@ -49,7 +57,34 @@ function MediaItem(props: { token: string; data: Media }) {
   );
 }
 
-export function Dashboard(props: { session: Signal<string | null> }) {
+function Dialog(props: { open: Signal<URL | null> }) {
+  const ref = reference<HTMLDialogElement>();
+
+  effect(() => {
+    const dialog = ref.get();
+    const url = props.open.get();
+
+    if (!dialog) return;
+
+    if (url) {
+      dialog.showModal();
+    } else {
+      dialog.close();
+    }
+  });
+
+  return computed(() => {
+    const url = props.open.get();
+
+    return (
+      <dialog ref={ref} onclose={() => props.open.set(null)}>
+        {url && <a href={url.toString()}>Copy Playback URL</a>}
+      </dialog>
+    );
+  });
+}
+
+export function Dashboard() {
   document.title = "Dashboard";
 
   const sFragment = signal(window.location.hash);
@@ -63,19 +98,14 @@ export function Dashboard(props: { session: Signal<string | null> }) {
   const sItems = signal<Media[] | null>(null);
 
   effect(() => {
-    const token = props.session.get();
-
-    if (token) {
-      getAllMedia(token).then((data) => {
-        sItems.set(data);
-      });
-    }
+    getAllMedia().then((data) => {
+      sItems.set(data);
+    });
   });
 
-  return computed(() => {
-    const token = props.session.get();
-    if (!token) return;
+  const sOpen = signal<URL | null>(null);
 
+  return computed(() => {
     const items = sItems.get();
     if (!items) return <>loading...</>;
 
@@ -102,7 +132,7 @@ export function Dashboard(props: { session: Signal<string | null> }) {
 
     const list = sorted.map((node) => {
       if (node instanceof MediaNode) {
-        return <MediaItem token={token} data={node.item} />;
+        return <MediaItem open={sOpen} data={node.item} />;
       } else {
         const href = `/#${slug.length ? "/" + slug.join("/") : ""}/${node.name}`;
         return <StaticItem href={encodeURI(href)}>{node.name}</StaticItem>;
@@ -121,22 +151,25 @@ export function Dashboard(props: { session: Signal<string | null> }) {
         .filter((item) => item instanceof MediaNode)
         .map((item) => item.item.id);
 
-      const base = await createPlayback(token, node.name, playlist);
+      const base = await createPlayback(node.name, playlist);
       if (!base) return;
 
       const pathname = `${base}/playlist.m3u8?direct=${direct}`;
       const url = new URL(pathname, getOrigin());
 
-      await copyUrl(url);
+      await copyUrl(sOpen, url);
     };
 
     return (
       <>
+        <Dialog open={sOpen} />
         <div>
           <span>Playlist</span>
+          &nbsp;
           <button type="button" onclick={() => copyPlaylistUrl(true)}>
             direct
           </button>
+          &nbsp;
           <button type="button" onclick={() => copyPlaylistUrl(false)}>
             hls
           </button>

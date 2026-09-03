@@ -6,15 +6,9 @@ export interface Media {
   path: string;
 }
 
-export async function getAllMedia(token: string): Promise<Media[] | null> {
+export async function getAllMedia(): Promise<Media[] | null> {
   try {
-    const response = await fetchData(
-      "/media",
-      {
-        method: "get",
-      },
-      token,
-    );
+    const response = await fetchData("/media", { method: "get" });
 
     if (!response.ok) {
       return null;

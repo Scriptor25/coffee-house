@@ -1,11 +1,12 @@
-import { computed, signal, type Signal } from "@runtime/state";
+import { computed } from "@runtime/computed";
+import { Signal, signal } from "@runtime/signal";
 import { createSession } from "../../data/session";
 import styles from "./login.module.css";
 
-export function Login(props: { session: Signal<string | null> }) {
+export function Login(props: { sToken: Signal<string | null> }) {
   document.title = "Login";
 
-  const state = signal<"none" | "pending" | "success" | "error">("none");
+  const sState = signal<"none" | "pending" | "success" | "error">("none");
 
   const handleSubmit = (event: SubmitEvent) => {
     event.preventDefault();
@@ -17,24 +18,24 @@ export function Login(props: { session: Signal<string | null> }) {
     const username = data.get("username") as string;
     const password = data.get("password") as string;
 
-    state.set("pending");
+    sState.set("pending");
 
     createSession(username, password).then((token) => {
       if (token) {
-        state.set("success");
-        props.session.set(token);
+        sState.set("success");
+        props.sToken.set(token);
       } else {
-        state.set("error");
+        sState.set("error");
       }
 
       setTimeout(() => {
-        state.set("none");
+        sState.set("none");
       }, 1000);
     });
   };
 
   return computed(() => {
-    const value = state.get();
+    const value = sState.get();
     const disabled = value === "pending";
 
     const label = (() => {

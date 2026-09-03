@@ -1,19 +1,14 @@
 import { fetchData } from "./api";
 
 export async function createPlayback(
-  token: string,
   name: string,
   items: string[],
 ): Promise<string | null> {
   try {
-    const response = await fetchData(
-      "playback",
-      {
-        method: "post",
-        body: JSON.stringify({ name, items }),
-      },
-      token,
-    );
+    const response = await fetchData("playback", {
+      method: "post",
+      body: JSON.stringify({ name, items }),
+    });
 
     if (!response.ok) {
       return null;

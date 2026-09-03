@@ -1,11 +1,10 @@
 import { getOrigin } from "../util/origin";
+import { getSessionToken, setSessionToken } from "./session";
 
-export async function fetchData(
-  resource: string,
-  init?: RequestInit,
-  token?: string,
-) {
-  return fetch(new URL(resource, getOrigin()), {
+export async function fetchData(resource: string, init?: RequestInit) {
+  const token = getSessionToken();
+
+  const response = await fetch(new URL(resource, getOrigin()), {
     ...init,
     headers: token
       ? {
@@ -14,4 +13,10 @@ export async function fetchData(
         }
       : init?.headers,
   });
+
+  if (response.status === 401) {
+    setSessionToken(null);
+  }
+
+  return response;
 }

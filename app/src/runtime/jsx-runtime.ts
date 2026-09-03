@@ -1,4 +1,5 @@
-import { type Readable, isReadable } from "./state";
+import { isReadable, type Readable } from "./readable";
+import type { Signal } from "./signal";
 
 export type Key = number | bigint | string | symbol;
 
@@ -167,17 +168,35 @@ function setProperty(node: Element, key: string, value: unknown) {
   setStaticProperty(node, key, value);
 }
 
-export function jsx<P extends { children?: VNode }>(
-  tag: string | Component<P>,
-  props?: P,
-  _key?: Key,
-): VNode {
+export function jsx<
+  P extends { ref?: Signal<HTMLElement | null>; children?: VNode },
+>(tag: string | Component<P>, props?: P, _key?: Key): VNode {
   props ??= {} as P;
 
   if (typeof tag === "string") {
     const node = document.createElement(tag);
 
-    const { children, ...rest } = props;
+    const { ref, children, ...rest } = props;
+
+    if (ref) {
+      const observer = new MutationObserver(() => {
+        const connected = node.isConnected;
+        ref.set(connected ? node : null);
+
+        if (!connected) {
+          observer.disconnect();
+        }
+      });
+
+      observer.observe(document, {
+        childList: true,
+        subtree: true,
+      });
+
+      if (node.isConnected) {
+        ref.set(node);
+      }
+    }
 
     for (const [key, value] of Object.entries(rest)) {
       setProperty(node, key, value);
@@ -202,6 +221,7 @@ export type HTMLElementProps<T extends HTMLElement> = {
   [K in keyof Omit<T, "key" | "children">]?: T[K];
 } & {
   key?: Key;
+  ref?: Signal<T | null>;
   children?: VNode;
 };
 

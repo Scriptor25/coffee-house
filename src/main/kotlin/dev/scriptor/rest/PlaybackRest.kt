@@ -81,6 +81,7 @@ class PlaybackRest {
 
     @Post("/", "application/json", "text/plain")
     context(
+        _: Logger,
         database: Database,
         auth: AuthContext,
         context: PlaybackContext,

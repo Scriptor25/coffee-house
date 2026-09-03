@@ -16,6 +16,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.Duration.ofMinutes
+import java.util.logging.Logger
 import kotlin.time.Clock
 import kotlin.time.toKotlinDuration
 
@@ -78,6 +79,7 @@ class SessionRest {
 
     @Get("/renew", "text/plain")
     context(
+        _: Logger,
         database: Database,
         auth: AuthContext,
     )

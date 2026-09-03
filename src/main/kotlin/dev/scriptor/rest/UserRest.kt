@@ -12,6 +12,7 @@ import dev.scriptor.server.UnauthorizedSignal
 import dev.scriptor.server.jvm.annotation.*
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import java.util.logging.Logger
 import kotlin.uuid.Uuid
 
 @Suppress("unused")
@@ -20,6 +21,7 @@ class UserRest {
 
     @Get("/", result = "application/json")
     context(
+        _: Logger,
         database: Database,
         auth: AuthContext,
     )
@@ -38,6 +40,7 @@ class UserRest {
 
     @Post("/", "application/json", "application/json")
     context(
+        _: Logger,
         database: Database,
         auth: AuthContext,
     )
@@ -67,6 +70,7 @@ class UserRest {
 
     @Get("/[id]", result = "application/json")
     context(
+        _: Logger,
         database: Database,
         auth: AuthContext,
     )
@@ -87,6 +91,7 @@ class UserRest {
 
     @Put("/[id]", "application/json", "application/json")
     context(
+        _: Logger,
         database: Database,
         auth: AuthContext,
     )
@@ -117,6 +122,7 @@ class UserRest {
 
     @Delete("/[id]", result = "application/json")
     context(
+        _: Logger,
         database: Database,
         auth: AuthContext,
     )

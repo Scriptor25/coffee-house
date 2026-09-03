@@ -1,27 +1,19 @@
-import { computed, signal } from "@runtime/state";
+import { computed } from "@runtime/computed";
+import { signal } from "@runtime/signal";
+import { getSessionToken, setSessionToken } from "../../data/session";
 import { Dashboard } from "../dashboard/dashboard";
 import { Login } from "../login/login";
 
 export function App() {
-  const session = signal(window.localStorage.getItem("session"));
+  const sToken = signal(getSessionToken());
 
-  session.subscribe(() => {
-    const token = session.get();
-
-    if (token) {
-      window.localStorage.setItem("session", token);
-    } else {
-      window.localStorage.removeItem("session");
-    }
+  sToken.subscribe(() => {
+    setSessionToken(sToken.get());
   });
 
   return computed(() => {
-    const token = session.get();
+    const token = sToken.get();
 
-    return token ? (
-      <Dashboard session={session} />
-    ) : (
-      <Login session={session} />
-    );
+    return token ? <Dashboard /> : <Login sToken={sToken} />;
   });
 }
