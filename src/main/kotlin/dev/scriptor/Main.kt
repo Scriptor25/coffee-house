@@ -1,14 +1,20 @@
 package dev.scriptor
 
 import dev.scriptor.context.PlaybackContext
-import dev.scriptor.model.ffmpeg.CodecId
+import dev.scriptor.model.ffmpeg.*
 import dev.scriptor.model.media.*
+import dev.scriptor.model.movie.MovieMediaTable
+import dev.scriptor.model.movie.MovieTable
+import dev.scriptor.model.show.EpisodeMediaTable
+import dev.scriptor.model.show.EpisodeTable
+import dev.scriptor.model.show.SeasonTable
+import dev.scriptor.model.show.ShowTable
 import dev.scriptor.model.user.UserTable
 import dev.scriptor.server.Provider
 import dev.scriptor.server.http.Server
 import dev.scriptor.server.jvm.scan
 import org.jetbrains.exposed.v1.core.Column
-import org.jetbrains.exposed.v1.core.IColumnType
+import org.jetbrains.exposed.v1.core.ColumnType
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.notInList
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -36,7 +42,7 @@ import kotlin.time.toKotlinInstant
 
 fun Table.instant(name: String): Column<Instant> = registerColumn(
     name,
-    object : IColumnType<Instant> {
+    object : ColumnType<Instant>() {
         override var nullable: Boolean = false
 
         override fun sqlType(): String {
@@ -54,7 +60,7 @@ fun Table.instant(name: String): Column<Instant> = registerColumn(
 
 fun Table.path(name: String): Column<Path> = registerColumn(
     name,
-    object : IColumnType<Path> {
+    object : ColumnType<Path>() {
         override var nullable: Boolean = false
 
         override fun sqlType(): String {
@@ -355,19 +361,41 @@ fun main() {
 
     provider.registerT(log)
 
-    val capabilities = Probe(log, ffmpeg, transcodingDevice)()
-
     val databasePath = cache.resolve("index.db")
     databasePath.createParentDirectories()
 
     val database = Database.connect({ DriverManager.getConnection("jdbc:sqlite:$databasePath") })
     provider.registerT(database)
 
+    transaction(database) {
+        SchemaUtils.create(
+            CodecCapabilitiesTable,
+            DeviceCapabilitiesTable,
+            DeviceToDeviceCapabilitiesTable,
+            FilterCapabilitiesTable,
+            ImplementationCapabilitiesTable,
+            ImplementationDeviceTable,
+            MediaTable,
+            VideoTrackTable,
+            AudioTrackTable,
+            SubtitleTrackTable,
+            ChapterTable,
+            UserTable,
+            MovieTable,
+            MovieMediaTable,
+            ShowTable,
+            SeasonTable,
+            EpisodeTable,
+            EpisodeMediaTable,
+        )
+    }
+
+    Probe(log, ffmpeg, transcodingDevice)(database)
+
     val transcoding = TranscodingCache(
         log,
         ffmpeg,
         cache,
-        capabilities,
         TranscodingRequirements(
             transcodingEnable,
             transcodingDevice,
@@ -386,17 +414,6 @@ fun main() {
         .toList()
 
     log.info("found ${paths.size} files")
-
-    transaction(database) {
-        SchemaUtils.create(
-            MediaTable,
-            VideoTrackTable,
-            AudioTrackTable,
-            SubtitleTrackTable,
-            ChapterTable,
-            UserTable,
-        )
-    }
 
     transaction(database) {
         Media

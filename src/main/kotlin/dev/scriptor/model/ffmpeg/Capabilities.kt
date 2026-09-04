@@ -1,116 +1,168 @@
 package dev.scriptor.model.ffmpeg
 
-data class Capabilities(
-    val devices: Map<DeviceId, DeviceCapabilities>,
-    val interop: Map<Pair<DeviceId, DeviceId>, InteropCapabilities>,
-    val implementations: Map<ImplementationId, ImplementationCapabilities>,
-    val codecs: Map<CodecId, CodecCapabilities>,
-    val filters: Map<FilterId, FilterCapabilities>,
-) {
-    val decoders = implementations.filterValues { it.direction == CodecDirection.DECODE }
-    val encoders = implementations.filterValues { it.direction == CodecDirection.ENCODE }
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
 
-    fun getDevice(id: DeviceId): DeviceCapabilities? {
-        return devices[id]
+data object Capabilities {
+
+    fun getSoftwareDecoders(): List<ImplementationCapabilities> {
+        return ImplementationCapabilities
+            .find(
+                (ImplementationCapabilitiesTable.direction eq CodecDirection.DECODE)
+                        and (ImplementationCapabilitiesTable.kind eq ImplementationKind.SOFTWARE)
+            )
+            .toList()
     }
 
-    fun getSoftwareDecoders(): Map<ImplementationId, ImplementationCapabilities> {
-        return decoders.filterValues { it.kind == ImplementationKind.SOFTWARE }
+    fun getSoftwareEncoders(): List<ImplementationCapabilities> {
+        return ImplementationCapabilities
+            .find(
+                (ImplementationCapabilitiesTable.direction eq CodecDirection.ENCODE)
+                        and (ImplementationCapabilitiesTable.kind eq ImplementationKind.SOFTWARE)
+            )
+            .toList()
     }
 
-    fun getSoftwareEncoders(): Map<ImplementationId, ImplementationCapabilities> {
-        return encoders.filterValues { it.kind == ImplementationKind.SOFTWARE }
+    fun getHybridDecoders(): List<ImplementationCapabilities> {
+        return ImplementationCapabilities
+            .find(
+                (ImplementationCapabilitiesTable.direction eq CodecDirection.DECODE)
+                        and (ImplementationCapabilitiesTable.kind eq ImplementationKind.HYBRID)
+            )
+            .toList()
     }
 
-    fun getHybridDecoders(): Map<ImplementationId, ImplementationCapabilities> {
-        return decoders.filterValues { it.kind == ImplementationKind.HYBRID }
+    fun getHybridEncoders(): List<ImplementationCapabilities> {
+        return ImplementationCapabilities
+            .find(
+                (ImplementationCapabilitiesTable.direction eq CodecDirection.ENCODE)
+                        and (ImplementationCapabilitiesTable.kind eq ImplementationKind.HYBRID)
+            )
+            .toList()
     }
 
-    fun getHybridEncoders(): Map<ImplementationId, ImplementationCapabilities> {
-        return encoders.filterValues { it.kind == ImplementationKind.HYBRID }
+    fun getHardwareDecoders(): List<ImplementationCapabilities> {
+        return ImplementationCapabilities
+            .find(
+                (ImplementationCapabilitiesTable.direction eq CodecDirection.DECODE)
+                        and (ImplementationCapabilitiesTable.kind eq ImplementationKind.HARDWARE)
+            )
+            .toList()
     }
 
-    fun getHardwareDecoders(): Map<ImplementationId, ImplementationCapabilities> {
-        return decoders.filterValues { it.kind == ImplementationKind.HARDWARE }
+    fun getHardwareEncoders(): List<ImplementationCapabilities> {
+        return ImplementationCapabilities
+            .find(
+                (ImplementationCapabilitiesTable.direction eq CodecDirection.ENCODE)
+                        and (ImplementationCapabilitiesTable.kind eq ImplementationKind.HARDWARE)
+            )
+            .toList()
     }
 
-    fun getHardwareEncoders(): Map<ImplementationId, ImplementationCapabilities> {
-        return encoders.filterValues { it.kind == ImplementationKind.HARDWARE }
+    fun getDeviceDecoders(device: DeviceId): List<ImplementationCapabilities> {
+        return ImplementationCapabilities
+            .find(
+                (ImplementationCapabilitiesTable.direction eq CodecDirection.DECODE)
+                        and (ImplementationCapabilitiesTable.id eq ImplementationDeviceTable.implementation)
+                        and (ImplementationDeviceTable.device eq device)
+            )
+            .toList()
     }
 
-    fun getDeviceDecoders(id: DeviceId): Map<ImplementationId, ImplementationCapabilities> {
-        val device = devices[id] ?: return emptyMap()
-        return decoders.filterValues { device.id in it.supportedHardwareDevices }
+    fun getDeviceEncoders(device: DeviceId): List<ImplementationCapabilities> {
+        return ImplementationCapabilities
+            .find(
+                (ImplementationCapabilitiesTable.direction eq CodecDirection.ENCODE)
+                        and (ImplementationCapabilitiesTable.id eq ImplementationDeviceTable.implementation)
+                        and (ImplementationDeviceTable.device eq device)
+            )
+            .toList()
     }
 
-    fun getDeviceEncoders(id: DeviceId): Map<ImplementationId, ImplementationCapabilities> {
-        val device = devices[id] ?: return emptyMap()
-        return encoders.filterValues { device.id in it.supportedHardwareDevices }
+    fun getCodecDecoders(codec: CodecId): List<ImplementationCapabilities> {
+        return ImplementationCapabilities
+            .find(
+                (ImplementationCapabilitiesTable.direction eq CodecDirection.DECODE)
+                        and (ImplementationCapabilitiesTable.codec eq codec)
+            )
+            .toList()
     }
 
-    fun getCodecDecoders(id: CodecId): Map<ImplementationId, ImplementationCapabilities> {
-        val codec = codecs[id] ?: return emptyMap()
-        return codec.decoders
-            .mapNotNull(decoders::get)
-            .associateBy(ImplementationCapabilities::id)
+    fun getCodecEncoders(codec: CodecId): List<ImplementationCapabilities> {
+        return ImplementationCapabilities
+            .find(
+                (ImplementationCapabilitiesTable.direction eq CodecDirection.ENCODE)
+                        and (ImplementationCapabilitiesTable.codec eq codec)
+            )
+            .toList()
     }
 
-    fun getCodecEncoders(id: CodecId): Map<ImplementationId, ImplementationCapabilities> {
-        val codec = codecs[id] ?: return emptyMap()
-        return codec.encoders
-            .mapNotNull(encoders::get)
-            .associateBy(ImplementationCapabilities::id)
-    }
-
-    fun getInterop(src: DeviceId, dst: DeviceId): InteropCapabilities? {
-        val src = devices[src] ?: return null
-        val dst = devices[dst] ?: return null
-        return interop[src.id to dst.id]
+    fun getDeviceToDevice(src: DeviceId, dst: DeviceId): DeviceToDeviceCapabilities? {
+        return DeviceToDeviceCapabilities
+            .find(
+                (DeviceToDeviceCapabilitiesTable.src eq src)
+                        and (DeviceToDeviceCapabilitiesTable.dst eq dst)
+            )
+            .firstOrNull()
     }
 
     fun getDevicesForDecoding(codec: CodecId): Set<DeviceId> {
-        val codec = codecs[codec] ?: return emptySet()
-
-        return codec.decoders
-            .mapNotNull(decoders::get)
-            .flatMap(ImplementationCapabilities::supportedHardwareDevices)
-            .filter(devices::containsKey)
+        // TODO: check if device is available
+        return ImplementationCapabilities
+            .find(
+                (ImplementationCapabilitiesTable.direction eq CodecDirection.DECODE)
+                        and (ImplementationCapabilitiesTable.codec eq codec)
+            )
+            .flatMap { it.supportedHardwareDevices }
+            .map { it.id.value }
             .toSet()
     }
 
     fun getDevicesForEncoding(codec: CodecId): Set<DeviceId> {
-        val codec = codecs[codec] ?: return emptySet()
-
-        return codec.encoders
-            .mapNotNull(encoders::get)
-            .flatMap(ImplementationCapabilities::supportedHardwareDevices)
-            .filter(devices::containsKey)
+        // TODO: check if device is available
+        return ImplementationCapabilities
+            .find(
+                (ImplementationCapabilitiesTable.direction eq CodecDirection.ENCODE)
+                        and (ImplementationCapabilitiesTable.codec eq codec)
+            )
+            .flatMap { it.supportedHardwareDevices }
+            .map { it.id.value }
             .toSet()
     }
 
     fun getDecoders(codec: CodecId, device: DeviceId?): Set<ImplementationId> {
-        val codec = codecs[codec] ?: return emptySet()
-
-        return codec.decoders
-            .mapNotNull(decoders::get)
-            .filter {
-                if (device == null) it.kind == ImplementationKind.SOFTWARE
-                else device in it.supportedHardwareDevices
-            }
-            .map(ImplementationCapabilities::id)
+        return ImplementationCapabilities
+            .find(
+                (ImplementationCapabilitiesTable.direction eq CodecDirection.DECODE)
+                        and (ImplementationCapabilitiesTable.codec eq codec)
+                        and
+                        when (device) {
+                            null -> (ImplementationCapabilitiesTable.kind eq ImplementationKind.SOFTWARE)
+                            else -> (
+                                    (ImplementationCapabilitiesTable.id eq ImplementationDeviceTable.implementation)
+                                            and (ImplementationDeviceTable.device eq device)
+                                    )
+                        }
+            )
+            .map { it.id.value }
             .toSet()
     }
 
     fun getEncoders(codec: CodecId, device: DeviceId?): Set<ImplementationId> {
-        val codec = codecs[codec] ?: return emptySet()
-
-        return codec.encoders
-            .mapNotNull(encoders::get)
-            .filter {
-                if (device == null) it.kind == ImplementationKind.SOFTWARE
-                else device in it.supportedHardwareDevices
-            }
-            .map(ImplementationCapabilities::id)
+        return ImplementationCapabilities
+            .find(
+                (ImplementationCapabilitiesTable.direction eq CodecDirection.ENCODE)
+                        and (ImplementationCapabilitiesTable.codec eq codec)
+                        and
+                        when (device) {
+                            null -> (ImplementationCapabilitiesTable.kind eq ImplementationKind.SOFTWARE)
+                            else -> (
+                                    (ImplementationCapabilitiesTable.id eq ImplementationDeviceTable.implementation)
+                                            and (ImplementationDeviceTable.device eq device)
+                                    )
+                        }
+            )
+            .map { it.id.value }
             .toSet()
     }
 
@@ -122,8 +174,8 @@ data class Capabilities(
     }
 
     fun compare(a: ImplementationId, b: ImplementationId): Int {
-        val a = implementations[a] ?: return -1
-        val b = implementations[b] ?: return 1
+        val a = ImplementationCapabilities.findById(a) ?: return -1
+        val b = ImplementationCapabilities.findById(b) ?: return 1
 
         var errorA = 0
         var errorB = 0

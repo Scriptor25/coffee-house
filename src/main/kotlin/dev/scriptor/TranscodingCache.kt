@@ -20,7 +20,6 @@ class TranscodingCache(
     private val log: Logger,
     private val ffmpeg: String,
     private val base: Path,
-    private val capabilities: Capabilities,
     private val requirements: TranscodingRequirements,
     private val allowed: Set<String> = setOf("2160p", "1440p", "1080p", "720p", "480p", "360p", "144p"),
 ) {
@@ -80,14 +79,14 @@ class TranscodingCache(
     }
 
     private fun createBackend(device: DeviceId?, input: CodecId, output: CodecId): VideoBackend {
-        val decoders = capabilities.getDecoders(input, device)
-        val encoders = capabilities.getEncoders(output, device)
+        val decoders = Capabilities.getDecoders(input, device)
+        val encoders = Capabilities.getEncoders(output, device)
 
         val decoder = decoders
-            .toSortedSet(capabilities::compare)
+            .toSortedSet(Capabilities::compare)
             .firstOrNull()
         val encoder = encoders
-            .toSortedSet(capabilities::compare)
+            .toSortedSet(Capabilities::compare)
             .firstOrNull()
 
         val videoDecoder =
@@ -154,21 +153,21 @@ class TranscodingCache(
             val input = CodecId(video.codec)
             val output = requirements.video
 
-            val decodeDevices = capabilities.getDevicesForDecoding(input)
-            val encodeDevices = capabilities.getDevicesForEncoding(output)
+            val decodeDevices = Capabilities.getDevicesForDecoding(input)
+            val encodeDevices = Capabilities.getDevicesForEncoding(output)
 
             val transcodeDevice = decodeDevices
                 .filter(encodeDevices::contains)
-                .toSortedSet(capabilities::compare)
+                .toSortedSet(Capabilities::compare)
                 .firstOrNull()
 
             val pipeline = if (transcodeDevice == null) {
 
                 val decodeDevice = decodeDevices
-                    .toSortedSet(capabilities::compare)
+                    .toSortedSet(Capabilities::compare)
                     .firstOrNull()
                 val encodeDevice = encodeDevices
-                    .toSortedSet(capabilities::compare)
+                    .toSortedSet(Capabilities::compare)
                     .firstOrNull()
 
                 val decodeBackend = createBackend(decodeDevice, input, output)
@@ -177,7 +176,6 @@ class TranscodingCache(
                     else createBackend(encodeDevice, input, output)
 
                 Pipeline(
-                    capabilities,
                     decodeBackend,
                     encodeBackend,
                     encodeBackend,
@@ -186,7 +184,7 @@ class TranscodingCache(
             } else {
                 val backend = createBackend(transcodeDevice, input, output)
 
-                Pipeline(capabilities, backend)
+                Pipeline(backend)
             }
 
             TranscodingJob(

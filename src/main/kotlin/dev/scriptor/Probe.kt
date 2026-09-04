@@ -1,9 +1,11 @@
 package dev.scriptor
 
 import dev.scriptor.model.ffmpeg.*
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.select
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.io.BufferedReader
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import java.util.logging.Logger
 
 class Probe(
@@ -11,7 +13,7 @@ class Probe(
     private val ffmpeg: String = "ffmpeg",
     private val device: String? = null,
 ) {
-    operator fun invoke() = probe()
+    operator fun invoke(database: Database) = probe(database)
 
     private fun device(type: DeviceId, name: String? = null, inherit: String? = null): String = buildString {
         append(type)
@@ -28,28 +30,32 @@ class Probe(
         }
     }
 
-    private fun probe(): Capabilities {
-        val deviceIds = probeDevices()
-        val codecs = probeCodecs()
-        val filters = probeFilters()
+    private fun probe(database: Database) {
+        context(database) {
+            val devices = probeDevices()
 
-        val decoders = probeDecoders()
-        val encoders = probeEncoders()
+            val decodersMap = mutableMapOf<CodecId, Set<ImplementationId>>()
+            val encodersMap = mutableMapOf<CodecId, Set<ImplementationId>>()
 
-        val devices = deviceIds.mapNotNull(::probeDevice)
-        val interop = probeInterop(devices)
-        val implementations = probeImplementations(decoders + encoders)
+            probeCodecs(decodersMap, encodersMap)
+            probeFilters()
 
-        return Capabilities(
-            devices.associateBy(DeviceCapabilities::id),
-            interop.associateBy { it.src to it.dst },
-            implementations.associateBy(ImplementationCapabilities::id),
-            codecs.associateBy(CodecCapabilities::id),
-            filters.associateBy(FilterCapabilities::id),
-        )
+            val decodersCodecMap = decodersMap.entries.flatMap { (key, value) -> value.map { it to key } }.toMap()
+            val encodersCodecMap = encodersMap.entries.flatMap { (key, value) -> value.map { it to key } }.toMap()
+
+            val decoders = probeDecoders(decodersCodecMap)
+            val encoders = probeEncoders(encodersCodecMap)
+
+            probeDeviceToDevice(devices)
+            probeImplementations(
+                devices.map { it.id.value }.toSet(),
+                decoders + encoders,
+            )
+        }
     }
 
-    private fun probeDevices(): Set<DeviceId> {
+    context(database: Database)
+    private fun probeDevices(): List<DeviceCapabilities> {
         log.fine("probe devices")
 
         val result = command(
@@ -60,119 +66,30 @@ class Probe(
 
         if (result.error) {
             log.fine("failed to probe device types:\n${result.stderr}")
-            return emptySet()
+            return emptyList()
         }
 
-        return result.stdout
+        val devices = result.stdout
             .lineSequence()
             .map(String::trim)
             .filter(String::isNotEmpty)
             .drop(1)
             .map(::DeviceId)
             .toSet()
-    }
 
-    private fun probeCodecs(): List<CodecCapabilities> {
-        log.fine("probe codecs")
-
-        val result = command(
-            "-hide_banner",
-            "-loglevel", "error",
-            "-codecs",
-        )
-
-        if (result.error) {
-            val message = result.stderr.ifBlank(result::stdout)
-            log.fine("failed to probe encoders:\n$message")
-            return emptyList()
+        val existing = transaction(database) {
+            DeviceCapabilitiesTable
+                .select(DeviceCapabilitiesTable.id)
+                .map { it[DeviceCapabilitiesTable.id].value }
+                .toSet()
         }
 
-        return parseCodecs(result.stdout)
+        return devices
+            .filter { it !in existing }
+            .mapNotNull { probeDevice(it) }
     }
 
-    private fun probeFilters(): List<FilterCapabilities> {
-        log.fine("probe filters")
-
-        val result = command(
-            "-hide_banner",
-            "-loglevel", "error",
-            "-filters",
-        )
-
-        if (result.error) {
-            val message = result.stderr.ifBlank(result::stdout)
-            log.fine("failed to probe filters:\n$message")
-            return emptyList()
-        }
-
-        return parseFilters(result.stdout)
-    }
-
-    private fun probeEncoders(): List<ImplementationCapabilities> {
-        log.fine("probe encoders")
-
-        val result = command(
-            "-hide_banner",
-            "-loglevel", "error",
-            "-encoders",
-        )
-
-        if (result.error) {
-            val message = result.stderr.ifBlank(result::stdout)
-            log.fine("failed to probe encoders:\n$message")
-            return emptyList()
-        }
-
-        return parseImplementations(result.stdout, CodecDirection.ENCODE)
-    }
-
-    private fun probeDecoders(): List<ImplementationCapabilities> {
-        log.fine("probe decoders")
-
-        val result = command(
-            "-hide_banner",
-            "-loglevel", "error",
-            "-decoders",
-        )
-
-        if (result.error) {
-            val message = result.stderr.ifBlank(result::stdout)
-            log.fine("failed to probe decoders:\n$message")
-            return emptyList()
-        }
-
-        return parseImplementations(result.stdout, CodecDirection.DECODE)
-    }
-
-    private fun probeImplementations(implementations: List<ImplementationCapabilities>): List<ImplementationCapabilities> {
-        log.fine("probe implementations (${implementations.size})")
-
-        val result = arrayOfNulls<ImplementationCapabilities>(implementations.size)
-        val executed = mutableSetOf<Int>()
-
-        while (true) {
-            val executor = Executors.newFixedThreadPool(
-                minOf(
-                    4,
-                    Runtime.getRuntime().availableProcessors(),
-                ),
-            )
-
-            for ((index, implementation) in implementations.withIndex()) {
-                if (index in executed) continue
-                executor.execute {
-                    result[index] = probeImplementation(implementation)
-                    executed.add(index)
-                }
-            }
-
-            executor.shutdown()
-            if (executor.awaitTermination(60, TimeUnit.SECONDS)) break
-        }
-
-        return result.filterNotNull()
-    }
-
+    context(database: Database)
     private fun probeDevice(
         id: DeviceId,
     ): DeviceCapabilities? {
@@ -195,35 +112,157 @@ class Probe(
             return null
         }
 
-        return DeviceCapabilities(
-            id,
+        return transaction(database) { DeviceCapabilities.new(id) {} }
+    }
+
+    context(database: Database)
+    private fun probeCodecs(
+        decodersMap: MutableMap<CodecId, Set<ImplementationId>>,
+        encodersMap: MutableMap<CodecId, Set<ImplementationId>>,
+    ) {
+        log.fine("probe codecs")
+
+        val result = command(
+            "-hide_banner",
+            "-loglevel", "error",
+            "-codecs",
+        )
+
+        if (result.error) {
+            val message = result.stderr.ifBlank(result::stdout)
+            log.fine("failed to probe encoders:\n$message")
+            return
+        }
+
+        parseCodecs(
+            result.stdout,
+            decodersMap,
+            encodersMap,
         )
     }
 
-    private fun probeInterop(devices: List<DeviceCapabilities>): List<InteropCapabilities> {
-        val result = mutableListOf<InteropCapabilities>()
+    context(database: Database)
+    private fun probeFilters() {
+        log.fine("probe filters")
 
+        val result = command(
+            "-hide_banner",
+            "-loglevel", "error",
+            "-filters",
+        )
+
+        if (result.error) {
+            val message = result.stderr.ifBlank(result::stdout)
+            log.fine("failed to probe filters:\n$message")
+            return
+        }
+
+        parseFilters(result.stdout)
+    }
+
+    context(database: Database)
+    private fun probeDecoders(codecMap: Map<ImplementationId, CodecId>): List<ImplementationCapabilities> {
+        log.fine("probe decoders")
+
+        val result = command(
+            "-hide_banner",
+            "-loglevel", "error",
+            "-decoders",
+        )
+
+        if (result.error) {
+            val message = result.stderr.ifBlank(result::stdout)
+            log.fine("failed to probe decoders:\n$message")
+            return emptyList()
+        }
+
+        return parseImplementations(result.stdout, CodecDirection.DECODE, codecMap)
+    }
+
+    context(database: Database)
+    private fun probeEncoders(codecMap: Map<ImplementationId, CodecId>): List<ImplementationCapabilities> {
+        log.fine("probe encoders")
+
+        val result = command(
+            "-hide_banner",
+            "-loglevel", "error",
+            "-encoders",
+        )
+
+        if (result.error) {
+            val message = result.stderr.ifBlank(result::stdout)
+            log.fine("failed to probe encoders:\n$message")
+            return emptyList()
+        }
+
+        return parseImplementations(result.stdout, CodecDirection.ENCODE, codecMap)
+    }
+
+    context(database: Database)
+    private fun probeImplementations(
+        devices: Set<DeviceId>,
+        implementations: List<ImplementationCapabilities>,
+    ) {
+        log.fine("probe implementations (${implementations.size})")
+
+        for (implementation in implementations) {
+            probeImplementation(devices, implementation)
+        }
+    }
+
+    context(database: Database)
+    private fun probeDeviceToDevice(devices: List<DeviceCapabilities>) {
+        val existing = transaction(database) {
+            DeviceToDeviceCapabilitiesTable
+                .select(DeviceToDeviceCapabilitiesTable.src, DeviceToDeviceCapabilitiesTable.dst)
+                .map { it[DeviceToDeviceCapabilitiesTable.src].value to it[DeviceToDeviceCapabilitiesTable.dst].value }
+                .toSet()
+        }
+
+        val combinations = mutableListOf<Pair<DeviceId, DeviceId>>()
         for (src in devices) {
             for (dst in devices) {
-                if (src == dst) {
-                    result += InteropCapabilities(
-                        src = src.id,
-                        dst = dst.id,
-                        derivable = true,
-                        direct = true,
-                        mapping = true,
-                    )
-                    continue
-                }
-
-                result += probeDeviceInterop(src.id, dst.id) ?: continue
+                val key = src.id.value to dst.id.value
+                if (key in existing) continue
+                combinations.add(key)
             }
         }
 
-        return result
+        for ((src, dst) in combinations) {
+            if (src == dst) {
+                transaction(database) {
+                    DeviceToDeviceCapabilities.new {
+                        this.src = DeviceCapabilities[src]
+                        this.dst = DeviceCapabilities[dst]
+                        this.derivable = true
+                        this.direct = true
+                        this.mapping = true
+                    }
+                }
+                continue
+            }
+
+            val data = probeDeviceToDevice(src, dst) ?: continue
+
+            transaction(database) {
+                DeviceToDeviceCapabilities.new {
+                    this.src = DeviceCapabilities[src]
+                    this.dst = DeviceCapabilities[dst]
+                    this.derivable = data.derivable
+                    this.direct = data.direct
+                    this.mapping = data.mapping
+                }
+            }
+        }
     }
 
-    private fun probeDeviceInterop(src: DeviceId, dst: DeviceId): InteropCapabilities? {
+    private data class DeviceToDeviceCapabilitiesData(
+        val derivable: Boolean,
+        val direct: Boolean,
+        val mapping: Boolean,
+    )
+
+    private fun probeDeviceToDevice(src: DeviceId, dst: DeviceId): DeviceToDeviceCapabilitiesData? {
         log.fine("probe device interop $src ---> $dst")
 
         val resultDerive = command(
@@ -259,9 +298,7 @@ class Probe(
         )
 
         if (resultDirect.success) {
-            return InteropCapabilities(
-                src = src,
-                dst = dst,
+            return DeviceToDeviceCapabilitiesData(
                 derivable = true,
                 direct = true,
                 mapping = true,
@@ -283,18 +320,14 @@ class Probe(
         )
 
         if (resultMapping.success) {
-            return InteropCapabilities(
-                src = src,
-                dst = dst,
+            return DeviceToDeviceCapabilitiesData(
                 derivable = true,
                 direct = false,
                 mapping = true,
             )
         }
 
-        return InteropCapabilities(
-            src = src,
-            dst = dst,
+        return DeviceToDeviceCapabilitiesData(
             derivable = true,
             direct = false,
             mapping = false,
@@ -314,8 +347,18 @@ class Probe(
     private val codecDecodersRegex = """\(decoders:\s*([^)]+)\)""".toRegex()
     private val codecEncodersRegex = """\(encoders:\s*([^)]+)\)""".toRegex()
 
-    private fun parseCodecs(text: String): List<CodecCapabilities> {
-        val result = mutableListOf<CodecCapabilities>()
+    context(database: Database)
+    private fun parseCodecs(
+        text: String,
+        decodersMap: MutableMap<CodecId, Set<ImplementationId>>,
+        encodersMap: MutableMap<CodecId, Set<ImplementationId>>,
+    ) {
+        val existing = transaction(database) {
+            CodecCapabilitiesTable
+                .select(CodecCapabilitiesTable.id)
+                .map { it[CodecCapabilitiesTable.id].value }
+                .toSet()
+        }
 
         for (line in text.lineSequence().dropWhile { !it.trim().startsWith('-') }) {
             val match = codecLineRegex.matchEntire(line) ?: continue
@@ -334,24 +377,29 @@ class Probe(
             } ?: continue
 
             val id = CodecId(name)
+            if (id in existing) continue
 
             val decoders = parseSpaceSeparatedSequence(codecDecodersRegex, description)
+                .map(::ImplementationId)
+                .toSet()
             val encoders = parseSpaceSeparatedSequence(codecEncodersRegex, description)
+                .map(::ImplementationId)
+                .toSet()
 
-            result += CodecCapabilities(
-                id,
-                type,
-                flags[0] == 'D',
-                flags[1] == 'E',
-                flags[3] == 'I',
-                flags[4] == 'L',
-                flags[5] == 'S',
-                decoders.map(::ImplementationId).toSet(),
-                encoders.map(::ImplementationId).toSet(),
-            )
+            decodersMap[id] = decoders
+            encodersMap[id] = encoders
+
+            transaction(database) {
+                CodecCapabilities.new(id) {
+                    this.type = type
+                    this.supportsDecoding = flags[0] == 'D'
+                    this.supportsEncoding = flags[1] == 'E'
+                    this.intraFrameOnly = flags[3] == 'I'
+                    this.lossyCompression = flags[4] == 'L'
+                    this.losslessCompression = flags[5] == 'S'
+                }
+            }
         }
-
-        return result
     }
 
     private val implementationGeneralCapabilitiesRegex = """General capabilities:([^\n]*)""".toRegex()
@@ -361,7 +409,11 @@ class Probe(
     private val implementationSupportedSampleFormatsRegex = """Supported sample formats:([^\n]*)""".toRegex()
     private val implementationSupportedChannelLayoutsRegex = """Supported channel layouts:([^\n]*)""".toRegex()
 
-    private fun probeImplementation(implementation: ImplementationCapabilities): ImplementationCapabilities? {
+    context(database: Database)
+    private fun probeImplementation(
+        devices: Set<DeviceId>,
+        implementation: ImplementationCapabilities,
+    ): Boolean {
         val kind = when (implementation.direction) {
             CodecDirection.DECODE -> "decoder"
             CodecDirection.ENCODE -> "encoder"
@@ -374,42 +426,71 @@ class Probe(
         )
 
         if (result.error) {
-            return null
+            return false
         }
 
         val generalCapabilities =
             parseSpaceSeparatedSequence(implementationGeneralCapabilitiesRegex, result.stdout)
+                .toSet()
         val supportedHardwareDevices =
             parseSpaceSeparatedSequence(implementationSupportedHardwareDevicesRegex, result.stdout)
+                .map { DeviceId(it) }
+                .filter { it in devices }
+                .toSet()
         val supportedPixelFormats =
             parseSpaceSeparatedSequence(implementationSupportedPixelFormatsRegex, result.stdout)
+                .map { PixelFormat(it) }
+                .toSet()
         val supportedSampleRates =
             parseSpaceSeparatedSequence(implementationSupportedSampleRatesRegex, result.stdout)
+                .map { it.toLong() }
+                .toSet()
         val supportedSampleFormats =
             parseSpaceSeparatedSequence(implementationSupportedSampleFormatsRegex, result.stdout)
+                .toSet()
         val supportedChannelLayouts =
             parseSpaceSeparatedSequence(implementationSupportedChannelLayoutsRegex, result.stdout)
+                .toSet()
 
-        val general = generalCapabilities.toSet()
-
-        return implementation.copy(
-            kind = when {
-                "hardware" in general -> ImplementationKind.HARDWARE
-                "hybrid" in general -> ImplementationKind.HYBRID
+        transaction(database) {
+            implementation.kind = when {
+                "hardware" in generalCapabilities -> ImplementationKind.HARDWARE
+                "hybrid" in generalCapabilities -> ImplementationKind.HYBRID
                 else -> ImplementationKind.SOFTWARE
-            },
-            generalCapabilities = general,
-            supportedHardwareDevices = supportedHardwareDevices.map(::DeviceId).toSet(),
-            supportedPixelFormats = supportedPixelFormats.map(::PixelFormat).toSet(),
-            supportedSampleRates = supportedSampleRates.map(String::toLong).toSet(),
-            supportedSampleFormats = supportedSampleFormats.toSet(),
-            supportedChannelLayouts = supportedChannelLayouts.toSet(),
-        )
+            }
+
+            implementation.generalCapabilities = generalCapabilities.joinToString(";")
+            implementation.supportedPixelFormats = supportedPixelFormats.joinToString(";")
+            implementation.supportedSampleRates = supportedSampleRates.joinToString(";")
+            implementation.supportedSampleFormats = supportedSampleFormats.joinToString(";")
+            implementation.supportedChannelLayouts = supportedChannelLayouts.joinToString(";")
+
+            supportedHardwareDevices.forEach { device ->
+                ImplementationDeviceTable.insert {
+                    it[ImplementationDeviceTable.implementation] = implementation.id
+                    it[ImplementationDeviceTable.device] = device
+                }
+            }
+        }
+
+        return true
     }
 
     private val coderLineRegex = """^\s*([VASFXBD.]{6})\s+(\S+)\s+(.*)$""".toRegex()
 
-    private fun parseImplementations(text: String, direction: CodecDirection): List<ImplementationCapabilities> {
+    context(database: Database)
+    private fun parseImplementations(
+        text: String,
+        direction: CodecDirection,
+        codecMap: Map<ImplementationId, CodecId>,
+    ): List<ImplementationCapabilities> {
+        val existing = transaction(database) {
+            ImplementationCapabilitiesTable
+                .select(ImplementationCapabilitiesTable.id)
+                .map { it[ImplementationCapabilitiesTable.id].value }
+                .toSet()
+        }
+
         val result = mutableListOf<ImplementationCapabilities>()
 
         for (line in text.lineSequence().dropWhile { !it.trim().startsWith('-') }) {
@@ -419,25 +500,22 @@ class Probe(
             val name = match.groupValues[2]
 
             val id = ImplementationId(name)
+            if (id in existing) continue
 
-            val type = when (flags[0]) {
-                'V' -> CodecType.VIDEO
-                'A' -> CodecType.AUDIO
-                'S' -> CodecType.SUBTITLE
-                else -> null
-            } ?: continue
+            val codec = codecMap[id]
 
-            result += ImplementationCapabilities(
-                id,
-                type,
-                direction,
-                flags[1] == 'F',
-                flags[2] == 'S',
-                flags[3] == 'X',
-                flags[4] == 'B',
-                flags[5] == 'D',
-                ImplementationKind.SOFTWARE,
-            )
+            result += transaction(database) {
+                ImplementationCapabilities.new(id) {
+                    this.codec = if (codec == null) null else CodecCapabilities[codec]
+                    this.direction = direction
+                    this.frameLevelMultithreading = flags[1] == 'F'
+                    this.sliceLevelMultithreading = flags[2] == 'S'
+                    this.experimental = flags[3] == 'X'
+                    this.supportDrawHorizontalBand = flags[4] == 'B'
+                    this.supportDirectRendering = flags[5] == 'D'
+                    this.kind = ImplementationKind.SOFTWARE
+                }
+            }
         }
 
         return result
@@ -445,8 +523,14 @@ class Probe(
 
     private val filterLineRegex = """^\s*([TS.]{2,3})\s+(\S+)\s+([AVN|\->]+)\s+(.+)$""".toRegex()
 
-    private fun parseFilters(text: String): List<FilterCapabilities> {
-        val result = mutableListOf<FilterCapabilities>()
+    context(database: Database)
+    private fun parseFilters(text: String) {
+        val existing = transaction(database) {
+            FilterCapabilitiesTable
+                .select(FilterCapabilitiesTable.id)
+                .map { it[FilterCapabilitiesTable.id].value }
+                .toSet()
+        }
 
         for (line in text.lineSequence().dropWhile { !it.trim().startsWith('-') }) {
             val match = filterLineRegex.matchEntire(line) ?: continue
@@ -456,16 +540,16 @@ class Probe(
             val transform = match.groupValues[3]
 
             val id = FilterId(name)
+            if (id in existing) continue
 
-            result += FilterCapabilities(
-                id,
-                transform,
-                flags[0] == 'T',
-                flags[1] == 'S',
-            )
+            transaction(database) {
+                FilterCapabilities.new(id) {
+                    this.transform = transform
+                    this.timelineSupport = flags[0] == 'T'
+                    this.sliceThreading = flags[1] == 'S'
+                }
+            }
         }
-
-        return result
     }
 
     private data class CommandResult(
