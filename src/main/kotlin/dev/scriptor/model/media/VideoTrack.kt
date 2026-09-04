@@ -30,7 +30,7 @@ object VideoTrackTable : UuidTable("video_track") {
 class VideoTrack(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<VideoTrack>(VideoTrackTable)
 
-    var media by Media.Companion referencedOn VideoTrackTable.media
+    var media by Media referencedOn VideoTrackTable.media
     var index by VideoTrackTable.index
     var codec by VideoTrackTable.codec
     var width by VideoTrackTable.width
@@ -45,6 +45,6 @@ class VideoTrack(id: EntityID<Uuid>) : UuidEntity(id) {
     var default by VideoTrackTable.default
 
     override fun toString(): String {
-        return "VideoTrack(id=$id, media=$media, index=$index, codec=$codec, width=$width, height=$height, bitRate=$bitRate, frameRate=$frameRate, profile=$profile, level=$level, hdr=$hdr, language=$language, title=$title, default=$default)"
+        return "VideoTrack(id=$id, media=${media.id}, index=$index, codec=$codec, width=$width, height=$height, bitRate=$bitRate, frameRate=$frameRate, profile=$profile, level=$level, hdr=$hdr, language=$language, title=$title, default=$default)"
     }
 }

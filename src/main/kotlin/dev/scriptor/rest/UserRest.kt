@@ -19,25 +19,6 @@ import kotlin.uuid.Uuid
 @Controller("/user")
 class UserRest {
 
-    @Get("/", result = "application/json")
-    context(
-        _: Logger,
-        database: Database,
-        auth: AuthContext,
-    )
-    fun getUsers(@Header authorization: Authorization? = null): List<User> {
-        val session = auth.auth(authorization)
-            ?: throw UnauthorizedSignal()
-
-        return when (session.role) {
-            UserRole.ADMIN -> transaction(database) { User.all().toList() }
-            UserRole.USER -> {
-                val self = transaction(database) { User.findById(session.id!!) }
-                listOfNotNull(self)
-            }
-        }
-    }
-
     @Post("/", "application/json", "application/json")
     context(
         _: Logger,
@@ -68,7 +49,7 @@ class UserRest {
         }
     }
 
-    @Get("/[id]", result = "application/json")
+    @Get("/[id]", "application/json")
     context(
         _: Logger,
         database: Database,
@@ -120,7 +101,7 @@ class UserRest {
         } ?: throw NotFoundSignal()
     }
 
-    @Delete("/[id]", result = "application/json")
+    @Delete("/[id]", "application/json")
     context(
         _: Logger,
         database: Database,
@@ -142,5 +123,37 @@ class UserRest {
                 it.delete()
             }
         } ?: throw NotFoundSignal()
+    }
+
+    @Post("/list", "application/json", "application/json")
+    context(
+        _: Logger,
+        database: Database,
+        auth: AuthContext,
+    )
+    fun getUserList(
+        @Header authorization: Authorization? = null,
+        @Body body: JsonNode,
+    ): List<User> {
+        val session = auth.auth(authorization)
+            ?: throw UnauthorizedSignal()
+
+        val offset = body["offset"].get<Number>().toLong()
+        val limit = body["limit"].get<Number>().toInt()
+
+        return when (session.role) {
+            UserRole.ADMIN -> transaction(database) {
+                User
+                    .all()
+                    .offset(offset)
+                    .limit(limit)
+                    .toList()
+            }
+
+            UserRole.USER -> {
+                val self = transaction(database) { User.findById(session.id!!) }
+                listOfNotNull(self)
+            }
+        }
     }
 }

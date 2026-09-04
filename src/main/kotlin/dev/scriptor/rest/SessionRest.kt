@@ -29,7 +29,9 @@ class SessionRest {
         provider: Provider,
         database: Database,
     )
-    fun createSession(@Body body: JsonNode): Jwt {
+    fun createSession(
+        @Body body: JsonNode,
+    ): Jwt {
         val username = body["username"].get<String>()
         val password = body["password"].get<String>()
 
@@ -47,7 +49,6 @@ class SessionRest {
             user = transaction(database) {
                 User
                     .find { UserTable.name eq username }
-                    .limit(1)
                     .firstOrNull()
             } ?: throw UnauthorizedSignal()
 
@@ -83,7 +84,9 @@ class SessionRest {
         database: Database,
         auth: AuthContext,
     )
-    fun renewSession(@Header authorization: Authorization? = null): Jwt {
+    fun renewSession(
+        @Header authorization: Authorization? = null,
+    ): Jwt {
 
         val instant = Clock.System.now()
 

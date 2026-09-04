@@ -23,7 +23,7 @@ object ChapterTable : UuidTable("chapter") {
 class Chapter(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<Chapter>(ChapterTable)
 
-    var media by Media.Companion referencedOn ChapterTable.media
+    var media by Media referencedOn ChapterTable.media
     var index by ChapterTable.index
     var start by ChapterTable.start
     var end by ChapterTable.end
@@ -31,6 +31,6 @@ class Chapter(id: EntityID<Uuid>) : UuidEntity(id) {
     var title by ChapterTable.title
 
     override fun toString(): String {
-        return "Chapter(id=$id, index=$index, start=$start, end=$end, language=$language, title=$title)"
+        return "Chapter(id=$id, media=${media.id} index=$index, start=$start, end=$end, language=$language, title=$title)"
     }
 }

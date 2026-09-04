@@ -5,14 +5,13 @@ import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.ParameterList
 import dev.scriptor.server.jvm.annotation.Controller
 import dev.scriptor.server.jvm.annotation.Get
-import dev.scriptor.server.result.Result
 import dev.scriptor.server.result.StreamResult
 
 @Suppress("unused")
 @Controller("/")
 class DashboardRest {
 
-    private fun getResource(name: String): Result {
+    private fun resource(name: String): StreamResult {
         val stream = ClassLoader.getSystemResourceAsStream(name)
             ?: throw NotFoundSignal()
 
@@ -26,34 +25,34 @@ class DashboardRest {
         )
     }
 
-    @Get("/favicon.[]", result = "image/svg+xml")
-    fun getFavicon(): Result {
-        return getResource("favicon.svg")
+    @Get("/favicon.[]", "image/svg+xml")
+    fun getFavicon(): StreamResult {
+        return resource("favicon.svg")
     }
 
-    @Get("/", result = "text/html")
-    fun getDocument(): Result {
-        return getResource("index.html")
+    @Get("/", "text/html")
+    fun getDocument(): StreamResult {
+        return resource("index.html")
     }
 
-    @Get("/index.js", result = "text/javascript")
-    fun getScript(): Result {
-        return getResource("index.js")
+    @Get("/index.js", "text/javascript")
+    fun getScript(): StreamResult {
+        return resource("index.js")
     }
 
-    @Get("/index.js.map", result = "text/javascript")
-    fun getScriptMap(): Result {
-        return getResource("index.js.map")
+    @Get("/index.js.map")
+    fun getScriptMap(): StreamResult {
+        return resource("index.js.map")
     }
 
-    @Get("/index.css", result = "text/css")
-    fun getStyle(): Result {
-        return getResource("index.css")
+    @Get("/index.css", "text/css")
+    fun getStyle(): StreamResult {
+        return resource("index.css")
     }
 
-    @Get("/index.css.map", result = "text/css")
-    fun getStyleMap(): Result {
-        return getResource("index.css.map")
+    @Get("/index.css.map")
+    fun getStyleMap(): StreamResult {
+        return resource("index.css.map")
     }
 
     @Get("/health")
