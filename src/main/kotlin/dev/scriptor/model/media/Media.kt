@@ -33,6 +33,6 @@ class Media(id: EntityID<Uuid>) : UuidEntity(id) {
     val chapters by Chapter referrersOn ChapterTable.media
 
     override fun toString(): String {
-        return "Media(id=$id, path=$path, size=$size, createdAt=$createdAt, modifiedAt=$modifiedAt, duration=$duration)"
+        return "Media(id=$id, path=$path, size=$size, title=$title, createdAt=$createdAt, modifiedAt=$modifiedAt, duration=$duration)"
     }
 }

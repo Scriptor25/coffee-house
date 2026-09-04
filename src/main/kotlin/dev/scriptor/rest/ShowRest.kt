@@ -5,7 +5,7 @@ import dev.scriptor.context.AuthContext
 import dev.scriptor.emptyJsonObject
 import dev.scriptor.get
 import dev.scriptor.model.Authorization
-import dev.scriptor.model.media.Media
+import dev.scriptor.model.show.Show
 import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.UnauthorizedSignal
 import dev.scriptor.server.jvm.annotation.*
@@ -15,8 +15,8 @@ import java.util.logging.Logger
 import kotlin.uuid.Uuid
 
 @Suppress("unused")
-@Controller("/media")
-class MediaRest {
+@Controller("/show")
+class ShowRest {
 
     @Get("/[id]", "application/json")
     context(
@@ -24,14 +24,14 @@ class MediaRest {
         database: Database,
         auth: AuthContext,
     )
-    fun getMedia(
+    fun getShow(
         @PathParameter id: Uuid,
         @Header authorization: Authorization? = null,
-    ): Media {
+    ): Show {
         auth.auth(authorization)
             ?: throw UnauthorizedSignal()
 
-        return transaction(database) { Media.findById(id) }
+        return transaction(database) { Show.findById(id) }
             ?: throw NotFoundSignal()
     }
 
@@ -41,10 +41,10 @@ class MediaRest {
         database: Database,
         auth: AuthContext,
     )
-    fun getMediaList(
+    fun getShowList(
         @Header authorization: Authorization? = null,
         @Body body: JsonNode? = null,
-    ): List<Media> {
+    ): List<Show> {
         val body = body ?: emptyJsonObject()
 
         auth.auth(authorization)
@@ -54,7 +54,7 @@ class MediaRest {
         val limit = body["limit"].get<Number?>()?.toInt() ?: Int.MAX_VALUE
 
         return transaction(database) {
-            Media
+            Show
                 .all()
                 .offset(offset)
                 .limit(limit)

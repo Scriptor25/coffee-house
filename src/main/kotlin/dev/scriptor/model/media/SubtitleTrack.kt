@@ -24,7 +24,7 @@ object SubtitleTrackTable : UuidTable("subtitle_track") {
 class SubtitleTrack(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<SubtitleTrack>(SubtitleTrackTable)
 
-    var media by Media.Companion referencedOn SubtitleTrackTable.media
+    var media by Media referencedOn SubtitleTrackTable.media
     var index by SubtitleTrackTable.index
     var codec by SubtitleTrackTable.codec
     var language by SubtitleTrackTable.language
@@ -33,6 +33,6 @@ class SubtitleTrack(id: EntityID<Uuid>) : UuidEntity(id) {
     var forced by SubtitleTrackTable.forced
 
     override fun toString(): String {
-        return "SubtitleTrack(id=$id, media=$media, index=$index, codec=$codec, language=$language, title=$title, default=$default, forced=$forced)"
+        return "SubtitleTrack(id=$id, media=${media.id}, index=$index, codec=$codec, language=$language, title=$title, default=$default, forced=$forced)"
     }
 }

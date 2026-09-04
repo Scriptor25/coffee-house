@@ -8,7 +8,7 @@ export interface Media {
 }
 
 export async function getAllMedia(): Promise<Media[]> {
-  const response = await fetchData("/media", { method: "get" });
+  const response = await fetchData("/media/list", { method: "post" });
 
   if (!response.ok) {
     throw new Error(

@@ -27,7 +27,7 @@ object AudioTrackTable : UuidTable("audio_track") {
 class AudioTrack(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<AudioTrack>(AudioTrackTable)
 
-    var media by Media.Companion referencedOn AudioTrackTable.media
+    var media by Media referencedOn AudioTrackTable.media
     var index by AudioTrackTable.index
     var codec by AudioTrackTable.codec
     var bitRate by AudioTrackTable.bitRate
@@ -39,6 +39,6 @@ class AudioTrack(id: EntityID<Uuid>) : UuidEntity(id) {
     var forced by AudioTrackTable.forced
 
     override fun toString(): String {
-        return "AudioTrack(id=$id, media=$media, index=$index, codec=$codec, bitRate=$bitRate, sampleRate=$sampleRate, channels=$channels, language=$language, title=$title, default=$default)"
+        return "AudioTrack(id=$id, media=${media.id}, index=$index, codec=$codec, bitRate=$bitRate, sampleRate=$sampleRate, channels=$channels, language=$language, title=$title, default=$default)"
     }
 }
