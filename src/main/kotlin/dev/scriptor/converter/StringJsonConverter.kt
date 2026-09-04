@@ -5,8 +5,10 @@ import dev.scriptor.parseJson
 import dev.scriptor.server.Provider
 import dev.scriptor.server.converter.Converter
 
-class StringJsonConverter : Converter<String, JsonNode> {
+class StringJsonConverter : Converter<String, JsonNode?> {
 
     context(provider: Provider)
-    override fun convert(value: String): JsonNode = parseJson(value)
+    override fun convert(value: String): JsonNode? =
+        if (value.isEmpty()) null
+        else parseJson(value)
 }

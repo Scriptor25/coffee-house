@@ -5,7 +5,7 @@ export async function createPlayback(
   items: string[],
 ): Promise<string | null> {
   try {
-    const response = await fetchData("playback", {
+    const response = await fetchData("/playback", {
       method: "post",
       body: JSON.stringify({ name, items }),
     });
