@@ -5,8 +5,9 @@ import dev.scriptor.TranscodingCache
 import dev.scriptor.context.AuthContext
 import dev.scriptor.context.PlaybackContext
 import dev.scriptor.jsonOf
-import dev.scriptor.model.Authorization
+import dev.scriptor.model.AuthorizationHeader
 import dev.scriptor.model.CreatePlaybackBody
+import dev.scriptor.model.RangeHeader
 import dev.scriptor.model.media.Chapter
 import dev.scriptor.model.media.Media
 import dev.scriptor.server.*
@@ -42,22 +43,17 @@ class PlaybackRest {
         } ?: throw NotFoundSignal()
     }
 
-    private fun stream(range: String?, path: Path): Result {
+    private fun stream(range: RangeHeader?, path: Path): Result {
         val channel = FileChannel.open(path)
 
-        if (range.isNullOrBlank()) {
+        if (range == null) {
             return ChannelResult(value = channel)
         }
 
         val total = channel.size()
 
-        val range = range
-            .substringAfter("bytes=")
-            .split("-", limit = 2)
-            .filter { it.isNotBlank() }
-
-        val begin = range[0].toLong()
-        val end = if (range.size == 2) range[1].toLong() else (total - 1L)
+        val begin = range.begin
+        val end = range.end ?: minOf(begin + 2L * 1024L * 1024L, total - 1L)
 
         val headers = ParameterList()
 
@@ -86,7 +82,7 @@ class PlaybackRest {
         context: PlaybackContext,
     )
     fun createPlayback(
-        @Header authorization: Authorization? = null,
+        @Header authorization: AuthorizationHeader? = null,
         @Body body: CreatePlaybackBody,
     ): String {
         val session = auth.auth(authorization)
@@ -135,7 +131,7 @@ class PlaybackRest {
     fun getStream(
         @PathParameter token: String,
         @PathParameter index: Int,
-        @Header range: String? = null,
+        @Header range: RangeHeader? = null,
     ): Result {
         val item = item(token, index)
 
@@ -198,7 +194,7 @@ class PlaybackRest {
         @PathParameter index: Int,
         @PathParameter name: String,
         @PathParameter segment: String,
-        @Header range: String? = null,
+        @Header range: RangeHeader? = null,
     ): Result {
         val item = item(token, index)
 

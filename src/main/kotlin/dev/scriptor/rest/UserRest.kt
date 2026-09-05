@@ -1,9 +1,9 @@
 package dev.scriptor.rest
 
 import dev.scriptor.context.AuthContext
-import dev.scriptor.model.Authorization
+import dev.scriptor.model.AuthorizationHeader
 import dev.scriptor.model.CreateUserBody
-import dev.scriptor.model.OffsetLimit
+import dev.scriptor.model.OffsetLimitBody
 import dev.scriptor.model.UpdateUserBody
 import dev.scriptor.model.user.User
 import dev.scriptor.model.user.UserRole
@@ -27,7 +27,7 @@ class UserRest {
         auth: AuthContext,
     )
     fun createUser(
-        @Header authorization: Authorization? = null,
+        @Header authorization: AuthorizationHeader? = null,
         @Body body: CreateUserBody,
     ): User {
         val session = auth.auth(authorization)
@@ -54,7 +54,7 @@ class UserRest {
     )
     fun getUser(
         @PathParameter id: Uuid,
-        @Header authorization: Authorization? = null,
+        @Header authorization: AuthorizationHeader? = null,
     ): User {
         val session = auth.auth(authorization)
             ?: throw UnauthorizedSignal()
@@ -75,7 +75,7 @@ class UserRest {
     )
     fun updateUser(
         @PathParameter id: Uuid,
-        @Header authorization: Authorization? = null,
+        @Header authorization: AuthorizationHeader? = null,
         @Body body: UpdateUserBody,
     ): User {
         val session = auth.auth(authorization)
@@ -103,7 +103,7 @@ class UserRest {
     )
     fun deleteUser(
         @PathParameter id: Uuid,
-        @Header authorization: Authorization? = null,
+        @Header authorization: AuthorizationHeader? = null,
     ): User {
         val session = auth.auth(authorization)
             ?: throw UnauthorizedSignal()
@@ -126,8 +126,8 @@ class UserRest {
         auth: AuthContext,
     )
     fun getUserList(
-        @Header authorization: Authorization? = null,
-        @Body body: OffsetLimit = OffsetLimit(),
+        @Header authorization: AuthorizationHeader? = null,
+        @Body body: OffsetLimitBody = OffsetLimitBody(),
     ): List<User> {
         val session = auth.auth(authorization)
             ?: throw UnauthorizedSignal()

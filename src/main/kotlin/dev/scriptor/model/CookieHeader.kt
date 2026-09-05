@@ -1,6 +1,6 @@
 package dev.scriptor.model
 
-class Cookie {
+class CookieHeader {
 
     private val values: MutableMap<String, String>
 

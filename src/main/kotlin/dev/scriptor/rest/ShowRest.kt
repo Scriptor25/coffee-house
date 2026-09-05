@@ -1,8 +1,8 @@
 package dev.scriptor.rest
 
 import dev.scriptor.context.AuthContext
-import dev.scriptor.model.Authorization
-import dev.scriptor.model.OffsetLimit
+import dev.scriptor.model.AuthorizationHeader
+import dev.scriptor.model.OffsetLimitBody
 import dev.scriptor.model.show.Show
 import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.UnauthorizedSignal
@@ -24,7 +24,7 @@ class ShowRest {
     )
     fun getShow(
         @PathParameter id: Uuid,
-        @Header authorization: Authorization? = null,
+        @Header authorization: AuthorizationHeader? = null,
     ): Show {
         auth.auth(authorization)
             ?: throw UnauthorizedSignal()
@@ -40,8 +40,8 @@ class ShowRest {
         auth: AuthContext,
     )
     fun getShowList(
-        @Header authorization: Authorization? = null,
-        @Body body: OffsetLimit = OffsetLimit(),
+        @Header authorization: AuthorizationHeader? = null,
+        @Body body: OffsetLimitBody = OffsetLimitBody(),
     ): List<Show> {
         auth.auth(authorization)
             ?: throw UnauthorizedSignal()

@@ -225,7 +225,9 @@ class Probe(
         devices: Set<DeviceId>,
         implementations: List<Implementation>,
     ) {
-        log.fine("probe implementations (${implementations.size})")
+        if (implementations.isEmpty()) return
+
+        log.fine("probe ${implementations.size} implementations")
 
         for (implementation in implementations) {
             probeImplementation(devices, implementation)

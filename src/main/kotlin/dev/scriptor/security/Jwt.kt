@@ -53,29 +53,11 @@ data class JwtPayload(
     val iss: String? = null,
     val sub: String? = null,
     val aud: String? = null,
-    val exp: Long? = null,
-    val nbf: Long? = null,
-    val iat: Long? = null,
+    val exp: Instant? = null,
+    val nbf: Instant? = null,
+    val iat: Instant? = null,
     val jti: String? = null,
 ) {
-    constructor(
-        iss: String? = null,
-        sub: String? = null,
-        aud: String? = null,
-        exp: Instant? = null,
-        nbf: Instant? = null,
-        iat: Instant? = null,
-        jti: String? = null,
-    ) : this(
-        iss,
-        sub,
-        aud,
-        exp?.epochSeconds,
-        nbf?.epochSeconds,
-        iat?.epochSeconds,
-        jti,
-    )
-
     companion object {
         fun decode(source: String): JwtPayload {
             val text = BASE64.decode(source).decodeToString()
@@ -88,9 +70,9 @@ data class JwtPayload(
             var iss: String? = null
             var sub: String? = null
             var aud: String? = null
-            var exp: Long? = null
-            var nbf: Long? = null
-            var iat: Long? = null
+            var exp: Instant? = null
+            var nbf: Instant? = null
+            var iat: Instant? = null
             var jti: String? = null
 
             for ((k, v) in node.entries) {
@@ -98,9 +80,9 @@ data class JwtPayload(
                     "iss" -> iss = (v as JsonStringNode).value
                     "sub" -> sub = (v as JsonStringNode).value
                     "aud" -> aud = (v as JsonStringNode).value
-                    "exp" -> exp = (v as JsonNumberNode).value.toLong()
-                    "nbf" -> nbf = (v as JsonNumberNode).value.toLong()
-                    "iat" -> iat = (v as JsonNumberNode).value.toLong()
+                    "exp" -> exp = Instant.fromEpochSeconds((v as JsonNumberNode).value.toLong())
+                    "nbf" -> nbf = Instant.fromEpochSeconds((v as JsonNumberNode).value.toLong())
+                    "iat" -> iat = Instant.fromEpochSeconds((v as JsonNumberNode).value.toLong())
                     "jti" -> jti = (v as JsonStringNode).value
                 }
             }
@@ -121,9 +103,9 @@ data class JwtPayload(
         if (iss != null) this["iss"] = jsonOf(iss)
         if (sub != null) this["sub"] = jsonOf(sub)
         if (aud != null) this["aud"] = jsonOf(aud)
-        if (exp != null) this["exp"] = jsonOf(exp)
-        if (nbf != null) this["nbf"] = jsonOf(nbf)
-        if (iat != null) this["iat"] = jsonOf(iat)
+        if (exp != null) this["exp"] = jsonOf(exp.epochSeconds)
+        if (nbf != null) this["nbf"] = jsonOf(nbf.epochSeconds)
+        if (iat != null) this["iat"] = jsonOf(iat.epochSeconds)
         if (jti != null) this["jti"] = jsonOf(jti)
     }
 

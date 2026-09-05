@@ -1,7 +1,7 @@
 package dev.scriptor.rest
 
 import dev.scriptor.context.AuthContext
-import dev.scriptor.model.Authorization
+import dev.scriptor.model.AuthorizationHeader
 import dev.scriptor.model.CreateSessionBody
 import dev.scriptor.model.user.User
 import dev.scriptor.model.user.UserTable
@@ -81,7 +81,7 @@ class SessionRest {
         auth: AuthContext,
     )
     fun renewSession(
-        @Header authorization: Authorization? = null,
+        @Header authorization: AuthorizationHeader? = null,
     ): Jwt {
 
         val instant = Clock.System.now()
@@ -96,8 +96,8 @@ class SessionRest {
         return Jwt.encode(
             jwt.header,
             jwt.payload.copy(
-                iat = instant.epochSeconds,
-                exp = expiresAt.epochSeconds,
+                iat = instant,
+                exp = expiresAt,
             ),
             "hello-world-secret", // TODO: change to something more secure
         )
