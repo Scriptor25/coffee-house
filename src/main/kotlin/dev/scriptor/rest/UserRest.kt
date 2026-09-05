@@ -1,10 +1,10 @@
 package dev.scriptor.rest
 
-import dev.scriptor.JsonNode
 import dev.scriptor.context.AuthContext
-import dev.scriptor.emptyJsonObject
-import dev.scriptor.get
 import dev.scriptor.model.Authorization
+import dev.scriptor.model.CreateUserBody
+import dev.scriptor.model.OffsetLimit
+import dev.scriptor.model.UpdateUserBody
 import dev.scriptor.model.user.User
 import dev.scriptor.model.user.UserRole
 import dev.scriptor.server.ForbiddenSignal
@@ -28,7 +28,7 @@ class UserRest {
     )
     fun createUser(
         @Header authorization: Authorization? = null,
-        @Body value: JsonNode,
+        @Body body: CreateUserBody,
     ): User {
         val session = auth.auth(authorization)
             ?: throw UnauthorizedSignal()
@@ -37,15 +37,11 @@ class UserRest {
             throw ForbiddenSignal()
         }
 
-        val username: String = value["username"].get()
-        val password: String = value["password"].get()
-        val role: String = value["role"].get()
-
         return transaction(database) {
             User.new {
-                this.name = username
-                this.hash = password // TODO: generate password hash
-                this.role = UserRole.valueOf(role)
+                this.name = body.username
+                this.hash = body.password // TODO: generate password hash
+                this.role = body.role
             }
         }
     }
@@ -80,7 +76,7 @@ class UserRest {
     fun updateUser(
         @PathParameter id: Uuid,
         @Header authorization: Authorization? = null,
-        @Body value: JsonNode,
+        @Body body: UpdateUserBody,
     ): User {
         val session = auth.auth(authorization)
             ?: throw UnauthorizedSignal()
@@ -89,15 +85,12 @@ class UserRest {
             throw ForbiddenSignal()
         }
 
-        val username: String = value["username"].get()
-        val role: String = value["role"].get()
-
-        // TODO: separate route for updating password
+        // TODO: route for updating password
 
         return transaction(database) {
             User.findByIdAndUpdate(id) {
-                it.name = username
-                it.role = UserRole.valueOf(role)
+                it.name = body.username
+                it.role = body.role
             }
         } ?: throw NotFoundSignal()
     }
@@ -134,22 +127,17 @@ class UserRest {
     )
     fun getUserList(
         @Header authorization: Authorization? = null,
-        @Body body: JsonNode? = null,
+        @Body body: OffsetLimit = OffsetLimit(),
     ): List<User> {
-        val body = body ?: emptyJsonObject()
-
         val session = auth.auth(authorization)
             ?: throw UnauthorizedSignal()
-
-        val offset = body["offset"].get<Number?>()?.toLong() ?: 0L
-        val limit = body["limit"].get<Number?>()?.toInt() ?: Int.MAX_VALUE
 
         return when (session.role) {
             UserRole.ADMIN -> transaction(database) {
                 User
                     .all()
-                    .offset(offset)
-                    .limit(limit)
+                    .offset(body.offset)
+                    .limit(body.limit)
                     .toList()
             }
 

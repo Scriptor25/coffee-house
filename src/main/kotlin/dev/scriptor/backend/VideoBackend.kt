@@ -2,10 +2,10 @@ package dev.scriptor.backend
 
 import dev.scriptor.decoder.video.VideoDecoder
 import dev.scriptor.encoder.video.VideoEncoder
-import dev.scriptor.model.ffmpeg.DeviceId
+import dev.scriptor.model.ffmpeg.Device
 
 interface VideoBackend {
-    val device: DeviceId?
+    val device: Device?
 
     val decoder: VideoDecoder
     val encoder: VideoEncoder

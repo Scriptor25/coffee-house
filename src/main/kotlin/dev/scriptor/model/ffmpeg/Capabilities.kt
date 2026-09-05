@@ -5,178 +5,132 @@ import org.jetbrains.exposed.v1.core.eq
 
 data object Capabilities {
 
-    fun getSoftwareDecoders(): List<ImplementationCapabilities> {
-        return ImplementationCapabilities
+    fun getSoftwareDecoders(): List<Implementation> {
+        return Implementation
             .find(
-                (ImplementationCapabilitiesTable.direction eq CodecDirection.DECODE)
-                        and (ImplementationCapabilitiesTable.kind eq ImplementationKind.SOFTWARE)
+                (ImplementationTable.direction eq ImplementationDirection.DECODE)
+                        and (ImplementationTable.kind eq ImplementationKind.SOFTWARE)
             )
             .toList()
     }
 
-    fun getSoftwareEncoders(): List<ImplementationCapabilities> {
-        return ImplementationCapabilities
+    fun getSoftwareEncoders(): List<Implementation> {
+        return Implementation
             .find(
-                (ImplementationCapabilitiesTable.direction eq CodecDirection.ENCODE)
-                        and (ImplementationCapabilitiesTable.kind eq ImplementationKind.SOFTWARE)
+                (ImplementationTable.direction eq ImplementationDirection.ENCODE)
+                        and (ImplementationTable.kind eq ImplementationKind.SOFTWARE)
             )
             .toList()
     }
 
-    fun getHybridDecoders(): List<ImplementationCapabilities> {
-        return ImplementationCapabilities
+    fun getHybridDecoders(): List<Implementation> {
+        return Implementation
             .find(
-                (ImplementationCapabilitiesTable.direction eq CodecDirection.DECODE)
-                        and (ImplementationCapabilitiesTable.kind eq ImplementationKind.HYBRID)
+                (ImplementationTable.direction eq ImplementationDirection.DECODE)
+                        and (ImplementationTable.kind eq ImplementationKind.HYBRID)
             )
             .toList()
     }
 
-    fun getHybridEncoders(): List<ImplementationCapabilities> {
-        return ImplementationCapabilities
+    fun getHybridEncoders(): List<Implementation> {
+        return Implementation
             .find(
-                (ImplementationCapabilitiesTable.direction eq CodecDirection.ENCODE)
-                        and (ImplementationCapabilitiesTable.kind eq ImplementationKind.HYBRID)
+                (ImplementationTable.direction eq ImplementationDirection.ENCODE)
+                        and (ImplementationTable.kind eq ImplementationKind.HYBRID)
             )
             .toList()
     }
 
-    fun getHardwareDecoders(): List<ImplementationCapabilities> {
-        return ImplementationCapabilities
+    fun getHardwareDecoders(): List<Implementation> {
+        return Implementation
             .find(
-                (ImplementationCapabilitiesTable.direction eq CodecDirection.DECODE)
-                        and (ImplementationCapabilitiesTable.kind eq ImplementationKind.HARDWARE)
+                (ImplementationTable.direction eq ImplementationDirection.DECODE)
+                        and (ImplementationTable.kind eq ImplementationKind.HARDWARE)
             )
             .toList()
     }
 
-    fun getHardwareEncoders(): List<ImplementationCapabilities> {
-        return ImplementationCapabilities
+    fun getHardwareEncoders(): List<Implementation> {
+        return Implementation
             .find(
-                (ImplementationCapabilitiesTable.direction eq CodecDirection.ENCODE)
-                        and (ImplementationCapabilitiesTable.kind eq ImplementationKind.HARDWARE)
+                (ImplementationTable.direction eq ImplementationDirection.ENCODE)
+                        and (ImplementationTable.kind eq ImplementationKind.HARDWARE)
             )
             .toList()
     }
 
-    fun getDeviceDecoders(device: DeviceId): List<ImplementationCapabilities> {
-        return ImplementationCapabilities
-            .find(
-                (ImplementationCapabilitiesTable.direction eq CodecDirection.DECODE)
-                        and (ImplementationCapabilitiesTable.id eq ImplementationDeviceTable.implementation)
-                        and (ImplementationDeviceTable.device eq device)
-            )
-            .toList()
+    fun getDeviceDecoders(device: Device): List<Implementation> {
+        return device.implementations
+            .filter { it.direction == ImplementationDirection.DECODE }
     }
 
-    fun getDeviceEncoders(device: DeviceId): List<ImplementationCapabilities> {
-        return ImplementationCapabilities
-            .find(
-                (ImplementationCapabilitiesTable.direction eq CodecDirection.ENCODE)
-                        and (ImplementationCapabilitiesTable.id eq ImplementationDeviceTable.implementation)
-                        and (ImplementationDeviceTable.device eq device)
-            )
-            .toList()
+    fun getDeviceEncoders(device: Device): List<Implementation> {
+        return device.implementations
+            .filter { it.direction == ImplementationDirection.ENCODE }
     }
 
-    fun getCodecDecoders(codec: CodecId): List<ImplementationCapabilities> {
-        return ImplementationCapabilities
-            .find(
-                (ImplementationCapabilitiesTable.direction eq CodecDirection.DECODE)
-                        and (ImplementationCapabilitiesTable.codec eq codec)
-            )
-            .toList()
+    fun getCodecDecoders(codec: Codec): List<Implementation> {
+        return codec.implementations
+            .filter { it.direction == ImplementationDirection.DECODE }
     }
 
-    fun getCodecEncoders(codec: CodecId): List<ImplementationCapabilities> {
-        return ImplementationCapabilities
-            .find(
-                (ImplementationCapabilitiesTable.direction eq CodecDirection.ENCODE)
-                        and (ImplementationCapabilitiesTable.codec eq codec)
-            )
-            .toList()
+    fun getCodecEncoders(codec: Codec): List<Implementation> {
+        return codec.implementations
+            .filter { it.direction == ImplementationDirection.ENCODE }
     }
 
-    fun getDeviceToDevice(src: DeviceId, dst: DeviceId): DeviceToDeviceCapabilities? {
-        return DeviceToDeviceCapabilities
-            .find(
-                (DeviceToDeviceCapabilitiesTable.src eq src)
-                        and (DeviceToDeviceCapabilitiesTable.dst eq dst)
-            )
+    fun getDeviceToDevice(src: Device, dst: Device): DeviceToDevice? {
+        return DeviceToDevice
+            .find((DeviceToDeviceTable.src eq src.id) and (DeviceToDeviceTable.dst eq dst.id))
             .firstOrNull()
     }
 
-    fun getDevicesForDecoding(codec: CodecId): Set<DeviceId> {
-        // TODO: check if device is available
-        return ImplementationCapabilities
-            .find(
-                (ImplementationCapabilitiesTable.direction eq CodecDirection.DECODE)
-                        and (ImplementationCapabilitiesTable.codec eq codec)
-            )
-            .flatMap { it.supportedHardwareDevices }
-            .map { it.id.value }
+    fun getDevicesForDecoding(codec: Codec): Set<Device> {
+        return codec.implementations
+            .filter { it.direction == ImplementationDirection.DECODE }
+            .flatMap { it.devices }
             .toSet()
     }
 
-    fun getDevicesForEncoding(codec: CodecId): Set<DeviceId> {
-        // TODO: check if device is available
-        return ImplementationCapabilities
-            .find(
-                (ImplementationCapabilitiesTable.direction eq CodecDirection.ENCODE)
-                        and (ImplementationCapabilitiesTable.codec eq codec)
-            )
-            .flatMap { it.supportedHardwareDevices }
-            .map { it.id.value }
+    fun getDevicesForEncoding(codec: Codec): Set<Device> {
+        return codec.implementations
+            .filter { it.direction == ImplementationDirection.ENCODE }
+            .flatMap { it.devices }
             .toSet()
     }
 
-    fun getDecoders(codec: CodecId, device: DeviceId?): Set<ImplementationId> {
-        return ImplementationCapabilities
-            .find(
-                (ImplementationCapabilitiesTable.direction eq CodecDirection.DECODE)
-                        and (ImplementationCapabilitiesTable.codec eq codec)
-                        and
-                        when (device) {
-                            null -> (ImplementationCapabilitiesTable.kind eq ImplementationKind.SOFTWARE)
-                            else -> (
-                                    (ImplementationCapabilitiesTable.id eq ImplementationDeviceTable.implementation)
-                                            and (ImplementationDeviceTable.device eq device)
-                                    )
-                        }
-            )
-            .map { it.id.value }
+    fun getDecoders(codec: Codec, device: Device?): Set<Implementation> {
+        return codec.implementations
+            .filter { it.direction == ImplementationDirection.DECODE }
+            .filter {
+                when (device) {
+                    null -> it.kind == ImplementationKind.SOFTWARE
+                    else -> device in it.devices
+                }
+            }
             .toSet()
     }
 
-    fun getEncoders(codec: CodecId, device: DeviceId?): Set<ImplementationId> {
-        return ImplementationCapabilities
-            .find(
-                (ImplementationCapabilitiesTable.direction eq CodecDirection.ENCODE)
-                        and (ImplementationCapabilitiesTable.codec eq codec)
-                        and
-                        when (device) {
-                            null -> (ImplementationCapabilitiesTable.kind eq ImplementationKind.SOFTWARE)
-                            else -> (
-                                    (ImplementationCapabilitiesTable.id eq ImplementationDeviceTable.implementation)
-                                            and (ImplementationDeviceTable.device eq device)
-                                    )
-                        }
-            )
-            .map { it.id.value }
+    fun getEncoders(codec: Codec, device: Device?): Set<Implementation> {
+        return codec.implementations
+            .filter { it.direction == ImplementationDirection.ENCODE }
+            .filter {
+                when (device) {
+                    null -> it.kind == ImplementationKind.SOFTWARE
+                    else -> device in it.devices
+                }
+            }
             .toSet()
     }
 
-    fun compare(a: DeviceId, b: DeviceId): Int {
-        val a = DeviceBackend.find(a) ?: return -1
-        val b = DeviceBackend.find(b) ?: return 1
+    fun compare(a: Device, b: Device): Int {
+        val a = DeviceBackend.find(a.id.value) ?: return -1
+        val b = DeviceBackend.find(b.id.value) ?: return 1
 
         return a.priority - b.priority
     }
 
-    fun compare(a: ImplementationId, b: ImplementationId): Int {
-        val a = ImplementationCapabilities.findById(a) ?: return -1
-        val b = ImplementationCapabilities.findById(b) ?: return 1
-
+    fun compare(a: Implementation, b: Implementation): Int {
         var errorA = 0
         var errorB = 0
 

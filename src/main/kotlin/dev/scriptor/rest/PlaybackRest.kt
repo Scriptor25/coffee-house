@@ -1,12 +1,12 @@
 package dev.scriptor.rest
 
-import dev.scriptor.JsonNode
+import dev.scriptor.JsonArrayNode
 import dev.scriptor.TranscodingCache
 import dev.scriptor.context.AuthContext
 import dev.scriptor.context.PlaybackContext
-import dev.scriptor.get
 import dev.scriptor.jsonOf
 import dev.scriptor.model.Authorization
+import dev.scriptor.model.CreatePlaybackBody
 import dev.scriptor.model.media.Chapter
 import dev.scriptor.model.media.Media
 import dev.scriptor.server.*
@@ -20,7 +20,6 @@ import java.nio.file.Path
 import java.util.logging.Logger
 import kotlin.io.path.readText
 import kotlin.io.path.useLines
-import kotlin.uuid.Uuid
 
 @Suppress("unused")
 @Controller("/playback")
@@ -88,20 +87,14 @@ class PlaybackRest {
     )
     fun createPlayback(
         @Header authorization: Authorization? = null,
-        @Body node: JsonNode,
+        @Body body: CreatePlaybackBody,
     ): String {
         val session = auth.auth(authorization)
             ?: throw UnauthorizedSignal()
 
         val userId = session.user?.id?.value
 
-        val nameNode = node["name"]
-        val itemsNode = node["items"]
-
-        val name = nameNode.get<String>()
-        val items = itemsNode.map { Uuid.parseHexDash(it.get()) }
-
-        return context.createPlayback(userId, name, items)
+        return context.createPlayback(userId, body.name, body.items)
     }
 
     @Get("/[token]/playlist.m3u8", "application/x-mpegurl")
@@ -223,7 +216,7 @@ class PlaybackRest {
     fun getChapters(
         @PathParameter token: String,
         @PathParameter index: Int,
-    ): JsonNode {
+    ): JsonArrayNode {
         val item = item(token, index)
 
         val chapters = transaction(database) { item.chapters.toList() }
@@ -248,3 +241,4 @@ class PlaybackRest {
         )
     }
 }
+

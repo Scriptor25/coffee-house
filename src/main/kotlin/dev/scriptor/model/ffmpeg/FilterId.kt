@@ -5,8 +5,6 @@ import org.jetbrains.exposed.v1.core.ColumnType
 import org.jetbrains.exposed.v1.core.Table
 
 class FilterIdColumnType : ColumnType<FilterId>() {
-    override var nullable: Boolean = false
-
     override fun sqlType(): String {
         return "TEXT"
     }

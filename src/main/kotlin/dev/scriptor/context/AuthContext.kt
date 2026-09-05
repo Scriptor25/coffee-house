@@ -37,16 +37,19 @@ class AuthContext {
             return null
         }
 
-        var maxAge: Long? = null
-        if (jwt.payload.exp != null) {
-            val delta = jwt.payload.exp - instant
+        val maxAge =
+            when (val exp = jwt.payload.exp) {
+                null -> null
+                else -> {
+                    val delta = Instant.fromEpochSeconds(exp) - instant
 
-            if (delta.isNegative()) {
-                return null
+                    if (delta.isNegative()) {
+                        return null
+                    }
+
+                    delta.inWholeSeconds
+                }
             }
-
-            maxAge = delta.inWholeSeconds
-        }
 
         val id =
             when (val sub = jwt.payload.sub) {

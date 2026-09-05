@@ -34,11 +34,15 @@ class Probe(
         context(database) {
             val devices = probeDevices()
 
+            probeDeviceToDevice(devices)
+
+            probeFormats()
+            probeFilters()
+
             val decodersMap = mutableMapOf<CodecId, Set<ImplementationId>>()
             val encodersMap = mutableMapOf<CodecId, Set<ImplementationId>>()
 
             probeCodecs(decodersMap, encodersMap)
-            probeFilters()
 
             val decodersCodecMap = decodersMap.entries.flatMap { (key, value) -> value.map { it to key } }.toMap()
             val encodersCodecMap = encodersMap.entries.flatMap { (key, value) -> value.map { it to key } }.toMap()
@@ -46,7 +50,6 @@ class Probe(
             val decoders = probeDecoders(decodersCodecMap)
             val encoders = probeEncoders(encodersCodecMap)
 
-            probeDeviceToDevice(devices)
             probeImplementations(
                 devices.map { it.id.value }.toSet(),
                 decoders + encoders,
@@ -55,7 +58,7 @@ class Probe(
     }
 
     context(database: Database)
-    private fun probeDevices(): List<DeviceCapabilities> {
+    private fun probeDevices(): List<Device> {
         log.fine("probe devices")
 
         val result = command(
@@ -78,9 +81,9 @@ class Probe(
             .toSet()
 
         val existing = transaction(database) {
-            DeviceCapabilitiesTable
-                .select(DeviceCapabilitiesTable.id)
-                .map { it[DeviceCapabilitiesTable.id].value }
+            DeviceTable
+                .select(DeviceTable.id)
+                .map { it[DeviceTable.id].value }
                 .toSet()
         }
 
@@ -92,7 +95,7 @@ class Probe(
     context(database: Database)
     private fun probeDevice(
         id: DeviceId,
-    ): DeviceCapabilities? {
+    ): Device? {
         log.fine("probe device $id")
 
         val result = command(
@@ -112,7 +115,45 @@ class Probe(
             return null
         }
 
-        return transaction(database) { DeviceCapabilities.new(id) {} }
+        return transaction(database) { Device.new(id) {} }
+    }
+
+    context(database: Database)
+    private fun probeFormats() {
+        log.fine("probe formats")
+
+        val result = command(
+            "-hide_banner",
+            "-loglevel", "error",
+            "-pix_fmts",
+        )
+
+        if (result.error) {
+            val message = result.stderr.ifBlank(result::stdout)
+            log.fine("failed to probe formats:\n$message")
+            return
+        }
+
+        parseFormats(result.stdout)
+    }
+
+    context(database: Database)
+    private fun probeFilters() {
+        log.fine("probe filters")
+
+        val result = command(
+            "-hide_banner",
+            "-loglevel", "error",
+            "-filters",
+        )
+
+        if (result.error) {
+            val message = result.stderr.ifBlank(result::stdout)
+            log.fine("failed to probe filters:\n$message")
+            return
+        }
+
+        parseFilters(result.stdout)
     }
 
     context(database: Database)
@@ -142,26 +183,7 @@ class Probe(
     }
 
     context(database: Database)
-    private fun probeFilters() {
-        log.fine("probe filters")
-
-        val result = command(
-            "-hide_banner",
-            "-loglevel", "error",
-            "-filters",
-        )
-
-        if (result.error) {
-            val message = result.stderr.ifBlank(result::stdout)
-            log.fine("failed to probe filters:\n$message")
-            return
-        }
-
-        parseFilters(result.stdout)
-    }
-
-    context(database: Database)
-    private fun probeDecoders(codecMap: Map<ImplementationId, CodecId>): List<ImplementationCapabilities> {
+    private fun probeDecoders(codecMap: Map<ImplementationId, CodecId>): List<Implementation> {
         log.fine("probe decoders")
 
         val result = command(
@@ -176,11 +198,11 @@ class Probe(
             return emptyList()
         }
 
-        return parseImplementations(result.stdout, CodecDirection.DECODE, codecMap)
+        return parseImplementations(result.stdout, ImplementationDirection.DECODE, codecMap)
     }
 
     context(database: Database)
-    private fun probeEncoders(codecMap: Map<ImplementationId, CodecId>): List<ImplementationCapabilities> {
+    private fun probeEncoders(codecMap: Map<ImplementationId, CodecId>): List<Implementation> {
         log.fine("probe encoders")
 
         val result = command(
@@ -195,13 +217,13 @@ class Probe(
             return emptyList()
         }
 
-        return parseImplementations(result.stdout, CodecDirection.ENCODE, codecMap)
+        return parseImplementations(result.stdout, ImplementationDirection.ENCODE, codecMap)
     }
 
     context(database: Database)
     private fun probeImplementations(
         devices: Set<DeviceId>,
-        implementations: List<ImplementationCapabilities>,
+        implementations: List<Implementation>,
     ) {
         log.fine("probe implementations (${implementations.size})")
 
@@ -211,11 +233,11 @@ class Probe(
     }
 
     context(database: Database)
-    private fun probeDeviceToDevice(devices: List<DeviceCapabilities>) {
+    private fun probeDeviceToDevice(devices: List<Device>) {
         val existing = transaction(database) {
-            DeviceToDeviceCapabilitiesTable
-                .select(DeviceToDeviceCapabilitiesTable.src, DeviceToDeviceCapabilitiesTable.dst)
-                .map { it[DeviceToDeviceCapabilitiesTable.src].value to it[DeviceToDeviceCapabilitiesTable.dst].value }
+            DeviceToDeviceTable
+                .select(DeviceToDeviceTable.src, DeviceToDeviceTable.dst)
+                .map { it[DeviceToDeviceTable.src].value to it[DeviceToDeviceTable.dst].value }
                 .toSet()
         }
 
@@ -231,9 +253,9 @@ class Probe(
         for ((src, dst) in combinations) {
             if (src == dst) {
                 transaction(database) {
-                    DeviceToDeviceCapabilities.new {
-                        this.src = DeviceCapabilities[src]
-                        this.dst = DeviceCapabilities[dst]
+                    DeviceToDevice.new {
+                        this.src = Device[src]
+                        this.dst = Device[dst]
                         this.derivable = true
                         this.direct = true
                         this.mapping = true
@@ -245,9 +267,9 @@ class Probe(
             val data = probeDeviceToDevice(src, dst) ?: continue
 
             transaction(database) {
-                DeviceToDeviceCapabilities.new {
-                    this.src = DeviceCapabilities[src]
-                    this.dst = DeviceCapabilities[dst]
+                DeviceToDevice.new {
+                    this.src = Device[src]
+                    this.dst = Device[dst]
                     this.derivable = data.derivable
                     this.direct = data.direct
                     this.mapping = data.mapping
@@ -256,13 +278,13 @@ class Probe(
         }
     }
 
-    private data class DeviceToDeviceCapabilitiesData(
+    private data class DeviceToDeviceData(
         val derivable: Boolean,
         val direct: Boolean,
         val mapping: Boolean,
     )
 
-    private fun probeDeviceToDevice(src: DeviceId, dst: DeviceId): DeviceToDeviceCapabilitiesData? {
+    private fun probeDeviceToDevice(src: DeviceId, dst: DeviceId): DeviceToDeviceData? {
         log.fine("probe device interop $src ---> $dst")
 
         val resultDerive = command(
@@ -298,7 +320,7 @@ class Probe(
         )
 
         if (resultDirect.success) {
-            return DeviceToDeviceCapabilitiesData(
+            return DeviceToDeviceData(
                 derivable = true,
                 direct = true,
                 mapping = true,
@@ -320,14 +342,14 @@ class Probe(
         )
 
         if (resultMapping.success) {
-            return DeviceToDeviceCapabilitiesData(
+            return DeviceToDeviceData(
                 derivable = true,
                 direct = false,
                 mapping = true,
             )
         }
 
-        return DeviceToDeviceCapabilitiesData(
+        return DeviceToDeviceData(
             derivable = true,
             direct = false,
             mapping = false,
@@ -354,9 +376,9 @@ class Probe(
         encodersMap: MutableMap<CodecId, Set<ImplementationId>>,
     ) {
         val existing = transaction(database) {
-            CodecCapabilitiesTable
-                .select(CodecCapabilitiesTable.id)
-                .map { it[CodecCapabilitiesTable.id].value }
+            CodecTable
+                .select(CodecTable.id)
+                .map { it[CodecTable.id].value }
                 .toSet()
         }
 
@@ -390,7 +412,7 @@ class Probe(
             encodersMap[id] = encoders
 
             transaction(database) {
-                CodecCapabilities.new(id) {
+                Codec.new(id) {
                     this.type = type
                     this.supportsDecoding = flags[0] == 'D'
                     this.supportsEncoding = flags[1] == 'E'
@@ -412,11 +434,11 @@ class Probe(
     context(database: Database)
     private fun probeImplementation(
         devices: Set<DeviceId>,
-        implementation: ImplementationCapabilities,
+        implementation: Implementation,
     ): Boolean {
         val kind = when (implementation.direction) {
-            CodecDirection.DECODE -> "decoder"
-            CodecDirection.ENCODE -> "encoder"
+            ImplementationDirection.DECODE -> "decoder"
+            ImplementationDirection.ENCODE -> "encoder"
         }
 
         val result = command(
@@ -439,7 +461,7 @@ class Probe(
                 .toSet()
         val supportedPixelFormats =
             parseSpaceSeparatedSequence(implementationSupportedPixelFormatsRegex, result.stdout)
-                .map { PixelFormat(it) }
+                .map { FormatId(it) }
                 .toSet()
         val supportedSampleRates =
             parseSpaceSeparatedSequence(implementationSupportedSampleRatesRegex, result.stdout)
@@ -459,11 +481,10 @@ class Probe(
                 else -> ImplementationKind.SOFTWARE
             }
 
-            implementation.generalCapabilities = generalCapabilities.joinToString(";")
-            implementation.supportedPixelFormats = supportedPixelFormats.joinToString(";")
-            implementation.supportedSampleRates = supportedSampleRates.joinToString(";")
-            implementation.supportedSampleFormats = supportedSampleFormats.joinToString(";")
-            implementation.supportedChannelLayouts = supportedChannelLayouts.joinToString(";")
+            implementation.generalCapabilities = generalCapabilities
+            implementation.supportedSampleRates = supportedSampleRates
+            implementation.supportedSampleFormats = supportedSampleFormats
+            implementation.supportedChannelLayouts = supportedChannelLayouts
 
             supportedHardwareDevices.forEach { device ->
                 ImplementationDeviceTable.insert {
@@ -471,30 +492,37 @@ class Probe(
                     it[ImplementationDeviceTable.device] = device
                 }
             }
+
+            supportedPixelFormats.forEach { format ->
+                ImplementationFormatTable.insert {
+                    it[ImplementationFormatTable.implementation] = implementation.id
+                    it[ImplementationFormatTable.format] = format
+                }
+            }
         }
 
         return true
     }
 
-    private val coderLineRegex = """^\s*([VASFXBD.]{6})\s+(\S+)\s+(.*)$""".toRegex()
+    private val implementationLineRegex = """^\s*([VASFXBD.]{6})\s+(\S+)\s+(.*)$""".toRegex()
 
     context(database: Database)
     private fun parseImplementations(
         text: String,
-        direction: CodecDirection,
+        direction: ImplementationDirection,
         codecMap: Map<ImplementationId, CodecId>,
-    ): List<ImplementationCapabilities> {
+    ): List<Implementation> {
         val existing = transaction(database) {
-            ImplementationCapabilitiesTable
-                .select(ImplementationCapabilitiesTable.id)
-                .map { it[ImplementationCapabilitiesTable.id].value }
+            ImplementationTable
+                .select(ImplementationTable.id)
+                .map { it[ImplementationTable.id].value }
                 .toSet()
         }
 
-        val result = mutableListOf<ImplementationCapabilities>()
+        val result = mutableListOf<Implementation>()
 
         for (line in text.lineSequence().dropWhile { !it.trim().startsWith('-') }) {
-            val match = coderLineRegex.matchEntire(line) ?: continue
+            val match = implementationLineRegex.matchEntire(line) ?: continue
 
             val flags = match.groupValues[1]
             val name = match.groupValues[2]
@@ -502,17 +530,36 @@ class Probe(
             val id = ImplementationId(name)
             if (id in existing) continue
 
-            val codec = codecMap[id]
+            val codecId = codecMap[id]
+
+            val codecType = when (val c = flags[0]) {
+                'V' -> CodecType.VIDEO
+                'A' -> CodecType.AUDIO
+                'S' -> CodecType.SUBTITLE
+                else -> error("unexpected codec type '$c'")
+            }
+
+            val frameLevelMultithreading = flags[1] == 'F'
+            val sliceLevelMultithreading = flags[2] == 'S'
+            val experimental = flags[3] == 'X'
+            val supportDrawHorizontalBand = flags[4] == 'B'
+            val supportDirectRendering = flags[5] == 'D'
 
             result += transaction(database) {
-                ImplementationCapabilities.new(id) {
-                    this.codec = if (codec == null) null else CodecCapabilities[codec]
+                val codec = if (codecId != null) Codec[codecId] else null
+
+                if (codec != null && codec.type != codecType) {
+                    error("codec type mismatch")
+                }
+
+                Implementation.new(id) {
+                    this.codec = codec
                     this.direction = direction
-                    this.frameLevelMultithreading = flags[1] == 'F'
-                    this.sliceLevelMultithreading = flags[2] == 'S'
-                    this.experimental = flags[3] == 'X'
-                    this.supportDrawHorizontalBand = flags[4] == 'B'
-                    this.supportDirectRendering = flags[5] == 'D'
+                    this.frameLevelMultithreading = frameLevelMultithreading
+                    this.sliceLevelMultithreading = sliceLevelMultithreading
+                    this.experimental = experimental
+                    this.supportDrawHorizontalBand = supportDrawHorizontalBand
+                    this.supportDirectRendering = supportDirectRendering
                     this.kind = ImplementationKind.SOFTWARE
                 }
             }
@@ -521,14 +568,57 @@ class Probe(
         return result
     }
 
+    private val formatLineRegex = """^\s*([IOHPB.]{5})\s+(\S+)\s+(\d+)\s+(\d+)\s+(\d(?:-\d)*)$""".toRegex()
+
+    context(database: Database)
+    private fun parseFormats(text: String) {
+        val existing = transaction(database) {
+            FormatTable
+                .select(FormatTable.id)
+                .map { it[FormatTable.id].value }
+                .toSet()
+        }
+
+        for (line in text.lines().dropWhile { !it.trim().startsWith('-') }) {
+            val match = formatLineRegex.matchEntire(line) ?: continue
+
+            val flags = match.groupValues[1]
+            val name = match.groupValues[2]
+            val nbComponents = match.groupValues[3].toInt()
+            val bitsPerPixel = match.groupValues[4].toInt()
+            val bitDepths = match.groupValues[5].split("-", limit = nbComponents).map { it.toInt() }
+
+            val id = FormatId(name)
+            if (id in existing) continue
+
+            val input = flags[0] == 'I'
+            val output = flags[1] == 'O'
+            val hardware = flags[2] == 'H'
+            val paletted = flags[3] == 'P'
+            val bitstream = flags[4] == 'B'
+
+            transaction(database) {
+                Format.new(id) {
+                    this.components = bitDepths
+                    this.bitsPerPixel = bitsPerPixel
+                    this.input = input
+                    this.output = output
+                    this.hardware = hardware
+                    this.paletted = paletted
+                    this.bitstream = bitstream
+                }
+            }
+        }
+    }
+
     private val filterLineRegex = """^\s*([TS.]{2,3})\s+(\S+)\s+([AVN|\->]+)\s+(.+)$""".toRegex()
 
     context(database: Database)
     private fun parseFilters(text: String) {
         val existing = transaction(database) {
-            FilterCapabilitiesTable
-                .select(FilterCapabilitiesTable.id)
-                .map { it[FilterCapabilitiesTable.id].value }
+            FilterTable
+                .select(FilterTable.id)
+                .map { it[FilterTable.id].value }
                 .toSet()
         }
 
@@ -543,7 +633,7 @@ class Probe(
             if (id in existing) continue
 
             transaction(database) {
-                FilterCapabilities.new(id) {
+                Filter.new(id) {
                     this.transform = transform
                     this.timelineSupport = flags[0] == 'T'
                     this.sliceThreading = flags[1] == 'S'

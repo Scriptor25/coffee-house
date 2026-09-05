@@ -1,6 +1,7 @@
 package dev.scriptor.converter
 
-import dev.scriptor.JsonNode
+import dev.scriptor.JsonArrayNode
+import dev.scriptor.JsonObjectNode
 import dev.scriptor.jsonOf
 import dev.scriptor.model.media.Media
 import dev.scriptor.server.Provider
@@ -8,17 +9,17 @@ import dev.scriptor.server.converter.Converter
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
-class MediaJsonConverter : Converter<Media, JsonNode> {
+class MediaJsonConverter : Converter<Media, JsonObjectNode> {
 
     context(provider: Provider)
-    override fun convert(value: Media): JsonNode {
+    override fun convert(value: Media): JsonObjectNode {
         val database = provider.getContextT<Database>()
             ?: error("missing database context")
 
-        lateinit var video: JsonNode
-        lateinit var audio: JsonNode
-        lateinit var subtitles: JsonNode
-        lateinit var chapters: JsonNode
+        lateinit var video: JsonArrayNode
+        lateinit var audio: JsonArrayNode
+        lateinit var subtitles: JsonArrayNode
+        lateinit var chapters: JsonArrayNode
 
         transaction(database) {
             video = provider(value.video.toList())
@@ -28,12 +29,12 @@ class MediaJsonConverter : Converter<Media, JsonNode> {
         }
 
         return jsonOf(
-            "id" to jsonOf(value.id),
-            "path" to jsonOf(value.path),
+            "id" to jsonOf(value.id.toString()),
+            "path" to jsonOf(value.path.toString()),
             "size" to jsonOf(value.size),
             "title" to jsonOf(value.title),
-            "created_at" to jsonOf(value.createdAt),
-            "modified_at" to jsonOf(value.modifiedAt),
+            "created_at" to jsonOf(value.createdAt.toEpochMilliseconds()),
+            "modified_at" to jsonOf(value.modifiedAt.toEpochMilliseconds()),
             "duration" to jsonOf(value.duration),
             "video" to video,
             "audio" to audio,

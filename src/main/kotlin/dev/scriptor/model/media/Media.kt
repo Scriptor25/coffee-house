@@ -1,12 +1,49 @@
 package dev.scriptor.model.media
 
-import dev.scriptor.instant
-import dev.scriptor.path
+import org.jetbrains.exposed.v1.core.Column
+import org.jetbrains.exposed.v1.core.ColumnType
+import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.UuidTable
 import org.jetbrains.exposed.v1.dao.UuidEntity
 import org.jetbrains.exposed.v1.dao.UuidEntityClass
+import java.nio.file.Path
+import java.sql.Timestamp
+import kotlin.io.path.Path
+import kotlin.time.Instant
+import kotlin.time.toKotlinInstant
 import kotlin.uuid.Uuid
+
+fun Table.instant(name: String): Column<Instant> = registerColumn(
+    name,
+    object : ColumnType<Instant>() {
+        override fun sqlType(): String {
+            return "TIMESTAMP"
+        }
+
+        override fun valueFromDB(value: Any): Instant? = when (value) {
+            is Instant -> value
+            is Timestamp -> value.toInstant().toKotlinInstant()
+            is String -> Instant.parse(value)
+            else -> error("unexpected value of type ${value::class}")
+        }
+    },
+)
+
+fun Table.path(name: String): Column<Path> = registerColumn(
+    name,
+    object : ColumnType<Path>() {
+        override fun sqlType(): String {
+            return "TEXT"
+        }
+
+        override fun valueFromDB(value: Any): Path? = when (value) {
+            is Path -> value
+            is String -> Path(value)
+            else -> error("unexpected value of type ${value::class}")
+        }
+    },
+)
 
 object MediaTable : UuidTable("media") {
     val path = path("path").uniqueIndex()

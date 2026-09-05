@@ -1,9 +1,6 @@
 package dev.scriptor.security
 
-import dev.scriptor.get
-import dev.scriptor.jsonObject
-import dev.scriptor.jsonOf
-import dev.scriptor.parseJson
+import dev.scriptor.*
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import kotlin.io.encoding.Base64
@@ -22,10 +19,25 @@ data class JwtHeader(
             val text = BASE64.decode(source).decodeToString()
             val node = parseJson(text)
 
-            return JwtHeader(
-                node["typ"].get(),
-                node["alg"].get(),
-            )
+            if (node !is JsonObjectNode) {
+                error("invalid node")
+            }
+
+            val typNode = node["typ"]
+            if (typNode !is JsonStringNode) {
+                error("invalid node 'typ'")
+            }
+
+            val typ = typNode.value
+
+            val algNode = node["alg"]
+            if (algNode !is JsonStringNode) {
+                error("invalid node 'alg'")
+            }
+
+            val alg = algNode.value
+
+            return JwtHeader(typ, alg)
         }
     }
 
@@ -41,17 +53,37 @@ data class JwtPayload(
     val iss: String? = null,
     val sub: String? = null,
     val aud: String? = null,
-    val exp: Instant? = null,
-    val nbf: Instant? = null,
-    val iat: Instant? = null,
+    val exp: Long? = null,
+    val nbf: Long? = null,
+    val iat: Long? = null,
     val jti: String? = null,
-
-    val custom: Map<String, String> = emptyMap(),
 ) {
+    constructor(
+        iss: String? = null,
+        sub: String? = null,
+        aud: String? = null,
+        exp: Instant? = null,
+        nbf: Instant? = null,
+        iat: Instant? = null,
+        jti: String? = null,
+    ) : this(
+        iss,
+        sub,
+        aud,
+        exp?.epochSeconds,
+        nbf?.epochSeconds,
+        iat?.epochSeconds,
+        jti,
+    )
+
     companion object {
         fun decode(source: String): JwtPayload {
             val text = BASE64.decode(source).decodeToString()
             val node = parseJson(text)
+
+            if (node !is JsonObjectNode) {
+                error("invalid node")
+            }
 
             var iss: String? = null
             var sub: String? = null
@@ -61,19 +93,15 @@ data class JwtPayload(
             var iat: Long? = null
             var jti: String? = null
 
-            val custom = mutableMapOf<String, String>()
-
             for ((k, v) in node.entries) {
                 when (k) {
-                    "iss" -> iss = v.get()
-                    "sub" -> sub = v.get()
-                    "aud" -> aud = v.get()
-                    "exp" -> exp = v.get<Number>().toLong()
-                    "nbf" -> nbf = v.get<Number>().toLong()
-                    "iat" -> iat = v.get<Number>().toLong()
-                    "jti" -> jti = v.get()
-
-                    else -> custom[k] = v.get()
+                    "iss" -> iss = (v as JsonStringNode).value
+                    "sub" -> sub = (v as JsonStringNode).value
+                    "aud" -> aud = (v as JsonStringNode).value
+                    "exp" -> exp = (v as JsonNumberNode).value.toLong()
+                    "nbf" -> nbf = (v as JsonNumberNode).value.toLong()
+                    "iat" -> iat = (v as JsonNumberNode).value.toLong()
+                    "jti" -> jti = (v as JsonStringNode).value
                 }
             }
 
@@ -81,25 +109,22 @@ data class JwtPayload(
                 iss,
                 sub,
                 aud,
-                if (exp != null) Instant.fromEpochSeconds(exp) else null,
-                if (nbf != null) Instant.fromEpochSeconds(nbf) else null,
-                if (iat != null) Instant.fromEpochSeconds(iat) else null,
+                exp,
+                nbf,
+                iat,
                 jti,
-                custom,
             )
         }
     }
 
-    fun toJson() = jsonObject {
+    fun toJson(): JsonObjectNode = jsonObject {
         if (iss != null) this["iss"] = jsonOf(iss)
         if (sub != null) this["sub"] = jsonOf(sub)
         if (aud != null) this["aud"] = jsonOf(aud)
-        if (exp != null) this["exp"] = jsonOf(exp.epochSeconds)
-        if (nbf != null) this["nbf"] = jsonOf(nbf.epochSeconds)
-        if (iat != null) this["iat"] = jsonOf(iat.epochSeconds)
+        if (exp != null) this["exp"] = jsonOf(exp)
+        if (nbf != null) this["nbf"] = jsonOf(nbf)
+        if (iat != null) this["iat"] = jsonOf(iat)
         if (jti != null) this["jti"] = jsonOf(jti)
-
-        for ((k, v) in custom) this[k] = jsonOf(v)
     }
 
     override fun toString() = toJson().toString().toBase64()

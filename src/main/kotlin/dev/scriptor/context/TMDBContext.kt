@@ -1,7 +1,11 @@
 package dev.scriptor.context
 
+import dev.scriptor.JsonNode
 import dev.scriptor.parseJson
+import dev.scriptor.reflect.getClass
+import dev.scriptor.reflect.getType
 import dev.scriptor.server.Provider
+import dev.scriptor.server.converter.ConverterFn
 import dev.scriptor.server.jvm.annotation.Context
 import java.net.URI
 import java.net.http.HttpClient
@@ -311,7 +315,13 @@ class TMDBContext {
         val text = response.body()
         val json = parseJson(text)
 
-        return provider(json)
+        val src = getClass(json::class).createType()
+        val dst = getType<T>()
+
+        val convert = provider[src to dst] as? ConverterFn<JsonNode, T>
+            ?: error("no conversion path from $src to $dst")
+
+        return convert(json)
     }
 
     /**

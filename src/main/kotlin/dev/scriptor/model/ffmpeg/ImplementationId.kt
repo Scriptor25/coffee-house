@@ -5,8 +5,6 @@ import org.jetbrains.exposed.v1.core.ColumnType
 import org.jetbrains.exposed.v1.core.Table
 
 class ImplementationIdColumnType : ColumnType<ImplementationId>() {
-    override var nullable: Boolean = false
-
     override fun sqlType(): String {
         return "TEXT"
     }

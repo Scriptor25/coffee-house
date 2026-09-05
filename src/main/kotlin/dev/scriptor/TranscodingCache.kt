@@ -4,9 +4,9 @@ import dev.scriptor.backend.VideoBackend
 import dev.scriptor.decoder.video.VideoDecoder
 import dev.scriptor.encoder.video.VideoEncoder
 import dev.scriptor.model.ffmpeg.Capabilities
-import dev.scriptor.model.ffmpeg.CodecId
+import dev.scriptor.model.ffmpeg.Codec
+import dev.scriptor.model.ffmpeg.Device
 import dev.scriptor.model.ffmpeg.DeviceBackend
-import dev.scriptor.model.ffmpeg.DeviceId
 import dev.scriptor.model.media.Media
 import dev.scriptor.model.media.VideoTrack
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -78,22 +78,24 @@ class TranscodingCache(
         return result
     }
 
-    private fun createBackend(device: DeviceId?, input: CodecId, output: CodecId): VideoBackend {
+    private fun createBackend(device: Device?, input: Codec, output: Codec): VideoBackend {
         val decoders = Capabilities.getDecoders(input, device)
         val encoders = Capabilities.getEncoders(output, device)
 
         val decoder = decoders
             .toSortedSet(Capabilities::compare)
             .firstOrNull()
+            ?.id?.value
         val encoder = encoders
             .toSortedSet(Capabilities::compare)
             .firstOrNull()
+            ?.id?.value
 
         val videoDecoder =
             if (decoder != null) when (val x = VideoDecoder.find(decoder)) {
                 null -> {
                     log.warning("decoder '$decoder' not implemented")
-                    VideoDecoder.Generic(decoder, input, device)
+                    VideoDecoder.Generic(decoder, input.id.value, device?.id?.value)
                 }
 
                 else -> x
@@ -103,7 +105,7 @@ class TranscodingCache(
             if (encoder != null) when (val x = VideoEncoder.find(encoder)) {
                 null -> {
                     log.warning("encoder '$encoder' not implemented")
-                    VideoEncoder.Generic(encoder, output)
+                    VideoEncoder.Generic(encoder, output.id.value)
                 }
 
                 else -> x
@@ -112,7 +114,7 @@ class TranscodingCache(
 
         return when (device) {
             null -> object : VideoBackend {
-                override val device = device
+                override val device = null
 
                 override val decoder = videoDecoder
                 override val encoder = videoEncoder
@@ -124,7 +126,7 @@ class TranscodingCache(
             }
 
             else -> {
-                val backend = DeviceBackend.find(device)
+                val backend = DeviceBackend.find(device.id.value)
                     ?: error("device '$device' not implemented")
 
                 val scale = backend.scale
@@ -150,8 +152,8 @@ class TranscodingCache(
 
             val video = item.video.first { it.index == 0 }
 
-            val input = CodecId(video.codec)
-            val output = requirements.video
+            val input = video.codec
+            val output = Codec[requirements.video]
 
             val decodeDevices = Capabilities.getDevicesForDecoding(input)
             val encodeDevices = Capabilities.getDevicesForEncoding(output)
