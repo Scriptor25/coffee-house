@@ -1,19 +1,19 @@
 package dev.scriptor.converter
 
-import dev.scriptor.JsonNode
+import dev.scriptor.JsonObjectNode
 import dev.scriptor.jsonOf
 import dev.scriptor.model.user.User
 import dev.scriptor.server.Provider
 import dev.scriptor.server.converter.Converter
 
-class UserJsonConverter : Converter<User, JsonNode> {
+class UserJsonConverter : Converter<User, JsonObjectNode> {
 
     context(provider: Provider)
-    override fun convert(value: User): JsonNode {
+    override fun convert(value: User): JsonObjectNode {
         return jsonOf(
-            "id" to jsonOf(value.id),
+            "id" to jsonOf(value.id.toString()),
             "name" to jsonOf(value.name),
-            "role" to jsonOf(value.role),
+            "role" to jsonOf(value.role.name.lowercase()),
         )
     }
 }

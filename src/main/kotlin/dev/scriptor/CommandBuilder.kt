@@ -36,10 +36,10 @@ class CommandBuilder(
         }
 
         if (device == null) {
-            return pipeline.devices.flatMap { listOf("-init_hw_device", "$it") }
+            return pipeline.devices.flatMap { listOf("-init_hw_device", "${it.id}") }
         }
 
-        return pipeline.devices.flatMap { listOf("-init_hw_device", "$it:$device") }
+        return pipeline.devices.flatMap { listOf("-init_hw_device", "${it.id}:$device") }
     }
 
     private fun buildDecode(): List<String> {

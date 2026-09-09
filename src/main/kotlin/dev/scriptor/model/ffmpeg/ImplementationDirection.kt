@@ -1,6 +1,6 @@
 package dev.scriptor.model.ffmpeg
 
-enum class CodecDirection {
+enum class ImplementationDirection {
     DECODE,
     ENCODE,
 }

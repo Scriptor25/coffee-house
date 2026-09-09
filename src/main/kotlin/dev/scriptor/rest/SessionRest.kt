@@ -1,9 +1,8 @@
 package dev.scriptor.rest
 
-import dev.scriptor.JsonNode
 import dev.scriptor.context.AuthContext
-import dev.scriptor.get
-import dev.scriptor.model.Authorization
+import dev.scriptor.model.AuthorizationHeader
+import dev.scriptor.model.CreateSessionBody
 import dev.scriptor.model.user.User
 import dev.scriptor.model.user.UserTable
 import dev.scriptor.security.Jwt
@@ -30,30 +29,27 @@ class SessionRest {
         database: Database,
     )
     fun createSession(
-        @Body body: JsonNode,
+        @Body body: CreateSessionBody,
     ): Jwt {
-        val username = body["username"].get<String>()
-        val password = body["password"].get<String>()
-
-        val rootUsername: String? = provider.getNamedT("username")
-        val rootPassword: String? = provider.getNamedT("password")
+        val rootUsername = provider.getNamedT<String>("username")
+        val rootPassword = provider.getNamedT<String>("password")
 
         val user: User?
-        if (rootUsername != null && rootPassword != null && username == rootUsername) {
+        if (rootUsername != null && rootPassword != null && body.username == rootUsername) {
             user = null
 
-            if (password != rootPassword) {
+            if (body.password != rootPassword) {
                 throw UnauthorizedSignal()
             }
         } else {
             user = transaction(database) {
                 User
-                    .find { UserTable.name eq username }
+                    .find { UserTable.name eq body.username }
                     .firstOrNull()
             } ?: throw UnauthorizedSignal()
 
             // TODO: generate password hash
-            if (password != user.hash) {
+            if (body.password != user.hash) {
                 throw UnauthorizedSignal()
             }
         }
@@ -85,7 +81,7 @@ class SessionRest {
         auth: AuthContext,
     )
     fun renewSession(
-        @Header authorization: Authorization? = null,
+        @Header authorization: AuthorizationHeader? = null,
     ): Jwt {
 
         val instant = Clock.System.now()

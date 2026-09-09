@@ -4,9 +4,9 @@ import dev.scriptor.backend.VideoBackend
 import dev.scriptor.decoder.video.VideoDecoder
 import dev.scriptor.encoder.video.VideoEncoder
 import dev.scriptor.model.ffmpeg.Capabilities
-import dev.scriptor.model.ffmpeg.CodecId
+import dev.scriptor.model.ffmpeg.Codec
+import dev.scriptor.model.ffmpeg.Device
 import dev.scriptor.model.ffmpeg.DeviceBackend
-import dev.scriptor.model.ffmpeg.DeviceId
 import dev.scriptor.model.media.Media
 import dev.scriptor.model.media.VideoTrack
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -20,7 +20,6 @@ class TranscodingCache(
     private val log: Logger,
     private val ffmpeg: String,
     private val base: Path,
-    private val capabilities: Capabilities,
     private val requirements: TranscodingRequirements,
     private val allowed: Set<String> = setOf("2160p", "1440p", "1080p", "720p", "480p", "360p", "144p"),
 ) {
@@ -79,22 +78,24 @@ class TranscodingCache(
         return result
     }
 
-    private fun createBackend(device: DeviceId?, input: CodecId, output: CodecId): VideoBackend {
-        val decoders = capabilities.getDecoders(input, device)
-        val encoders = capabilities.getEncoders(output, device)
+    private fun createBackend(device: Device?, input: Codec, output: Codec): VideoBackend {
+        val decoders = Capabilities.getDecoders(input, device)
+        val encoders = Capabilities.getEncoders(output, device)
 
         val decoder = decoders
-            .toSortedSet(capabilities::compare)
+            .toSortedSet(Capabilities::compare)
             .firstOrNull()
+            ?.id?.value
         val encoder = encoders
-            .toSortedSet(capabilities::compare)
+            .toSortedSet(Capabilities::compare)
             .firstOrNull()
+            ?.id?.value
 
         val videoDecoder =
             if (decoder != null) when (val x = VideoDecoder.find(decoder)) {
                 null -> {
                     log.warning("decoder '$decoder' not implemented")
-                    VideoDecoder.Generic(decoder, input, device)
+                    VideoDecoder.Generic(decoder, input.id.value, device?.id?.value)
                 }
 
                 else -> x
@@ -104,7 +105,7 @@ class TranscodingCache(
             if (encoder != null) when (val x = VideoEncoder.find(encoder)) {
                 null -> {
                     log.warning("encoder '$encoder' not implemented")
-                    VideoEncoder.Generic(encoder, output)
+                    VideoEncoder.Generic(encoder, output.id.value)
                 }
 
                 else -> x
@@ -113,7 +114,7 @@ class TranscodingCache(
 
         return when (device) {
             null -> object : VideoBackend {
-                override val device = device
+                override val device = null
 
                 override val decoder = videoDecoder
                 override val encoder = videoEncoder
@@ -125,7 +126,7 @@ class TranscodingCache(
             }
 
             else -> {
-                val backend = DeviceBackend.find(device)
+                val backend = DeviceBackend.find(device.id.value)
                     ?: error("device '$device' not implemented")
 
                 val scale = backend.scale
@@ -151,24 +152,24 @@ class TranscodingCache(
 
             val video = item.video.first { it.index == 0 }
 
-            val input = CodecId(video.codec)
-            val output = requirements.video
+            val input = video.codec
+            val output = Codec[requirements.video]
 
-            val decodeDevices = capabilities.getDevicesForDecoding(input)
-            val encodeDevices = capabilities.getDevicesForEncoding(output)
+            val decodeDevices = Capabilities.getDevicesForDecoding(input)
+            val encodeDevices = Capabilities.getDevicesForEncoding(output)
 
             val transcodeDevice = decodeDevices
                 .filter(encodeDevices::contains)
-                .toSortedSet(capabilities::compare)
+                .toSortedSet(Capabilities::compare)
                 .firstOrNull()
 
             val pipeline = if (transcodeDevice == null) {
 
                 val decodeDevice = decodeDevices
-                    .toSortedSet(capabilities::compare)
+                    .toSortedSet(Capabilities::compare)
                     .firstOrNull()
                 val encodeDevice = encodeDevices
-                    .toSortedSet(capabilities::compare)
+                    .toSortedSet(Capabilities::compare)
                     .firstOrNull()
 
                 val decodeBackend = createBackend(decodeDevice, input, output)
@@ -177,7 +178,6 @@ class TranscodingCache(
                     else createBackend(encodeDevice, input, output)
 
                 Pipeline(
-                    capabilities,
                     decodeBackend,
                     encodeBackend,
                     encodeBackend,
@@ -186,7 +186,7 @@ class TranscodingCache(
             } else {
                 val backend = createBackend(transcodeDevice, input, output)
 
-                Pipeline(capabilities, backend)
+                Pipeline(backend)
             }
 
             TranscodingJob(

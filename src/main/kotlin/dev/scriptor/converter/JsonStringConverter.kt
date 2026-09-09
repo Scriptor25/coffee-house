@@ -1,12 +1,11 @@
 package dev.scriptor.converter
 
 import dev.scriptor.JsonNode
-import dev.scriptor.parseJson
 import dev.scriptor.server.Provider
 import dev.scriptor.server.converter.Converter
 
-class StringJsonConverter : Converter<String, JsonNode> {
+class JsonStringConverter : Converter<JsonNode, String> {
 
     context(provider: Provider)
-    override fun convert(value: String): JsonNode = parseJson(value)
+    override fun convert(value: JsonNode) = value.toString()
 }
