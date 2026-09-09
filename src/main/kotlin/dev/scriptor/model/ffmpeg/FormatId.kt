@@ -4,23 +4,23 @@ import org.jetbrains.exposed.v1.core.Column
 import org.jetbrains.exposed.v1.core.ColumnType
 import org.jetbrains.exposed.v1.core.Table
 
-class ImplementationIdColumnType : ColumnType<ImplementationId>() {
+class FormatIdColumnType : ColumnType<FormatId>() {
     override fun sqlType(): String {
         return "TEXT"
     }
 
-    override fun valueFromDB(value: Any): ImplementationId? {
+    override fun valueFromDB(value: Any): FormatId? {
         return when (value) {
-            is ImplementationId -> value
-            is String -> ImplementationId(value)
+            is FormatId -> value
+            is String -> FormatId(value)
             else -> error("unexpected value of type ${value::class}")
         }
     }
 }
 
-fun Table.implementationId(name: String): Column<ImplementationId> = registerColumn(name, ImplementationIdColumnType())
+fun Table.formatId(name: String): Column<FormatId> = registerColumn(name, FormatIdColumnType())
 
 @JvmInline
-value class ImplementationId(private val value: String) {
+value class FormatId(private val value: String) {
     override fun toString(): String = value
 }

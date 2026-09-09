@@ -1,12 +1,13 @@
 package dev.scriptor.rest
 
-import dev.scriptor.JsonNode
+import dev.scriptor.JsonArrayNode
 import dev.scriptor.TranscodingCache
 import dev.scriptor.context.AuthContext
 import dev.scriptor.context.PlaybackContext
-import dev.scriptor.get
 import dev.scriptor.jsonOf
-import dev.scriptor.model.Authorization
+import dev.scriptor.model.AuthorizationHeader
+import dev.scriptor.model.CreatePlaybackBody
+import dev.scriptor.model.RangeHeader
 import dev.scriptor.model.media.Chapter
 import dev.scriptor.model.media.Media
 import dev.scriptor.server.*
@@ -20,7 +21,6 @@ import java.nio.file.Path
 import java.util.logging.Logger
 import kotlin.io.path.readText
 import kotlin.io.path.useLines
-import kotlin.uuid.Uuid
 
 @Suppress("unused")
 @Controller("/playback")
@@ -43,22 +43,17 @@ class PlaybackRest {
         } ?: throw NotFoundSignal()
     }
 
-    private fun stream(range: String?, path: Path): Result {
+    private fun stream(range: RangeHeader?, path: Path): Result {
         val channel = FileChannel.open(path)
 
-        if (range.isNullOrBlank()) {
+        if (range == null) {
             return ChannelResult(value = channel)
         }
 
         val total = channel.size()
 
-        val range = range
-            .substringAfter("bytes=")
-            .split("-", limit = 2)
-            .filter { it.isNotBlank() }
-
-        val begin = range[0].toLong()
-        val end = if (range.size == 2) range[1].toLong() else (total - 1L)
+        val begin = range.begin
+        val end = range.end ?: minOf(begin + 2L * 1024L * 1024L, total - 1L)
 
         val headers = ParameterList()
 
@@ -87,21 +82,15 @@ class PlaybackRest {
         context: PlaybackContext,
     )
     fun createPlayback(
-        @Header authorization: Authorization? = null,
-        @Body node: JsonNode,
+        @Header authorization: AuthorizationHeader? = null,
+        @Body body: CreatePlaybackBody,
     ): String {
         val session = auth.auth(authorization)
             ?: throw UnauthorizedSignal()
 
         val userId = session.user?.id?.value
 
-        val nameNode = node["name"]
-        val itemsNode = node["items"]
-
-        val name = nameNode.get<String>()
-        val items = itemsNode.map { Uuid.parseHexDash(it.get()) }
-
-        return context.createPlayback(userId, name, items)
+        return context.createPlayback(userId, body.name, body.items)
     }
 
     @Get("/[token]/playlist.m3u8", "application/x-mpegurl")
@@ -142,7 +131,7 @@ class PlaybackRest {
     fun getStream(
         @PathParameter token: String,
         @PathParameter index: Int,
-        @Header range: String? = null,
+        @Header range: RangeHeader? = null,
     ): Result {
         val item = item(token, index)
 
@@ -205,7 +194,7 @@ class PlaybackRest {
         @PathParameter index: Int,
         @PathParameter name: String,
         @PathParameter segment: String,
-        @Header range: String? = null,
+        @Header range: RangeHeader? = null,
     ): Result {
         val item = item(token, index)
 
@@ -223,7 +212,7 @@ class PlaybackRest {
     fun getChapters(
         @PathParameter token: String,
         @PathParameter index: Int,
-    ): JsonNode {
+    ): JsonArrayNode {
         val item = item(token, index)
 
         val chapters = transaction(database) { item.chapters.toList() }
@@ -248,3 +237,4 @@ class PlaybackRest {
         )
     }
 }
+

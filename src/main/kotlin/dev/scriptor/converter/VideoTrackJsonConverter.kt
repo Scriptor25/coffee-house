@@ -1,17 +1,17 @@
 package dev.scriptor.converter
 
-import dev.scriptor.JsonNode
+import dev.scriptor.JsonObjectNode
 import dev.scriptor.jsonOf
 import dev.scriptor.model.media.VideoTrack
 import dev.scriptor.server.Provider
 import dev.scriptor.server.converter.Converter
 
-class VideoTrackJsonConverter : Converter<VideoTrack, JsonNode> {
+class VideoTrackJsonConverter : Converter<VideoTrack, JsonObjectNode> {
 
     context(provider: Provider)
-    override fun convert(value: VideoTrack): JsonNode = jsonOf(
+    override fun convert(value: VideoTrack): JsonObjectNode = jsonOf(
         "index" to jsonOf(value.index),
-        "codec" to jsonOf(value.codec),
+        "codec" to jsonOf(value.codec.id.toString()),
         "width" to jsonOf(value.width),
         "height" to jsonOf(value.height),
         "bit_rate" to jsonOf(value.bitRate),

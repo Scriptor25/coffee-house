@@ -1,15 +1,15 @@
 package dev.scriptor.converter
 
-import dev.scriptor.JsonNode
+import dev.scriptor.JsonObjectNode
 import dev.scriptor.jsonOf
 import dev.scriptor.model.media.Chapter
 import dev.scriptor.server.Provider
 import dev.scriptor.server.converter.Converter
 
-class ChapterJsonConverter : Converter<Chapter, JsonNode> {
+class ChapterJsonConverter : Converter<Chapter, JsonObjectNode> {
 
     context(provider: Provider)
-    override fun convert(value: Chapter): JsonNode = jsonOf(
+    override fun convert(value: Chapter): JsonObjectNode = jsonOf(
         "index" to jsonOf(value.index),
         "start" to jsonOf(value.start),
         "end" to jsonOf(value.end),

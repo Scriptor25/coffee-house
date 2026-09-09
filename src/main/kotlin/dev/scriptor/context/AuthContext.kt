@@ -1,6 +1,6 @@
 package dev.scriptor.context
 
-import dev.scriptor.model.Authorization
+import dev.scriptor.model.AuthorizationHeader
 import dev.scriptor.model.Session
 import dev.scriptor.model.user.User
 import dev.scriptor.security.Jwt
@@ -37,16 +37,19 @@ class AuthContext {
             return null
         }
 
-        var maxAge: Long? = null
-        if (jwt.payload.exp != null) {
-            val delta = jwt.payload.exp - instant
+        val maxAge =
+            when (val exp = jwt.payload.exp) {
+                null -> null
+                else -> {
+                    val delta = exp - instant
 
-            if (delta.isNegative()) {
-                return null
+                    if (delta.isNegative()) {
+                        return null
+                    }
+
+                    delta.inWholeSeconds
+                }
             }
-
-            maxAge = delta.inWholeSeconds
-        }
 
         val id =
             when (val sub = jwt.payload.sub) {
@@ -66,7 +69,7 @@ class AuthContext {
         _: Database,
     )
     fun auth(
-        authorization: Authorization?,
+        authorization: AuthorizationHeader?,
         instant: Instant = Clock.System.now(),
     ): Session? {
         if (authorization == null) {

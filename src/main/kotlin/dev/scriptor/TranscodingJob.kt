@@ -1,5 +1,6 @@
 package dev.scriptor
 
+import dev.scriptor.model.ffmpeg.CodecId
 import dev.scriptor.model.media.Media
 import java.nio.file.Path
 import java.util.logging.Logger
@@ -131,11 +132,11 @@ data class TranscodingJob(
             metadata.subtitles.filter {
                 // TODO: HLS does not support bitmap subtitles?
                 // TODO: use ocr filter for preprocessing bitmap subtitles
-                when (it.codec) {
-                    "subrip",
-                    "ass",
-                    "ssa",
-                    "webvtt" -> true
+                when (it.codec.id.value) {
+                    CodecId("subrip"),
+                    CodecId("ass"),
+                    CodecId("ssa"),
+                    CodecId("webvtt") -> true
 
                     else -> false
                 }

@@ -1,10 +1,8 @@
 package dev.scriptor.rest
 
-import dev.scriptor.JsonNode
 import dev.scriptor.context.AuthContext
-import dev.scriptor.emptyJsonObject
-import dev.scriptor.get
-import dev.scriptor.model.Authorization
+import dev.scriptor.model.AuthorizationHeader
+import dev.scriptor.model.OffsetLimitBody
 import dev.scriptor.model.movie.Movie
 import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.UnauthorizedSignal
@@ -26,7 +24,7 @@ class MovieRest {
     )
     fun getMovie(
         @PathParameter id: Uuid,
-        @Header authorization: Authorization? = null,
+        @Header authorization: AuthorizationHeader? = null,
     ): Movie {
         auth.auth(authorization)
             ?: throw UnauthorizedSignal()
@@ -42,22 +40,17 @@ class MovieRest {
         auth: AuthContext,
     )
     fun getMovieList(
-        @Header authorization: Authorization? = null,
-        @Body body: JsonNode? = null,
+        @Header authorization: AuthorizationHeader? = null,
+        @Body body: OffsetLimitBody = OffsetLimitBody(),
     ): List<Movie> {
-        val body = body ?: emptyJsonObject()
-
         auth.auth(authorization)
             ?: throw UnauthorizedSignal()
-
-        val offset = body["offset"].get<Number?>()?.toLong() ?: 0L
-        val limit = body["limit"].get<Number?>()?.toInt() ?: Int.MAX_VALUE
 
         return transaction(database) {
             Movie
                 .all()
-                .offset(offset)
-                .limit(limit)
+                .offset(body.offset)
+                .limit(body.limit)
                 .toList()
         }
     }

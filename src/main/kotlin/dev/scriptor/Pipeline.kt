@@ -4,14 +4,12 @@ import dev.scriptor.backend.VideoBackend
 import dev.scriptor.model.ffmpeg.Capabilities
 
 data class Pipeline(
-    val capabilities: Capabilities,
     val decode: VideoBackend,
     val split: VideoBackend,
     val scale: VideoBackend,
     val encode: VideoBackend,
 ) {
-    constructor(capabilities: Capabilities, backend: VideoBackend) : this(
-        capabilities,
+    constructor(backend: VideoBackend) : this(
         backend,
         backend,
         backend,
@@ -52,7 +50,7 @@ data class Pipeline(
             else -> {
                 val interop =
                     if (sd == null || dd == null) null
-                    else capabilities.getInterop(sd, dd)
+                    else Capabilities.getDeviceToDevice(sd, dd)
 
                 if (interop == null || !interop.derivable) {
                     src.download() + dst.upload()

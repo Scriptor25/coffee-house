@@ -1,6 +1,6 @@
 package dev.scriptor.model
 
-data class Authorization(
+data class AuthorizationHeader(
     val scheme: String,
     val credentials: String,
 )
