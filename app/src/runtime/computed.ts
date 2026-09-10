@@ -16,16 +16,10 @@ export class Computed<T> implements Readable<T> {
   get(): T {
     track(this);
 
-    this.compute();
-
-    return this.value;
+    return this.compute();
   }
 
   subscribe(listener: () => void): () => void {
-    if (this.subscribers.size === 0) {
-      this.compute();
-    }
-
     this.subscribers.add(listener);
 
     return () => {
@@ -33,13 +27,22 @@ export class Computed<T> implements Readable<T> {
     };
   }
 
-  private compute(): void {
-    if (!this.dirty) return;
+  dispose(): void {
+    this.observer.dispose();
+  }
+
+  private compute(): T {
+    if (!this.dirty) {
+      return this.value;
+    }
+
     this.dirty = false;
 
     this.observer.run(() => {
       this.value = this.fn();
     });
+
+    return this.value;
   }
 
   private invalidate(): void {

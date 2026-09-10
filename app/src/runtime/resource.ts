@@ -9,6 +9,7 @@ export type ResourceState<T> =
 
 export class Resource<T> implements Readable<ResourceState<T>> {
   private readonly state = signal<ResourceState<T>>({ status: "none" });
+
   private request: Promise<T> | null = null;
 
   constructor(private readonly fn: () => Promise<T>) {}

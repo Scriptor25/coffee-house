@@ -2,7 +2,7 @@
   display: grid;
   gap: var(--space-m);
 
-  padding: var(--space-m);
+  padding: 0;
   margin: 0;
 
   list-style: none;

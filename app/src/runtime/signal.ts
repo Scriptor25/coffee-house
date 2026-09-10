@@ -1,10 +1,15 @@
 import { track } from "./internal";
 import type { Readable } from "./readable";
 
+type NonFunction<T> = T extends (...args: any[]) => any ? never : T;
+
+type GeneratorFn<T> = (_: T) => T;
+type Generator<T> = T | GeneratorFn<T>;
+
 export class Signal<T> implements Readable<T> {
   private readonly subscribers = new Set<() => void>();
 
-  constructor(private value: T) {}
+  constructor(private value: NonFunction<T>) {}
 
   get(): T {
     track(this);
@@ -12,9 +17,11 @@ export class Signal<T> implements Readable<T> {
     return this.value;
   }
 
-  set(next: T | ((prev: T) => T)): void {
+  set(next: Generator<NonFunction<T>>): void {
     const value =
-      typeof next === "function" ? (next as (prev: T) => T)(this.value) : next;
+      typeof next === "function"
+        ? (next as GeneratorFn<NonFunction<T>>)(this.value)
+        : next;
 
     if (Object.is(this.value, value)) {
       return;
@@ -36,6 +43,6 @@ export class Signal<T> implements Readable<T> {
   }
 }
 
-export function signal<T>(init: T): Signal<T> {
+export function signal<T>(init: NonFunction<T>): Signal<T> {
   return new Signal<T>(init);
 }

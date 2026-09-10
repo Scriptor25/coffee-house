@@ -28,8 +28,8 @@ function insertReadable(
   child: Readable<VNode>,
   before: Node | null,
 ): Dispose {
-  const beg = document.createComment("beg");
-  const end = document.createComment("end");
+  const beg = document.createComment("");
+  const end = document.createComment("");
 
   node.insertBefore(beg, before);
   node.insertBefore(end, before);
