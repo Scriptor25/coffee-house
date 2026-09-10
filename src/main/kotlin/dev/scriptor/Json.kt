@@ -1,9 +1,7 @@
 package dev.scriptor
 
 import kotlin.reflect.*
-import kotlin.reflect.full.createInstance
-import kotlin.reflect.full.memberProperties
-import kotlin.reflect.full.primaryConstructor
+import kotlin.reflect.full.*
 
 enum class JsonNodeType {
     NULL,
@@ -664,7 +662,7 @@ private fun cast(name: String, node: JsonNode, type: KType, map: Map<KType, Json
                 else -> error("invalid node '$name'")
             }
 
-        is KClass<*> ->
+        is KClass<*> if c.hasAnnotation<JsonSerializable>() ->
             when (node) {
                 is JsonObjectNode -> {
                     when (val constructor = c.primaryConstructor) {
@@ -674,15 +672,21 @@ private fun cast(name: String, node: JsonNode, type: KType, map: Map<KType, Json
                             for (property in c.memberProperties) {
                                 if (property !is KMutableProperty<*>) continue
 
-                                val subnode = node[property.name]
+                                val setter = property.setter
+
+                                val a = setter.findAnnotation<JsonProperty>()
+                                val propertyName = a?.value
+                                    ?: property.name
+
+                                val subnode = node[propertyName]
                                 val value = cast(
-                                    "$name.${property.name}",
+                                    "$name.${propertyName}",
                                     subnode,
                                     property.returnType,
                                     map,
                                 )
 
-                                property.setter.call(instance, value)
+                                setter.call(instance, value)
                             }
 
                             instance
@@ -692,7 +696,9 @@ private fun cast(name: String, node: JsonNode, type: KType, map: Map<KType, Json
                             val args = mutableMapOf<KParameter, Any?>()
 
                             for (parameter in constructor.parameters) {
-                                val parameterName = parameter.name
+                                val a = parameter.findAnnotation<JsonProperty>()
+                                val parameterName = a?.value
+                                    ?: parameter.name
                                     ?: continue
 
                                 val subnode = node[parameterName]
@@ -730,3 +736,11 @@ fun JsonNode.cast(type: KType, map: Map<KType, JsonCast> = emptyMap()): Any? {
 inline fun <reified T> JsonNode.cast(map: Map<KType, JsonCast> = emptyMap()): T {
     return cast(typeOf<T>(), map) as T
 }
+
+@Retention(AnnotationRetention.RUNTIME)
+@Target(AnnotationTarget.CLASS)
+annotation class JsonSerializable
+
+@Retention(AnnotationRetention.RUNTIME)
+@Target(AnnotationTarget.VALUE_PARAMETER, AnnotationTarget.PROPERTY_SETTER)
+annotation class JsonProperty(val value: String)

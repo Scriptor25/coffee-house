@@ -67,8 +67,19 @@ export class ReactiveObserver implements Observer {
   }
 }
 
-let active: Observer | undefined;
+let active: Observer | null = null;
 
 export function track(src: Readable): void {
   active?.on(src);
+}
+
+export function untracked<T>(fn: () => T): T {
+  const previous = active;
+  active = null;
+
+  try {
+    return fn();
+  } finally {
+    active = previous;
+  }
 }

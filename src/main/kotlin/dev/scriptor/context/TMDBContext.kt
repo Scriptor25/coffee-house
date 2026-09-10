@@ -1,185 +1,199 @@
 package dev.scriptor.context
 
-import dev.scriptor.JsonNode
+import dev.scriptor.JsonProperty
+import dev.scriptor.JsonSerializable
+import dev.scriptor.cast
 import dev.scriptor.parseJson
-import dev.scriptor.reflect.getClass
-import dev.scriptor.reflect.getType
 import dev.scriptor.server.Provider
-import dev.scriptor.server.converter.ConverterFn
 import dev.scriptor.server.jvm.annotation.Context
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import kotlin.reflect.typeOf
 
 @Context
 class TMDBContext {
 
+    @JsonSerializable
     data class MovieCollection(
         val id: Int,
         val name: String,
-        /** poster_path */
-        val posterPath: String,
-        /** backdrop_path */
-        val backdropPath: String,
+        @JsonProperty("poster_path")
+        val posterPath: String?,
+        @JsonProperty("backdrop_path")
+        val backdropPath: String?,
     )
 
+    @JsonSerializable
     data class MovieGenre(
         val id: Int,
         val name: String,
     )
 
+    @JsonSerializable
     data class MovieCompany(
         val id: Int,
-        /** logo_path */
-        val logoPath: String,
+        @JsonProperty("logo_path")
+        val logoPath: String?,
         val name: String,
-        /** origin_country */
+        @JsonProperty("origin_country")
         val originCountry: String,
     )
 
+    @JsonSerializable
     data class MovieCountry(
-        /** iso_3166_1 */
+        @JsonProperty("iso_3166_1")
         val iso31661: String,
         val name: String,
     )
 
+    @JsonSerializable
     data class MovieLanguage(
-        /** english_name */
+        @JsonProperty("english_name")
         val englishName: String,
-        /** iso_639_1 */
+        @JsonProperty("iso_639_1")
         val iso6391: String,
         val name: String,
     )
 
+    @JsonSerializable
     data class MovieDetails(
         val adult: Boolean,
-        /** backdrop_path */
-        val backdropPath: String,
-        /** belongs_to_collection */
-        val belongsToCollection: MovieCollection,
+        @JsonProperty("backdrop_path")
+        val backdropPath: String?,
+        @JsonProperty("belongs_to_collection")
+        val belongsToCollection: MovieCollection?,
         val budget: Int,
         val genres: List<MovieGenre>,
         val homepage: String,
         val id: Int,
-        /** imdb_id */
+        @JsonProperty("imdb_id")
         val imdbId: String,
-        /** origin_country */
+        @JsonProperty("origin_country")
         val originCountry: List<String>,
-        /** original_language */
+        @JsonProperty("original_language")
         val originalLanguage: String,
-        /** original_title */
+        @JsonProperty("original_title")
         val originalTitle: String,
         val overview: String,
         val popularity: Double,
-        /** poster_path */
-        val posterPath: String,
-        /** production_companies */
+        @JsonProperty("poster_path")
+        val posterPath: String?,
+        @JsonProperty("production_companies")
         val productionCompanies: List<MovieCompany>,
-        /** production_countries */
+        @JsonProperty("production_countries")
         val productionCountries: List<MovieCountry>,
-        /** release_date */
+        @JsonProperty("release_date")
         val releaseDate: String,
         val revenue: Int,
         val runtime: Int,
         val softcore: Boolean,
-        /** spoken_languages */
+        @JsonProperty("spoken_languages")
         val spokenLanguages: List<MovieLanguage>,
         val status: String,
         val tagline: String,
         val title: String,
         val video: Boolean,
-        /** vote_average */
+        @JsonProperty("vote_average")
         val voteAverage: Double,
-        /** vote_count */
+        @JsonProperty("vote_count")
         val voteCount: Int,
     )
 
+    @JsonSerializable
     data class MovieAlternativeTitle(
-        /** iso_3166_1 */
+        @JsonProperty("iso_3166_1")
         val iso31661: String,
         val title: String,
         val type: String,
     )
 
+    @JsonSerializable
     data class MovieAlternativeTitles(
         val id: Int,
         val titles: List<MovieAlternativeTitle>,
     )
 
+    @JsonSerializable
     data class MovieCastMember(
         val adult: Boolean,
         val gender: Int,
         val id: Int,
-        /** know_for_department */
+        @JsonProperty("know_for_department")
         val knownForDepartment: String,
         val name: String,
-        /** original_name */
+        @JsonProperty("original_name")
         val originalName: String,
         val popularity: Double,
-        /** profile_path */
-        val profilePath: String,
-        /** cast_id */
+        @JsonProperty("profile_path")
+        val profilePath: String?,
+        @JsonProperty("cast_id")
         val castId: Int,
         val character: String,
-        /** credit_id */
+        @JsonProperty("credit_id")
         val creditId: String,
         val order: Int,
     )
 
+    @JsonSerializable
     data class MovieCrewMember(
         val adult: Boolean,
         val gender: Int,
         val id: Int,
-        /** known_for_department */
+        @JsonProperty("known_for_department")
         val knownForDepartment: String,
         val name: String,
-        /** original_name */
+        @JsonProperty("original_name")
         val originalName: String,
         val popularity: Double,
-        /** profile_path */
-        val profilePath: String,
-        /** credit_id */
+        @JsonProperty("profile_path")
+        val profilePath: String?,
+        @JsonProperty("credit_id")
         val creditId: String,
         val department: String,
         val job: String,
     )
 
+    @JsonSerializable
     data class MovieCredits(
         val id: Int,
         val cast: List<MovieCastMember>,
         val crew: List<MovieCrewMember>,
     )
 
+    @JsonSerializable
     data class MovieExternalIds(
         val id: Int,
-        /** imdb_id */
+        @JsonProperty("imdb_id")
         val imdbId: String,
-        /** wikidata_id */
+        @JsonProperty("wikidata_id")
         val wikidataId: String,
-        /** facebook_id */
+        @JsonProperty("facebook_id")
         val facebookId: String,
-        /** instagram_id */
+        @JsonProperty("instagram_id")
         val instagramId: String,
-        /** twitter_id */
+        @JsonProperty("twitter_id")
         val twitterId: String,
     )
 
+    @JsonSerializable
     data class MovieImage(
-        /** aspect_ratio */
+        @JsonProperty("aspect_ratio")
         val aspectRatio: Double,
         val height: Int,
-        /** iso_639_1 */
+        @JsonProperty("iso_639_1")
         val iso6391: String,
-        /** file_path */
-        val filePath: String,
-        /** vote_average */
+        @JsonProperty("file_path")
+        val filePath: String?,
+        @JsonProperty("vote_average")
         val voteAverage: Double,
-        /** vote_count */
+        @JsonProperty("vote_count")
         val voteCount: Int,
         val width: Int,
     )
 
+    @JsonSerializable
     data class MovieImages(
         val backdrops: List<MovieImage>,
         val id: Int,
@@ -187,50 +201,55 @@ class TMDBContext {
         val posters: List<MovieImage>,
     )
 
+    @JsonSerializable
     data class MovieKeyword(
         val id: Int,
         val name: String,
     )
 
+    @JsonSerializable
     data class MovieKeywords(
         val id: Int,
         val keywords: List<MovieKeyword>,
     )
 
+    @JsonSerializable
     data class MovieRecommendation(
         val adult: Boolean,
-        /** backdrop_path */
-        val backdropPath: String,
-        /** genre_ids */
+        @JsonProperty("backdrop_path")
+        val backdropPath: String?,
+        @JsonProperty("genre_ids")
         val genreIds: List<Int>,
         val id: Int,
-        /** original_language */
+        @JsonProperty("original_language")
         val originalLanguage: String,
-        /** original_title */
+        @JsonProperty("original_title")
         val originalTitle: String,
         val overview: String,
         val popularity: Double,
-        /** poster_path */
-        val posterPath: String,
-        /** release_date */
+        @JsonProperty("poster_path")
+        val posterPath: String?,
+        @JsonProperty("release_date")
         val releaseDate: String,
         val title: String,
         val video: Boolean,
-        /** vote_average */
+        @JsonProperty("vote_average")
         val voteAverage: Double,
-        /** vote_count */
+        @JsonProperty("vote_count")
         val voteCount: Int,
     )
 
+    @JsonSerializable
     data class MovieRecommendations(
         val page: Int,
         val results: List<MovieRecommendation>,
-        /** total_pages */
+        @JsonProperty("total_pages")
         val totalPages: Int,
-        /** total_results */
+        @JsonProperty("total_results")
         val totalResults: Int,
     )
 
+    @JsonSerializable
     data class MovieTranslationData(
         val homepage: String,
         val overview: String,
@@ -239,45 +258,57 @@ class TMDBContext {
         val title: String,
     )
 
+    @JsonSerializable
     data class MovieTranslation(
-        /** iso_3166_1 */
+        @JsonProperty("iso_3166_1")
         val iso31661: String,
-        /** iso_639_1 */
+        @JsonProperty("iso_639_1")
         val iso6391: String,
         val name: String,
-        /** english_name */
+        @JsonProperty("english_name")
         val englishName: String,
         val data: MovieTranslationData,
     )
 
+    @JsonSerializable
     data class MovieTranslations(
         val id: Int,
         val translations: List<MovieTranslation>,
     )
 
+    @JsonSerializable
     data class MovieVideo(
         val id: Int,
-        /** iso_3166_1 */
+        @JsonProperty("iso_3166_1")
         val iso31661: String,
-        /** iso_639_1 */
+        @JsonProperty("iso_639_1")
         val iso6391: String,
         val key: String,
         val name: String,
         val official: Boolean,
-        /** published_at */
+        @JsonProperty("published_at")
         val publishedAt: String,
         val site: String,
         val size: Int,
         val type: String,
     )
 
+    @JsonSerializable
     data class MovieVideos(
         val id: Int,
         val results: List<MovieVideo>,
     )
 
+    private val cache = mutableMapOf<String, Any?>()
+
     context(provider: Provider)
-    inline fun <reified T> getMovieData(resource: String, movieId: Int, params: Map<String, String?> = emptyMap()): T {
+    private inline fun <reified T> getMovieData(
+        resource: String,
+        movieId: Int,
+        params: Map<String, String?> = emptyMap()
+    ): T {
+        val params = params.toSortedMap()
+
         val query = buildString {
             var first = true
             for ((key, value) in params) {
@@ -295,6 +326,11 @@ class TMDBContext {
         }
 
         val uri = "https://api.themoviedb.org/3/movie/${movieId}${resource}${query}"
+
+        val cached = cache[uri]
+        if (cached != null) {
+            return cached as T
+        }
 
         val token = provider.getNamedT<String>("tmdb-token")
             ?: error("missing tmdb-token")
@@ -315,13 +351,14 @@ class TMDBContext {
         val text = response.body()
         val json = parseJson(text)
 
-        val src = getClass(json::class).createType()
-        val dst = getType<T>()
-
-        val convert = provider[src to dst] as? ConverterFn<JsonNode, T>
-            ?: error("no conversion path from $src to $dst")
-
-        return convert(json)
+        val value = json.cast<T>(
+            mapOf(
+                typeOf<Int>() to { it.cast<Number>().toInt() },
+                typeOf<Double>() to { it.cast<Number>().toDouble() },
+            ),
+        )
+        cache[uri] = value
+        return value
     }
 
     /**

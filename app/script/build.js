@@ -1,6 +1,9 @@
 import { build } from "esbuild";
 
-await build({
+/**
+ * @type {import("esbuild").BuildOptions} config
+ */
+export const config = {
   entryPoints: ["src/index.tsx"],
 
   outdir: "dist",
@@ -13,5 +16,11 @@ await build({
   jsxImportSource: "@runtime",
 
   sourcemap: true,
-  minify: false,
-});
+  minify: true,
+
+  loader: {
+    ".scss": "css",
+  },
+};
+
+await build(config);

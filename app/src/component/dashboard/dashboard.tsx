@@ -13,10 +13,11 @@ import {
   MediaNode,
   segments,
 } from "../../util/tree";
+import { MediaList } from "../media-list/media-list";
 
-async function copyUrl(open: Signal<URL | null>, url: URL) {
+async function copyUrl(open: Signal<URL | null>, url: URL, title: string) {
   if (!!window.navigator.share) {
-    window.navigator.share({ url: url.toString() });
+    window.navigator.share({ url: url.toString(), title });
     return;
   }
 
@@ -39,7 +40,7 @@ function MediaItem(props: { open: Signal<URL | null>; data: Media }) {
     const pathname = direct ? `${base}/0` : `${base}/0/master.m3u8`;
     const url = new URL(pathname, getOrigin());
 
-    await copyUrl(props.open, url);
+    await copyUrl(props.open, url, props.data.title);
   };
 
   return (
@@ -157,7 +158,7 @@ export function Dashboard() {
       const pathname = `${base}/playlist.m3u8?direct=${direct}`;
       const url = new URL(pathname, getOrigin());
 
-      await copyUrl(sOpen, url);
+      await copyUrl(sOpen, url, `Playlist ${node.name}`);
     };
 
     return (
@@ -175,6 +176,8 @@ export function Dashboard() {
           </button>
         </div>
         <ul>{list}</ul>
+
+        <MediaList data={items} mode="grid" />
       </>
     );
   });
