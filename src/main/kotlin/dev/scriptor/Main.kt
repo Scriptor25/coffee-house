@@ -1,14 +1,13 @@
 package dev.scriptor
 
 import dev.scriptor.context.PlaybackContext
+import dev.scriptor.context.TMDBContext
 import dev.scriptor.model.ffmpeg.*
 import dev.scriptor.model.media.*
+import dev.scriptor.model.movie.Movie
 import dev.scriptor.model.movie.MovieMediaTable
 import dev.scriptor.model.movie.MovieTable
-import dev.scriptor.model.show.EpisodeMediaTable
-import dev.scriptor.model.show.EpisodeTable
-import dev.scriptor.model.show.SeasonTable
-import dev.scriptor.model.show.ShowTable
+import dev.scriptor.model.show.*
 import dev.scriptor.model.user.UserTable
 import dev.scriptor.server.Provider
 import dev.scriptor.server.http.Server
@@ -16,6 +15,7 @@ import dev.scriptor.server.jvm.scan
 import org.jetbrains.exposed.v1.core.notInList
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.nio.file.Files
@@ -50,16 +50,19 @@ fun parseFrameRate(value: String?): Double {
     return if (den == 0.0) 0.0 else num / den
 }
 
+@JsonSerializable
 data class FormatTagsNode(
     val title: String? = null,
 )
 
+@JsonSerializable
 data class FormatNode(
     val size: String,
     val duration: String,
     val tags: FormatTagsNode,
 )
 
+@JsonSerializable
 data class StreamTagsNode(
     val title: String? = null,
     val language: String? = null,
@@ -67,39 +70,52 @@ data class StreamTagsNode(
     val mimetype: String? = null,
 )
 
+@JsonSerializable
 data class StreamDispositionNode(
     val default: Number? = null,
     val forced: Number? = null,
 )
 
+@JsonSerializable
 data class StreamNode(
     val index: Number,
-    val codec_type: String,
-    val codec_name: String? = null,
+    @JsonProperty("codec_type")
+    val codecType: String,
+    @JsonProperty("codec_name")
+    val codecName: String? = null,
     val width: Number? = null,
     val height: Number? = null,
-    val bit_rate: String? = null,
-    val avg_frame_rate: String? = null,
+    @JsonProperty("bit_rate")
+    val bitRate: String? = null,
+    @JsonProperty("avg_frame_rate")
+    val avgFrameRate: String? = null,
     val profile: String? = null,
     val level: Number? = null,
-    val color_transfer: String? = null,
-    val sample_rate: String? = null,
+    @JsonProperty("color_transfer")
+    val colorTransfer: String? = null,
+    @JsonProperty("sample_rate")
+    val sampleRate: String? = null,
     val channels: Number? = null,
     val tags: StreamTagsNode,
     val disposition: StreamDispositionNode,
 )
 
+@JsonSerializable
 data class ChapterTagsNode(
     val title: String? = null,
     val language: String? = null,
 )
 
+@JsonSerializable
 data class ChapterNode(
-    val start_time: String,
-    val end_time: String,
+    @JsonProperty("start_time")
+    val startTime: String,
+    @JsonProperty("end_time")
+    val endTime: String,
     val tags: ChapterTagsNode,
 )
 
+@JsonSerializable
 data class MetadataNode(
     val format: FormatNode,
     val streams: List<StreamNode>,
@@ -108,6 +124,7 @@ data class MetadataNode(
 
 context(
     log: Logger,
+    _: Provider,
     database: Database,
 )
 fun getMetadata(
@@ -150,20 +167,20 @@ fun getMetadata(
     }
 
     for (stream in node.streams) {
-        val codecType = stream.codec_type.lowercase()
+        val codecType = stream.codecType.lowercase()
 
         when (codecType) {
             "video" -> {
                 val index = stream.index.toInt()
-                val codec = stream.codec_name?.lowercase()
+                val codec = stream.codecName?.lowercase()
                 val width = stream.width?.toInt()
                 val height = stream.height?.toInt()
-                val bitRate = stream.bit_rate?.toLongOrNull() ?: 0L
-                val frameRate = parseFrameRate(stream.avg_frame_rate)
+                val bitRate = stream.bitRate?.toLongOrNull() ?: 0L
+                val frameRate = parseFrameRate(stream.avgFrameRate)
                 val profile = stream.profile
                 val level = stream.level?.toInt()
 
-                val hdr = when (stream.color_transfer) {
+                val hdr = when (stream.colorTransfer) {
                     "smpte2084", "arib-std-b67" -> true
                     else -> false
                 }
@@ -196,9 +213,9 @@ fun getMetadata(
 
             "audio" -> {
                 val index = stream.index.toInt()
-                val codec = stream.codec_name?.lowercase()
-                val bitRate = stream.bit_rate?.toLongOrNull() ?: 0L
-                val sampleRate = stream.sample_rate?.toLong()
+                val codec = stream.codecName?.lowercase()
+                val bitRate = stream.bitRate?.toLongOrNull() ?: 0L
+                val sampleRate = stream.sampleRate?.toLong()
                 val channels = stream.channels?.toInt()
 
                 val language = stream.tags.language
@@ -225,7 +242,7 @@ fun getMetadata(
 
             "subtitle" -> {
                 val index = stream.index.toInt()
-                val codec = stream.codec_name?.lowercase()
+                val codec = stream.codecName?.lowercase()
 
                 val language = stream.tags.language
                 val title = stream.tags.title
@@ -248,7 +265,7 @@ fun getMetadata(
 
             "attachment" -> {
                 val index = stream.index.toInt()
-                val codec = stream.codec_name?.lowercase()
+                val codec = stream.codecName?.lowercase()
 
                 val filename = stream.tags.filename
                 val mimetype = stream.tags.mimetype
@@ -262,8 +279,8 @@ fun getMetadata(
     for (chapter in node.chapters) {
         val index = i++
 
-        val start = chapter.start_time.toDouble()
-        val end = chapter.end_time.toDouble()
+        val start = chapter.startTime.toDouble()
+        val end = chapter.endTime.toDouble()
 
         val language = chapter.tags.language
         val title = chapter.tags.title
@@ -284,6 +301,7 @@ fun getMetadata(
 @OptIn(ExperimentalAtomicApi::class)
 context(
     log: Logger,
+    _: Provider,
     database: Database,
 )
 fun getMetadata(
@@ -332,6 +350,48 @@ fun getMetadata(
     }
 }
 
+context(
+    _: Provider,
+    database: Database,
+)
+fun getTmdbMetadata() {
+    val items = MediaTable
+        .select(MediaTable.id, MediaTable.path)
+        .associate { it[MediaTable.id].value to it[MediaTable.path] }
+
+    val context = TMDBContext()
+    val regex = """^[^\[]*\[tmdbid-(\d+)].*$""".toRegex()
+
+    for ((id, path) in items) {
+        val match = regex.matchEntire(path.nameWithoutExtension) ?: continue
+        val tmdbId = match.groupValues[1].toInt()
+
+        when {
+            path.startsWith("Movies") -> {
+                val details = context.getMovieDetails(tmdbId)
+
+                val movie = transaction(database) {
+                    Movie.new {
+                        this.tmdbId = tmdbId
+                        this.title = details.title
+                    }
+                }
+
+                transaction(database) {
+                    MovieMediaTable.insert {
+                        it[this.movie] = movie.id
+                        it[this.media] = id
+                    }
+                }
+            }
+
+            path.startsWith("Shows") -> {
+                // TODO: getShow*(tmdbId)
+            }
+        }
+    }
+}
+
 fun main() {
     val env = getEnvironment()
 
@@ -354,6 +414,8 @@ fun main() {
     val ffmpeg = env["FFMPEG"] ?: "ffmpeg"
     val ffprobe = env["FFPROBE"] ?: "ffprobe"
 
+    val tmdbToken = env["TMDB_TOKEN"]
+
     val log = getLogger("coffee-house")
     log.level = Level.ALL
 
@@ -361,6 +423,8 @@ fun main() {
 
     provider["username"] = username
     provider["password"] = password
+
+    provider["tmdb-token"] = tmdbToken
 
     provider.registerT(log)
 
@@ -430,7 +494,7 @@ fun main() {
             .forEach { it.delete() }
     }
 
-    context(log, database) {
+    context(log, provider, database) {
         getMetadata(ffprobe, paths)
     }
 

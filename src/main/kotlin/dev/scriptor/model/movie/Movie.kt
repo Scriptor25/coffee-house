@@ -10,6 +10,10 @@ import kotlin.uuid.Uuid
 object MovieTable : UuidTable("movie") {
     val tmdbId = integer("tmdb_id").nullable()
     val title = text("title")
+
+    init {
+        uniqueIndex(tmdbId)
+    }
 }
 
 class Movie(id: EntityID<Uuid>) : UuidEntity(id) {
