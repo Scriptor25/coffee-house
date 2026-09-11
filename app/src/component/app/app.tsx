@@ -4,8 +4,10 @@ import { signal } from "@runtime/signal";
 import { getSessionToken } from "../../data/session";
 import { DashboardPage } from "../../page/dashboad";
 import { LoginPage } from "../../page/login";
-import { MediaPage } from "../../page/media";
 import { NotFoundPage } from "../../page/not-found";
+import { effect } from "@runtime/effect";
+import { MovieListPage } from "../../page/movie/list";
+import { MovieDetailPage } from "../../page/movie/detail";
 
 type RouteNode =
   | Component<any>
@@ -14,27 +16,32 @@ type RouteNode =
 const config: RouteNode = {
   "/": DashboardPage,
   login: LoginPage,
-  media: {
-    "[id]": MediaPage,
+  movie: {
+    "/": MovieListPage,
+    "[id]": MovieDetailPage,
   },
 };
 
 export function App() {
-  const token = getSessionToken();
-  if (!token) {
-    window.location.hash = "#/login";
-  }
+  const $fragment = signal(window.location.hash);
 
-  const sFragment = signal(window.location.hash);
+  effect(() => {
+    $fragment.get();
+
+    const token = getSessionToken();
+    if (!token) {
+      window.location.hash = "#/login";
+    }
+  });
 
   window.addEventListener("hashchange", (event) => {
     event.preventDefault();
 
-    sFragment.set(window.location.hash);
+    $fragment.set(window.location.hash);
   });
 
   return computed(() => {
-    const fragment = sFragment.get();
+    const fragment = $fragment.get();
     const segments = fragment.length
       ? decodeURIComponent(fragment.slice(1))
           .split("/")

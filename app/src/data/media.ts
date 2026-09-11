@@ -3,12 +3,14 @@ import { fetchData } from "./api";
 export interface Media {
   id: string;
   title: string;
-  thumbnail?: string;
   path: string;
 }
 
 export async function getAllMedia(): Promise<Media[]> {
-  const response = await fetchData("/media/list", { method: "post", body: JSON.stringify({}) });
+  const response = await fetchData("/media/list", {
+    method: "post",
+    body: JSON.stringify({}),
+  });
 
   if (!response.ok) {
     throw new Error(

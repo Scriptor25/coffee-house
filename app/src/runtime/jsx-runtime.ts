@@ -1,5 +1,6 @@
 import { untracked } from "./internal";
-import { isReadable, type Readable } from "./readable";
+import type { Readable } from "./readable";
+import { isReadable } from "./readable";
 import type { Signal } from "./signal";
 
 export type Key = number | bigint | string | symbol;
@@ -17,7 +18,42 @@ export type VNode = VNodeBase | VNode[];
 
 export type Component<P extends {}> = (props: P) => VNode;
 
-export type Dispose = () => void;
+type Dispose = () => void;
+
+interface State {
+  connected: boolean;
+
+  connect(): void;
+  disconnect(): void;
+}
+
+const context = new WeakMap<Node, State>();
+
+function connectTree(node: Node) {
+  const state = context.get(node);
+
+  if (state && !state.connected) {
+    state.connected = true;
+    state.connect();
+  }
+
+  for (const child of node.childNodes) {
+    connectTree(child);
+  }
+}
+
+function disconnectTree(node: Node) {
+  const state = context.get(node);
+
+  if (state && state.connected) {
+    state.connected = false;
+    state.disconnect();
+  }
+
+  for (const child of node.childNodes) {
+    disconnectTree(child);
+  }
+}
 
 function isArray(x: unknown): x is unknown[] {
   return Array.isArray(x);
@@ -25,7 +61,7 @@ function isArray(x: unknown): x is unknown[] {
 
 function insertReadable(
   node: Node,
-  child: Readable<VNode>,
+  children: Readable<VNode>,
   before: Node | null,
 ): Dispose {
   const beg = document.createComment("");
@@ -54,20 +90,16 @@ function insertReadable(
   const update = () => {
     clear();
 
-    const dispose = insert(
-      node,
-      untracked(() => child.get()),
-      end,
-    );
+    const dispose = insert(node, children.get(), end);
 
     if (dispose) {
       disposers.push(dispose);
     }
   };
 
-  update();
+  untracked(() => update());
 
-  const unsubscribe = child.subscribe(update);
+  const unsubscribe = children.subscribe(update);
 
   return () => {
     unsubscribe();
@@ -80,22 +112,18 @@ function insertReadable(
 
 function insert(
   node: Node,
-  child: VNode,
+  children: VNode,
   before: Node | null = null,
-): Dispose | undefined {
-  if (isArray(child)) {
+): Dispose {
+  if (isArray(children)) {
     const disposers: Dispose[] = [];
 
-    for (const item of child) {
+    for (const item of children) {
       const dispose = insert(node, item, before);
 
       if (dispose) {
         disposers.push(dispose);
       }
-    }
-
-    if (!disposers.length) {
-      return;
     }
 
     return () => {
@@ -106,27 +134,44 @@ function insert(
   }
 
   if (
-    child === undefined ||
-    child === null ||
-    child === false ||
-    child === true ||
-    child === ""
+    children === undefined ||
+    children === null ||
+    children === false ||
+    children === true ||
+    children === ""
   ) {
-    return;
+    return () => {};
   }
 
-  if (child instanceof Node) {
-    node.insertBefore(child, before);
-    return;
+  if (children instanceof Node) {
+    node.insertBefore(children, before);
+    connectTree(children);
+    return () => {
+      disconnectTree(children);
+    };
   }
 
-  if (isReadable(child)) {
-    return insertReadable(node, child, before);
+  if (isReadable(children)) {
+    return insertReadable(node, children, before);
   }
 
-  const text = document.createTextNode(String(child));
+  const text = document.createTextNode(String(children));
   node.insertBefore(text, before);
-  return;
+  return () => {};
+}
+
+function setReadableProperty(
+  node: Element,
+  key: string,
+  value: Readable,
+): Dispose {
+  const update = () => {
+    setStaticProperty(node, key, value.get());
+  };
+
+  untracked(() => update());
+
+  return value.subscribe(update);
 }
 
 function setStaticProperty(node: Element, key: string, value: unknown) {
@@ -155,27 +200,13 @@ function setStaticProperty(node: Element, key: string, value: unknown) {
   }
 }
 
-function setReadableProperty(node: Element, key: string, value: Readable) {
-  const update = () => {
-    setStaticProperty(
-      node,
-      key,
-      untracked(() => value.get()),
-    );
-  };
-
-  update();
-
-  value.subscribe(update);
-}
-
-function setProperty(node: Element, key: string, value: unknown) {
+function setProperty(node: Element, key: string, value: unknown): Dispose {
   if (isReadable(value)) {
-    setReadableProperty(node, key, value);
-    return;
+    return setReadableProperty(node, key, value);
   }
 
   setStaticProperty(node, key, value);
+  return () => {};
 }
 
 export function jsx<
@@ -188,31 +219,32 @@ export function jsx<
 
     const { ref, children, ...rest } = props;
 
-    if (ref) {
-      const observer = new MutationObserver(() => {
-        const connected = node.isConnected;
-        ref.set(connected ? node : null);
-
-        if (!connected) {
-          observer.disconnect();
-        }
-      });
-
-      observer.observe(document, {
-        childList: true,
-        subtree: true,
-      });
-
-      if (node.isConnected) {
-        ref.set(node);
-      }
-    }
+    const disposers: Dispose[] = [];
 
     for (const [key, value] of Object.entries(rest)) {
-      setProperty(node, key, value);
+      disposers.push(setProperty(node, key, value));
     }
 
-    insert(node, children);
+    disposers.push(insert(node, children));
+
+    const connect = () => {
+      ref?.set(node);
+    };
+
+    const disconnect = () => {
+      ref?.set(null);
+
+      for (const dispose of disposers) {
+        dispose();
+      }
+    };
+
+    context.set(node, {
+      connected: false,
+      connect,
+      disconnect,
+    });
+
     return node;
   }
 
@@ -221,14 +253,14 @@ export function jsx<
 
 export const jsxs = jsx;
 
-export function Fragment(props: { children?: VNode }): VNode[] {
-  return isArray(props.children) ? props.children : [props.children];
+export function Fragment(props: { children?: VNode }): VNode {
+  return props.children;
 }
 
-export const render = insert;
+export const render = (root: Node, children: VNode) => insert(root, children);
 
 export type HTMLElementProps<T extends HTMLElement> = {
-  [K in keyof Omit<T, "key" | "children">]?: T[K];
+  [K in keyof Omit<T, "key" | "children">]?: T[K] | Readable<T[K]>;
 } & {
   key?: Key;
   ref?: Signal<T | null>;

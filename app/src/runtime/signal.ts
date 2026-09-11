@@ -1,4 +1,4 @@
-import { track } from "./internal";
+import { track, untracked } from "./internal";
 import type { Readable } from "./readable";
 
 type NonFunction<T> = T extends (...args: any[]) => any ? never : T;
@@ -29,9 +29,11 @@ export class Signal<T> implements Readable<T> {
 
     this.value = value;
 
-    for (const subscriber of this.subscribers) {
-      subscriber();
-    }
+    untracked(() => {
+      for (const subscriber of this.subscribers) {
+        subscriber();
+      }
+    });
   }
 
   subscribe(listener: () => void): () => void {

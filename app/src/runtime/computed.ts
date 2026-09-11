@@ -1,4 +1,4 @@
-import { ReactiveObserver, track } from "./internal";
+import { ReactiveObserver, track, untracked } from "./internal";
 import type { Readable } from "./readable";
 
 export class Computed<T> implements Readable<T> {
@@ -50,9 +50,11 @@ export class Computed<T> implements Readable<T> {
 
     this.dirty = true;
 
-    for (const subscriber of this.subscribers) {
-      subscriber();
-    }
+    untracked(() => {
+      for (const subscriber of this.subscribers) {
+        subscriber();
+      }
+    });
   }
 }
 

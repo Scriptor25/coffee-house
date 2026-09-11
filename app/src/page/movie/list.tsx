@@ -1,21 +1,21 @@
 import { computed } from "@runtime/computed";
+import { setMetadata } from "../../meta/meta";
 import { resource } from "@runtime/resource";
-import { MediaList } from "../component/media-list/media-list";
-import { getAllMedia } from "../data/media";
-import { setMetadata } from "../meta/meta";
+import { MediaList } from "../../component/media-list/media-list";
 
-export function DashboardPage() {
+export function MovieListPage() {
+  // TODO: get all movies
+  const $items = resource(async () => []);
+
   setMetadata({
     type: "website",
-    title: "Dashboard",
-    description: "The Dashboard Page",
+    title: "Movies",
+    description: "The Movies Page",
   });
-
-  const $items = resource(getAllMedia);
 
   return (
     <main>
-      <h1>Dashboard</h1>
+      <h1>Movies</h1>
 
       {computed(() => {
         const items = $items.get();
@@ -24,11 +24,11 @@ export function DashboardPage() {
           case "none":
             $items.load();
           case "pending":
-            return <p>Loading media items...</p>;
+            return <p>Loading movies...</p>;
           case "success":
             return <MediaList data={items.data} mode="grid" />;
           case "error":
-            return <p>Failed to load media items.</p>;
+            return <p>Failed to load movies.</p>;
         }
       })}
     </main>
