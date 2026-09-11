@@ -11,5 +11,8 @@
     "format": "prettier --write .",
     "build": "node script/build.js",
     "dev": "node script/dev.js"
+  },
+  "engines": {
+    "node": "^26"
   }
 }
