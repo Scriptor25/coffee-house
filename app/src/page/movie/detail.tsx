@@ -56,7 +56,7 @@ export function MovieDetailPage(props: { id: string }) {
                 <button
                   type="button"
                   onclick={() => {
-                    sharePlayback(item.title, item.description, () =>
+                    sharePlayback(item.title, () =>
                       createMoviePlayback(props.id),
                     );
                   }}

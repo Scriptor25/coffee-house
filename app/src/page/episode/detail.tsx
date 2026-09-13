@@ -33,7 +33,6 @@ export function EpisodeDetailPage(props: { id: string }) {
                     onclick={() => {
                       sharePlayback(
                         item.title,
-                        item.description,
                         () => createEpisodePlayback(props.id),
                         0,
                       );

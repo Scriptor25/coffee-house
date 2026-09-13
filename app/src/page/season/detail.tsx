@@ -64,7 +64,7 @@ export function SeasonDetailPage(props: { id: string }) {
                   <button
                     type="button"
                     onclick={() => {
-                      sharePlayback(item.title, item.description, () =>
+                      sharePlayback(item.title, () =>
                         createSeasonPlayback(props.id),
                       );
                     }}

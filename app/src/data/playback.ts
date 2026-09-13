@@ -23,7 +23,6 @@ export async function createPlayback(
 
 export async function sharePlayback(
   title: string,
-  description: string | undefined,
   create: () => Promise<string>,
   index?: number,
 ) {
@@ -35,8 +34,7 @@ export async function sharePlayback(
 
   if (window.navigator.share) {
     await window.navigator.share({
-      title: title,
-      text: description,
+      title,
       url,
     });
   } else if (window.navigator.clipboard) {
