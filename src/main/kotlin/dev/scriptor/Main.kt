@@ -765,7 +765,11 @@ fun main() {
     val databasePath = cache.resolve("index.db")
     databasePath.createParentDirectories()
 
-    val database = Database.connect({ DriverManager.getConnection("jdbc:sqlite:$databasePath") })
+    val database = Database.connect({
+        val connection = DriverManager.getConnection("jdbc:sqlite:$databasePath")
+        connection.createStatement().use { it.execute("PRAGMA foreign_keys = ON") }
+        connection
+    })
     provider.setT(database)
 
     transaction(database) {

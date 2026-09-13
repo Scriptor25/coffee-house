@@ -69,5 +69,5 @@ export async function createEntityPlayback(
     );
   }
 
-  return response.json();
+  return response.text();
 }
