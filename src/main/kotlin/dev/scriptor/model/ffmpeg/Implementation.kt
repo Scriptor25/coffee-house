@@ -1,38 +1,14 @@
 package dev.scriptor.model.ffmpeg
 
-import dev.scriptor.*
-import org.jetbrains.exposed.v1.core.Column
-import org.jetbrains.exposed.v1.core.ColumnType
+import dev.scriptor.fromJsonNoContext
+import dev.scriptor.json
+import dev.scriptor.toJsonNoContext
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.IdTable
 import org.jetbrains.exposed.v1.dao.Entity
 import org.jetbrains.exposed.v1.dao.EntityClass
-
-inline fun <reified T : Any> Table.json(
-    name: String,
-    crossinline from: (JsonNode) -> T,
-    crossinline to: (T) -> JsonNode,
-): Column<T> {
-    return registerColumn(name, object : ColumnType<T>() {
-        override fun sqlType(): String {
-            return "TEXT"
-        }
-
-        override fun valueFromDB(value: Any): T {
-            return when (value) {
-                is T -> value
-                is String -> from(parseJson(value))
-                else -> error("unexpected value of type ${value::class}")
-            }
-        }
-
-        override fun notNullValueToDB(value: T): Any {
-            return to(value).toString()
-        }
-    })
-}
 
 object ImplementationTable : IdTable<ImplementationId>("implementation") {
     override val id = implementationId("id").entityId()
@@ -50,74 +26,26 @@ object ImplementationTable : IdTable<ImplementationId>("implementation") {
 
     val generalCapabilities = json<Set<String>>(
         "general_capabilities",
-        from = {
-            if (it !is JsonArrayNode) {
-                error("invalid node")
-            }
-
-            it.map { node ->
-                if (node !is JsonStringNode) {
-                    error("invalid node '[N]'")
-                }
-
-                node.value
-            }.toSet()
-        },
-        to = { jsonArray { it.forEach { entry -> add(jsonOf(entry)) } } },
+        from = { it.fromJsonNoContext() },
+        to = { it.toJsonNoContext() },
     ).default(emptySet())
 
     val supportedSampleRates = json<Set<Long>>(
         "supported_sample_rates",
-        from = {
-            if (it !is JsonArrayNode) {
-                error("invalid node")
-            }
-
-            it.map { node ->
-                if (node !is JsonNumberNode) {
-                    error("invalid node '[N]'")
-                }
-
-                node.value.toLong()
-            }.toSet()
-        },
-        to = { jsonArray { it.forEach { entry -> add(jsonOf(entry)) } } },
+        from = { it.fromJsonNoContext() },
+        to = { it.toJsonNoContext() },
     ).default(emptySet())
 
     val supportedSampleFormats = json<Set<String>>(
         "supported_sample_formats",
-        from = {
-            if (it !is JsonArrayNode) {
-                error("invalid node")
-            }
-
-            it.map { node ->
-                if (node !is JsonStringNode) {
-                    error("invalid node '[N]'")
-                }
-
-                node.value
-            }.toSet()
-        },
-        to = { jsonArray { it.forEach { entry -> add(jsonOf(entry)) } } },
+        from = { it.fromJsonNoContext() },
+        to = { it.toJsonNoContext() },
     ).default(emptySet())
 
     val supportedChannelLayouts = json<Set<String>>(
         "supported_channel_layouts",
-        from = {
-            if (it !is JsonArrayNode) {
-                error("invalid node")
-            }
-
-            it.map { node ->
-                if (node !is JsonStringNode) {
-                    error("invalid node '[N]'")
-                }
-
-                node.value
-            }.toSet()
-        },
-        to = { jsonArray { it.forEach { entry -> add(jsonOf(entry)) } } },
+        from = { it.fromJsonNoContext() },
+        to = { it.toJsonNoContext() },
     ).default(emptySet())
 }
 

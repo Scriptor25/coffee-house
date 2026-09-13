@@ -8,6 +8,6 @@ import kotlin.uuid.Uuid
 
 class UuidJsonConverter : Converter<Uuid, JsonNode> {
 
-    context(provider: Provider)
+    context(provider: Provider?)
     override fun convert(value: Uuid): JsonNode = value.toHexDashString().toJson()
 }

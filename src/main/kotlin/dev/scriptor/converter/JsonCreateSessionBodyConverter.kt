@@ -8,6 +8,6 @@ import dev.scriptor.server.converter.Converter
 
 class JsonCreateSessionBodyConverter : Converter<JsonNode, CreateSessionBody> {
 
-    context(provider: Provider)
+    context(provider: Provider?)
     override fun convert(value: JsonNode): CreateSessionBody = value.fromJson()
 }

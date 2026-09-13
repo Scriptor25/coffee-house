@@ -7,6 +7,6 @@ import dev.scriptor.toJson
 
 class ListJsonConverter : Converter<List<*>, JsonNode> {
 
-    context(provider: Provider)
+    context(provider: Provider?)
     override fun convert(value: List<*>): JsonNode = value.toJson()
 }

@@ -10,9 +10,9 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 class SubtitleTrackJsonConverter : Converter<SubtitleTrack, JsonNode> {
 
-    context(provider: Provider)
+    context(provider: Provider?)
     override fun convert(value: SubtitleTrack): JsonNode {
-        val database: Database = provider.getT()
+        val database: Database = provider?.getT()
             ?: error("missing database")
         return transaction(database) { value.toJson() }
     }

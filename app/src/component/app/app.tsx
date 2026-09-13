@@ -4,10 +4,12 @@ import type { Component } from "@runtime/jsx-runtime";
 import { signal } from "@runtime/signal";
 import { getSessionToken } from "../../data/session";
 import { DashboardPage } from "../../page/dashboad";
+import { EpisodeDetailPage } from "../../page/episode/detail";
 import { LoginPage } from "../../page/login";
 import { MovieDetailPage } from "../../page/movie/detail";
 import { MovieListPage } from "../../page/movie/list";
 import { NotFoundPage } from "../../page/not-found";
+import { SeasonDetailPage } from "../../page/season/detail";
 import { ShowDetailPage } from "../../page/show/detail";
 import { ShowListPage } from "../../page/show/list";
 
@@ -25,6 +27,12 @@ const routes: RouteNode = {
   show: {
     "/": ShowListPage,
     "[id]": ShowDetailPage,
+  },
+  season: {
+    "[id]": SeasonDetailPage,
+  },
+  episode: {
+    "[id]": EpisodeDetailPage,
   },
 };
 

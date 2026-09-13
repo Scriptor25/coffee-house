@@ -8,6 +8,6 @@ import dev.scriptor.server.converter.Converter
 
 class JsonCreatePlaybackBodyConverter : Converter<JsonNode, CreatePlaybackBody> {
 
-    context(provider: Provider)
+    context(provider: Provider?)
     override fun convert(value: JsonNode): CreatePlaybackBody = value.fromJson()
 }

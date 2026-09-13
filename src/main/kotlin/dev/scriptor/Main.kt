@@ -4,6 +4,7 @@ import dev.scriptor.context.PlaybackContext
 import dev.scriptor.context.TmdbContext
 import dev.scriptor.model.ffmpeg.*
 import dev.scriptor.model.media.*
+import dev.scriptor.model.movie.ImageData
 import dev.scriptor.model.movie.Movie
 import dev.scriptor.model.movie.MovieMediaTable
 import dev.scriptor.model.movie.MovieTable
@@ -364,6 +365,36 @@ fun getFileMetadata(
     }
 }
 
+enum class TmdbImageType {
+    BACKDROP,
+    LOGO,
+    POSTER,
+    PROFILE,
+    STILL,
+}
+
+fun buildTmdbImages(configuration: TmdbContext.Configuration, type: TmdbImageType, path: String): List<ImageData> {
+    val base = configuration.images.secureBaseUrl
+
+    val sizes = when (type) {
+        TmdbImageType.BACKDROP -> configuration.images.backdropSizes
+        TmdbImageType.LOGO -> configuration.images.logoSizes
+        TmdbImageType.POSTER -> configuration.images.posterSizes
+        TmdbImageType.PROFILE -> configuration.images.profileSizes
+        TmdbImageType.STILL -> configuration.images.stillSizes
+    }
+
+    return sizes.map {
+        val url = "$base$it$path"
+        val width = when (it) {
+            "original" -> -1
+            else -> it.slice(1 until it.length).toInt()
+        }
+
+        ImageData(url, width)
+    }
+}
+
 context(
     _: Provider,
     _: Logger,
@@ -374,6 +405,9 @@ fun getTmdbMetadata(nodes: Nodes) {
     val tmdbIdRegex = """^[^\[]*\[tmdbid-(\d+)].*$""".toRegex()
     val seasonNumberRegex = """^.*(\d{1,2}).*$""".toRegex()
     val episodeNumberRegex = """^.*S(\d{1,2})E(\d{1,2}).*$""".toRegex()
+
+    val configuration = context.getConfiguration()
+        ?: error("failed to get tmdb configuration")
 
     for (movieNode in nodes.movies) {
         val match = tmdbIdRegex.matchEntire(movieNode.path.name) ?: continue
@@ -393,8 +427,14 @@ fun getTmdbMetadata(nodes: Nodes) {
                     this.tmdbId = movieId
                     this.title = details.title
                     this.description = details.overview
-                    this.poster = if (details.posterPath != null) "tmdb:${details.posterPath}" else null
-                    this.backdrop = if (details.backdropPath != null) "tmdb:${details.backdropPath}" else null
+                    this.poster = when (val path = details.posterPath) {
+                        null -> listOf()
+                        else -> buildTmdbImages(configuration, TmdbImageType.POSTER, path)
+                    }
+                    this.backdrop = when (val path = details.backdropPath) {
+                        null -> listOf()
+                        else -> buildTmdbImages(configuration, TmdbImageType.BACKDROP, path)
+                    }
                 }
             }
         }
@@ -437,6 +477,15 @@ fun getTmdbMetadata(nodes: Nodes) {
                 Show.new {
                     this.tmdbId = showId
                     this.title = details.name
+                    this.description = details.overview
+                    this.poster = when (val path = details.posterPath) {
+                        null -> listOf()
+                        else -> buildTmdbImages(configuration, TmdbImageType.POSTER, path)
+                    }
+                    this.backdrop = when (val path = details.backdropPath) {
+                        null -> listOf()
+                        else -> buildTmdbImages(configuration, TmdbImageType.BACKDROP, path)
+                    }
                 }
             }
         }
@@ -458,6 +507,12 @@ fun getTmdbMetadata(nodes: Nodes) {
                     Season.new {
                         this.show = show
                         this.index = seasonNumber
+                        this.title = details.name
+                        this.description = details.overview
+                        this.poster = when (val path = details.posterPath) {
+                            null -> listOf()
+                            else -> buildTmdbImages(configuration, TmdbImageType.POSTER, path)
+                        }
                     }
                 }
             }
@@ -481,6 +536,12 @@ fun getTmdbMetadata(nodes: Nodes) {
                             this.season = season
                             this.media = Media.find(MediaTable.path eq episodePath).first()
                             this.index = episodeNumber
+                            this.title = details.name
+                            this.description = details.overview
+                            this.still = when (val path = details.stillPath) {
+                                null -> listOf()
+                                else -> buildTmdbImages(configuration, TmdbImageType.STILL, path)
+                            }
                         }
                     }
                 }

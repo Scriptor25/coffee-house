@@ -8,6 +8,6 @@ import dev.scriptor.server.converter.Converter
 
 class JsonOffsetLimitConverter : Converter<JsonNode, OffsetLimitBody> {
 
-    context(provider: Provider)
+    context(provider: Provider?)
     override fun convert(value: JsonNode): OffsetLimitBody = value.fromJson()
 }

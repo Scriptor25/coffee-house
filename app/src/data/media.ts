@@ -4,7 +4,6 @@ export interface Media {
   id: string;
   title: string;
   path: string;
-  thumbnail?: string;
 }
 
 export async function getAllMedia(): Promise<Media[]> {

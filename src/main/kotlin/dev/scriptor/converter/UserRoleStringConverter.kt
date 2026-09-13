@@ -6,6 +6,6 @@ import dev.scriptor.server.converter.Converter
 
 class UserRoleStringConverter : Converter<UserRole, String> {
 
-    context(provider: Provider)
+    context(provider: Provider?)
     override fun convert(value: UserRole): String = value.name
 }

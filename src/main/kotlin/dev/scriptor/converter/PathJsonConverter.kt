@@ -8,6 +8,6 @@ import java.nio.file.Path
 
 class PathJsonConverter : Converter<Path, JsonNode> {
 
-    context(provider: Provider)
+    context(provider: Provider?)
     override fun convert(value: Path): JsonNode = value.toString().toJson()
 }

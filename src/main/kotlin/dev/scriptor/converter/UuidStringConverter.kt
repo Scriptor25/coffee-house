@@ -6,6 +6,6 @@ import kotlin.uuid.Uuid
 
 class UuidStringConverter : Converter<Uuid, String> {
 
-    context(provider: Provider)
+    context(provider: Provider?)
     override fun convert(value: Uuid): String = value.toHexDashString()
 }

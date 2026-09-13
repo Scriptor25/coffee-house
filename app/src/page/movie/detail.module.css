@@ -29,6 +29,17 @@
 }
 
 .content {
-  margin-top: 50px;
-  margin-left: 400px;
+  margin-left: 300px;
+}
+
+@media (max-width: 768px) {
+  .banner {
+    .poster {
+      display: none;
+    }
+  }
+
+  .content {
+    margin-left: 0;
+  }
 }

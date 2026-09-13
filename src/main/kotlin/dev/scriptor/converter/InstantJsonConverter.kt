@@ -8,6 +8,6 @@ import kotlin.time.Instant
 
 class InstantJsonConverter : Converter<Instant, JsonNode> {
 
-    context(provider: Provider)
+    context(provider: Provider?)
     override fun convert(value: Instant): JsonNode = jsonOf(value.toString())
 }

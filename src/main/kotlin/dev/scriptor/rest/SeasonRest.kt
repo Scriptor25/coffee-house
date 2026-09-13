@@ -1,6 +1,7 @@
 package dev.scriptor.rest
 
 import dev.scriptor.context.AuthContext
+import dev.scriptor.context.PlaybackContext
 import dev.scriptor.model.AuthorizationHeader
 import dev.scriptor.model.OffsetLimitBody
 import dev.scriptor.model.show.Episode
@@ -57,5 +58,33 @@ class SeasonRest {
                 .limit(body.limit)
                 .toList()
         }
+    }
+
+    @Post("/[id]/playback", "*/*", "text/plain")
+    context(
+        _: Logger,
+        database: Database,
+        auth: AuthContext,
+        context: PlaybackContext,
+    )
+    fun createSeasonPlayback(
+        @PathParameter id: Uuid,
+        @Header authorization: AuthorizationHeader? = null,
+    ): String {
+        val session = auth.auth(authorization)
+            ?: throw UnauthorizedSignal()
+
+        val userId = session.user?.id?.value
+
+        val season = transaction(database) { Season.findById(id) }
+            ?: throw NotFoundSignal()
+
+        val items = transaction(database) { season.episodes.map { it.media.id.value } }
+
+        return context.createPlayback(
+            userId,
+            season.title,
+            items,
+        )
     }
 }

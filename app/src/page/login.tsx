@@ -47,32 +47,34 @@ export function LoginPage() {
   };
 
   return (
-    <form onsubmit={handleSubmit} className={styles.form}>
-      <div className={styles.set}>
-        <label>
-          <span>Username</span>
-          <input
-            type="text"
-            name="username"
-            autocomplete="username"
-            required
-            disabled={$pending}
-          />
-        </label>
-        <label>
-          <span>Password</span>
-          <input
-            type="password"
-            name="password"
-            autocomplete="current-password"
-            required
-            disabled={$pending}
-          />
-        </label>
-      </div>
-      <button type="submit" disabled={$pending}>
-        {computed(() => ($pending.get() ? "pending..." : "submit"))}
-      </button>
-    </form>
+    <main>
+      <form onsubmit={handleSubmit} className={styles.form}>
+        <div className={styles.set}>
+          <label>
+            <span>Username</span>
+            <input
+              type="text"
+              name="username"
+              autocomplete="username"
+              required
+              disabled={$pending}
+            />
+          </label>
+          <label>
+            <span>Password</span>
+            <input
+              type="password"
+              name="password"
+              autocomplete="current-password"
+              required
+              disabled={$pending}
+            />
+          </label>
+        </div>
+        <button type="submit" disabled={$pending}>
+          {computed(() => ($pending.get() ? "pending..." : "submit"))}
+        </button>
+      </form>
+    </main>
   );
 }

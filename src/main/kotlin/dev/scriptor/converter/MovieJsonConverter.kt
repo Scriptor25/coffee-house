@@ -10,9 +10,9 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 class MovieJsonConverter : Converter<Movie, JsonNode> {
 
-    context(provider: Provider)
+    context(provider: Provider?)
     override fun convert(value: Movie): JsonNode {
-        val database: Database = provider.getT()
+        val database: Database = provider?.getT()
             ?: error("missing database")
         return transaction(database) { value.toJson() }
     }

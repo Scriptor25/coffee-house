@@ -20,3 +20,27 @@ export async function createPlayback(
     return null;
   }
 }
+
+export async function sharePlayback(
+  title: string,
+  description: string | undefined,
+  create: () => Promise<string>,
+) {
+  const id = await create();
+  const url = `${window.location.origin}/playback/${id}/playlist.m3u8`;
+
+  if (window.navigator.share) {
+    await window.navigator.share({
+      title: title,
+      text: description,
+      url,
+    });
+  } else if (window.navigator.clipboard) {
+    await window.navigator.clipboard.writeText(url);
+  } else {
+    console.warn(
+      "no method for sharing the playlist url available, opening in new window",
+    );
+    window.open(url);
+  }
+}

@@ -8,9 +8,9 @@ import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.channels.SeekableByteChannel
 
-class BodyStringConverter : Converter<MessageBody, String> {
+class MessageBodyStringConverter : Converter<MessageBody, String> {
 
-    context(provider: Provider)
+    context(provider: Provider?)
     override fun convert(value: MessageBody): String {
         val bytes = when (val c = value.channel) {
             is RangeReadableByteChannel -> {

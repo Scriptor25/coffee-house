@@ -10,9 +10,9 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 class SizedIterableJsonConverter : Converter<SizedIterable<*>, JsonNode> {
 
-    context(provider: Provider)
+    context(provider: Provider?)
     override fun convert(value: SizedIterable<*>): JsonNode {
-        val database: Database = provider.getT()
+        val database: Database = provider?.getT()
             ?: error("missing database")
         return transaction { value.toList().toJson() }
     }

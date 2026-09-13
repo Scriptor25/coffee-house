@@ -9,34 +9,34 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.util.logging.Logger
 
-@JsonSerializable
-data class ConfigurationImages(
-    @all:JsonProperty("base_url")
-    val baseUrl: String,
-    @all:JsonProperty("secure_base_url")
-    val secureBaseUrl: String,
-    @all:JsonProperty("backdrop_sizes")
-    val backdropSizes: List<String>,
-    @all:JsonProperty("logo_sizes")
-    val logoSizes: List<String>,
-    @all:JsonProperty("poster_sizes")
-    val posterSizes: List<String>,
-    @all:JsonProperty("profile_sizes")
-    val profileSizes: List<String>,
-    @all:JsonProperty("still_sizes")
-    val stillSizes: List<String>,
-)
-
-@JsonSerializable
-data class Configuration(
-    @all:JsonProperty("change_keys")
-    val changeKeys: List<String>,
-    @all:JsonProperty
-    val images: ConfigurationImages,
-)
-
 @Context
 class TmdbContext {
+
+    @JsonSerializable
+    data class ConfigurationImages(
+        @all:JsonProperty("base_url")
+        val baseUrl: String,
+        @all:JsonProperty("secure_base_url")
+        val secureBaseUrl: String,
+        @all:JsonProperty("backdrop_sizes")
+        val backdropSizes: List<String>,
+        @all:JsonProperty("logo_sizes")
+        val logoSizes: List<String>,
+        @all:JsonProperty("poster_sizes")
+        val posterSizes: List<String>,
+        @all:JsonProperty("profile_sizes")
+        val profileSizes: List<String>,
+        @all:JsonProperty("still_sizes")
+        val stillSizes: List<String>,
+    )
+
+    @JsonSerializable
+    data class Configuration(
+        @all:JsonProperty("change_keys")
+        val changeKeys: List<String>,
+        @all:JsonProperty
+        val images: ConfigurationImages,
+    )
 
     @JsonSerializable
     data class ImageReference(
@@ -1114,6 +1114,11 @@ class TmdbContext {
     }
 
     context(_: Provider, _: Logger)
+    fun getConfiguration(): Configuration? {
+        return getData("configuration")
+    }
+
+    context(_: Provider, _: Logger)
     fun getMovieDetails(
         movieId: Int,
         language: String? = null,
@@ -1520,10 +1525,5 @@ class TmdbContext {
                 "language" to language,
             ),
         )
-    }
-
-    context(_: Provider, _: Logger)
-    fun getConfiguration(): Configuration? {
-        return getData("configuration")
     }
 }

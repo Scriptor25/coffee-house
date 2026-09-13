@@ -6,7 +6,7 @@ import dev.scriptor.server.converter.Converter
 
 class StringRangeConverter : Converter<String, RangeHeader> {
 
-    context(provider: Provider)
+    context(provider: Provider?)
     override fun convert(value: String): RangeHeader {
 
         val range = value

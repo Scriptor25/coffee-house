@@ -8,6 +8,6 @@ import dev.scriptor.server.converter.Converter
 
 class JsonUpdateUserBodyConverter : Converter<JsonNode, UpdateUserBody> {
 
-    context(provider: Provider)
+    context(provider: Provider?)
     override fun convert(value: JsonNode): UpdateUserBody = value.fromJson()
 }

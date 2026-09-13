@@ -1,9 +1,9 @@
 package dev.scriptor.model.show
 
-import dev.scriptor.JsonProperty
-import dev.scriptor.JsonSerializable
+import dev.scriptor.*
 import dev.scriptor.model.media.Media
 import dev.scriptor.model.media.MediaTable
+import dev.scriptor.model.movie.ImageData
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.UuidTable
@@ -15,6 +15,13 @@ object EpisodeTable : UuidTable("episode") {
     val season = reference("season_id", SeasonTable, ReferenceOption.CASCADE)
     val media = reference("media_id", MediaTable, ReferenceOption.CASCADE)
     val index = integer("index")
+    val title = text("title")
+    val description = text("description").nullable()
+    val still = json<List<ImageData>>(
+        "still",
+        from = { it.fromJsonNoContext() },
+        to = { it.toJsonNoContext() },
+    )
 
     init {
         uniqueIndex(season, index)
@@ -31,11 +38,23 @@ class Episode(id: EntityID<Uuid>) : UuidEntity(id) {
 
     var season by Season referencedOn EpisodeTable.season
 
-    @JsonProperty
     var media by Media referencedOn EpisodeTable.media
+
+    @all:JsonProperty("item")
+    val jsonItem
+        get() = media.id.value
 
     @JsonProperty
     var index by EpisodeTable.index
+
+    @JsonProperty
+    var title by EpisodeTable.title
+
+    @JsonProperty
+    var description by EpisodeTable.description
+
+    @JsonProperty
+    var still by EpisodeTable.still
 
     override fun toString(): String {
         return "Episode(id=$id, season=${season.id}, media=${media.id}, index=$index)"
