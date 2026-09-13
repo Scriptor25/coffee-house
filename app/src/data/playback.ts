@@ -25,9 +25,13 @@ export async function sharePlayback(
   title: string,
   description: string | undefined,
   create: () => Promise<string>,
+  index?: number,
 ) {
   const id = await create();
-  const url = `${window.location.origin}/playback/${id}/playlist.m3u8`;
+  const url =
+    typeof index === "number"
+      ? `${window.location.origin}/playback/${id}/${index}/master.m3u8`
+      : `${window.location.origin}/playback/${id}/playlist.m3u8`;
 
   if (window.navigator.share) {
     await window.navigator.share({

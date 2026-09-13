@@ -8,6 +8,7 @@ import { MediaListContainer } from "../../component/media-list/media-list";
 import { Suspense } from "../../component/suspense/suspense";
 import { getSeasonById } from "../../data/season";
 import { getShowById } from "../../data/show";
+import styles from "./detail.module.css";
 
 export function ShowSeason(props: { id: string; mode: MediaListMode }) {
   const $item = resource(() => getSeasonById(props.id));
@@ -22,13 +23,17 @@ export function ShowSeason(props: { id: string; mode: MediaListMode }) {
         <MediaListItem
           href={`#/season/${item.id}`}
           title={item.title}
-          thumbnail={(className) => (
-            <Image
-              src={item.poster}
-              sizes="(max-width: 600px) 50vw, 300px"
-              className={className}
-            />
-          )}
+          thumbnail={
+            item.poster.length
+              ? (className, sizes) => (
+                  <Image
+                    className={className}
+                    sizes={sizes}
+                    src={item.poster}
+                  />
+                )
+              : undefined
+          }
           mode={props.mode}
         />
       )}
@@ -40,14 +45,22 @@ export function ShowDetailPage(props: { id: string }) {
   const $item = resource(() => getShowById(props.id));
 
   return (
-    <main>
-      <Suspense
-        resource={$item}
-        pending={<p>Loading show...</p>}
-        error={<p>Failed to load show.</p>}
-      >
-        {(item) => (
-          <>
+    <Suspense
+      resource={$item}
+      pending={<p>Loading show...</p>}
+      error={<p>Failed to load show.</p>}
+    >
+      {(item) => (
+        <>
+          <div className={styles.banner}>
+            <Image
+              className={styles.backdrop}
+              src={item.backdrop}
+              sizes="100vw"
+            />
+            <Image className={styles.poster} src={item.poster} sizes="200px" />
+          </div>
+          <main className={styles.content}>
             <h1>{item.title}</h1>
             <p>{item.description}</p>
             <h2>Seasons</h2>
@@ -55,10 +68,11 @@ export function ShowDetailPage(props: { id: string }) {
               items={item.seasons.map((id) => (mode) => (
                 <ShowSeason id={id} mode={mode} />
               ))}
+              mode="grid-poster"
             />
-          </>
-        )}
-      </Suspense>
-    </main>
+          </main>
+        </>
+      )}
+    </Suspense>
   );
 }

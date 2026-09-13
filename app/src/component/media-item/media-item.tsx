@@ -7,14 +7,17 @@ export interface MediaListItemProps {
   mode: MediaListMode;
   href: string;
   title: VNode;
-  thumbnail?: (className?: string) => VNode;
+  thumbnail?: (className?: string, sizes?: string) => VNode;
 }
 
 export function MediaListItem(props: MediaListItemProps) {
   return (
-    <li className={styles.item} data-mode={props.mode ?? "grid"}>
+    <li className={styles.item} data-mode={props.mode}>
       {props.thumbnail ? (
-        props.thumbnail(styles.thumbnail)
+        props.thumbnail(
+          styles.thumbnail,
+          props.mode === "list" ? "30vw" : "(max-width: 600px) 50vw, 300px",
+        )
       ) : (
         <div className={styles.thumbnail} />
       )}

@@ -34,13 +34,15 @@ export function DashboardPage() {
               items={movies.map((movie) => ({
                 href: `#/movie/${movie.id}`,
                 title: movie.title,
-                thumbnail: (className) => (
-                  <Image
-                    src={movie.poster}
-                    sizes="(max-width: 600px) 50vw, 300px"
-                    className={className}
-                  />
-                ),
+                thumbnail: movie.poster.length
+                  ? (className, sizes) => (
+                      <Image
+                        className={className}
+                        sizes={sizes}
+                        src={movie.poster}
+                      />
+                    )
+                  : undefined,
               }))}
               end={{
                 href: "#/movie",
@@ -65,13 +67,15 @@ export function DashboardPage() {
               items={shows.map((show) => ({
                 href: `#/show/${show.id}`,
                 title: show.title,
-                thumbnail: (className) => (
-                  <Image
-                    src={show.poster}
-                    sizes="(max-width: 600px) 50vw, 300px"
-                    className={className}
-                  />
-                ),
+                thumbnail: show.poster.length
+                  ? (className, sizes) => (
+                      <Image
+                        className={className}
+                        sizes={sizes}
+                        src={show.poster}
+                      />
+                    )
+                  : undefined,
               }))}
               end={{
                 href: "#/show",

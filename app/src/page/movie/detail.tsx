@@ -33,21 +33,32 @@ export function MovieDetailPage(props: { id: string }) {
         return (
           <>
             <div className={styles.banner}>
-              <Image className={styles.backdrop} src={item.backdrop} />
-              <Image className={styles.poster} src={item.poster} />
+              <Image
+                className={styles.backdrop}
+                src={item.backdrop}
+                sizes="100vw"
+              />
+              <Image
+                className={styles.poster}
+                src={item.poster}
+                sizes="200px"
+              />
             </div>
             <main className={styles.content}>
               <h1>{item.title}</h1>
               <p>{item.description}</p>
-              <button
-                onclick={() => {
-                  sharePlayback(item.title, item.description, () =>
-                    createMoviePlayback(props.id),
-                  );
-                }}
-              >
-                Play
-              </button>
+              <p>
+                <button
+                  type="button"
+                  onclick={() => {
+                    sharePlayback(item.title, item.description, () =>
+                      createMoviePlayback(props.id),
+                    );
+                  }}
+                >
+                  Play
+                </button>
+              </p>
             </main>
           </>
         );

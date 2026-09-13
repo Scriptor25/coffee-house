@@ -9,6 +9,7 @@ import { Suspense } from "../../component/suspense/suspense";
 import { getEpisodeById } from "../../data/episode";
 import { sharePlayback } from "../../data/playback";
 import { createSeasonPlayback, getSeasonById } from "../../data/season";
+import styles from "./detail.module.css";
 
 export function SeasonEpisode(props: { id: string; mode: MediaListMode }) {
   const $item = resource(() => getEpisodeById(props.id));
@@ -23,13 +24,13 @@ export function SeasonEpisode(props: { id: string; mode: MediaListMode }) {
         <MediaListItem
           href={`#/episode/${props.id}`}
           title={item.title}
-          thumbnail={(className) => (
-            <Image
-              src={item.still}
-              sizes="(max-width: 600px) 50vw, 300px"
-              className={className}
-            />
-          )}
+          thumbnail={
+            item.still.length
+              ? (className, sizes) => (
+                  <Image className={className} sizes={sizes} src={item.still} />
+                )
+              : undefined
+          }
           mode={props.mode}
         />
       )}
@@ -49,17 +50,29 @@ export function SeasonDetailPage(props: { id: string }) {
       >
         {(item) => (
           <>
-            <h1>{item.title}</h1>
-            <p>{item.description}</p>
-            <button
-              onclick={() => {
-                sharePlayback(item.title, item.description, () =>
-                  createSeasonPlayback(props.id),
-                );
-              }}
-            >
-              Play
-            </button>
+            <section className={styles.header}>
+              <Image
+                className={styles.poster}
+                src={item.poster}
+                sizes="(max-width: 768px) 100vw, 30vw"
+              />
+              <div>
+                <h1>{item.title}</h1>
+                <p>{item.description}</p>
+                <p>
+                  <button
+                    type="button"
+                    onclick={() => {
+                      sharePlayback(item.title, item.description, () =>
+                        createSeasonPlayback(props.id),
+                      );
+                    }}
+                  >
+                    Play all
+                  </button>
+                </p>
+              </div>
+            </section>
             <h2>Episodes</h2>
             <MediaListContainer
               items={item.episodes.map((id) => (mode) => (

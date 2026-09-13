@@ -29,11 +29,11 @@ export function MovieListPage() {
               href: `#/movie/${item.id}`,
               title: item.title,
               thumbnail: item.poster.length
-                ? (className) => (
+                ? (className, sizes) => (
                     <Image
-                      src={item.poster}
-                      sizes="(max-width: 600px) 50vw, 300px"
                       className={className}
+                      sizes={sizes}
+                      src={item.poster}
                     />
                   )
                 : undefined,
