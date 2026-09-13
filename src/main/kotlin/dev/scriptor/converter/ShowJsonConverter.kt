@@ -1,21 +1,19 @@
 package dev.scriptor.converter
 
-import dev.scriptor.JsonObjectNode
-import dev.scriptor.jsonOf
+import dev.scriptor.JsonNode
 import dev.scriptor.model.show.Show
 import dev.scriptor.server.Provider
 import dev.scriptor.server.converter.Converter
+import dev.scriptor.toJson
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
-class ShowJsonConverter : Converter<Show, JsonObjectNode> {
+class ShowJsonConverter : Converter<Show, JsonNode> {
 
     context(provider: Provider)
-    override fun convert(value: Show): JsonObjectNode {
-        val database = provider.getContextT<Database>()
-        return jsonOf(
-            "title" to jsonOf(value.title),
-            "seasons" to provider(transaction(database) { value.seasons.toList() }),
-        )
+    override fun convert(value: Show): JsonNode {
+        val database: Database = provider.getT()
+            ?: error("missing database")
+        return transaction(database) { value.toJson() }
     }
 }

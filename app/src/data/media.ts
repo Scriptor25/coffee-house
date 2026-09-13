@@ -1,34 +1,16 @@
-import { fetchData } from "./api";
+import { getAllEntities, getEntityById } from "./api";
 
 export interface Media {
   id: string;
   title: string;
   path: string;
+  thumbnail?: string;
 }
 
 export async function getAllMedia(): Promise<Media[]> {
-  const response = await fetchData("/media/list", {
-    method: "post",
-    body: JSON.stringify({}),
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      `failed to get all media: ${response.status} ${response.statusText}`,
-    );
-  }
-
-  return response.json();
+  return getAllEntities("media");
 }
 
 export async function getMediaById(id: string): Promise<Media> {
-  const response = await fetchData(`/media/${id}`, { method: "get" });
-
-  if (!response.ok) {
-    throw new Error(
-      `failed to get media by id ${id}: ${response.status} ${response.statusText}`,
-    );
-  }
-
-  return response.json();
+  return getEntityById("media", id);
 }

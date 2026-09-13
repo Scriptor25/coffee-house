@@ -1,19 +1,19 @@
 package dev.scriptor.converter
 
 import dev.scriptor.JsonNode
-import dev.scriptor.model.show.Season
+import dev.scriptor.jsonOf
+import dev.scriptor.model.ffmpeg.Codec
 import dev.scriptor.server.Provider
 import dev.scriptor.server.converter.Converter
-import dev.scriptor.toJson
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
-class SeasonJsonConverter : Converter<Season, JsonNode> {
+class CodecJsonConverter : Converter<Codec, JsonNode> {
 
     context(provider: Provider)
-    override fun convert(value: Season): JsonNode {
+    override fun convert(value: Codec): JsonNode {
         val database: Database = provider.getT()
             ?: error("missing database")
-        return transaction(database) { value.toJson() }
+        return transaction(database) { jsonOf(value.id.toString()) }
     }
 }

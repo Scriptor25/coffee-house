@@ -1,26 +1,19 @@
 package dev.scriptor.converter
 
-import dev.scriptor.JsonObjectNode
-import dev.scriptor.jsonOf
+import dev.scriptor.JsonNode
 import dev.scriptor.model.media.VideoTrack
 import dev.scriptor.server.Provider
 import dev.scriptor.server.converter.Converter
+import dev.scriptor.toJson
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
-class VideoTrackJsonConverter : Converter<VideoTrack, JsonObjectNode> {
+class VideoTrackJsonConverter : Converter<VideoTrack, JsonNode> {
 
     context(provider: Provider)
-    override fun convert(value: VideoTrack): JsonObjectNode = jsonOf(
-        "index" to jsonOf(value.index),
-        "codec" to jsonOf(value.codec.id.toString()),
-        "width" to jsonOf(value.width),
-        "height" to jsonOf(value.height),
-        "bit_rate" to jsonOf(value.bitRate),
-        "frame_rate" to jsonOf(value.frameRate),
-        "profile" to jsonOf(value.profile),
-        "level" to jsonOf(value.level),
-        "hdr" to jsonOf(value.hdr),
-        "language" to jsonOf(value.language),
-        "title" to jsonOf(value.title),
-        "default" to jsonOf(value.default),
-    )
+    override fun convert(value: VideoTrack): JsonNode {
+        val database: Database = provider.getT()
+            ?: error("missing database")
+        return transaction(database) { value.toJson() }
+    }
 }

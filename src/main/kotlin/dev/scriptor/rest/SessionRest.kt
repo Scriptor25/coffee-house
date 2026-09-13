@@ -31,8 +31,8 @@ class SessionRest {
     fun createSession(
         @Body body: CreateSessionBody,
     ): Jwt {
-        val rootUsername = provider.getNamedT<String>("username")
-        val rootPassword = provider.getNamedT<String>("password")
+        val rootUsername: String? = provider.getT("username")
+        val rootPassword: String? = provider.getT("password")
 
         val user: User?
         if (rootUsername != null && rootPassword != null && body.username == rootUsername) {

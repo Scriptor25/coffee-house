@@ -1,5 +1,7 @@
 package dev.scriptor.model.media
 
+import dev.scriptor.JsonProperty
+import dev.scriptor.JsonSerializable
 import dev.scriptor.model.ffmpeg.Codec
 import dev.scriptor.model.ffmpeg.CodecTable
 import org.jetbrains.exposed.v1.core.ReferenceOption
@@ -23,15 +25,32 @@ object SubtitleTrackTable : UuidTable("subtitle_track") {
     }
 }
 
+@JsonSerializable
 class SubtitleTrack(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<SubtitleTrack>(SubtitleTrackTable)
 
+    @all:JsonProperty("id")
+    val jsonId
+        get() = id.value
+
     var media by Media referencedOn SubtitleTrackTable.media
+
+    @JsonProperty
     var index by SubtitleTrackTable.index
+
+    @JsonProperty
     var codec by Codec referencedOn SubtitleTrackTable.codec
+
+    @JsonProperty
     var language by SubtitleTrackTable.language
+
+    @JsonProperty
     var title by SubtitleTrackTable.title
+
+    @JsonProperty
     var default by SubtitleTrackTable.default
+
+    @JsonProperty
     var forced by SubtitleTrackTable.forced
 
     override fun toString(): String {

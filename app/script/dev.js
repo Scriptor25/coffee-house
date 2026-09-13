@@ -42,7 +42,7 @@ const server = createServer(async (req, res) => {
 
       res.writeHead(200, {
         "content-type": type,
-        "cache-control": "public, max-age=604800, immutable",
+        // "cache-control": "public, max-age=604800, immutable",
       });
       res.end(data);
       break;

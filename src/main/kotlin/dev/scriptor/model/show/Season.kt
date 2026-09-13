@@ -1,5 +1,7 @@
 package dev.scriptor.model.show
 
+import dev.scriptor.JsonProperty
+import dev.scriptor.JsonSerializable
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.UuidTable
@@ -16,12 +18,20 @@ object SeasonTable : UuidTable("season") {
     }
 }
 
+@JsonSerializable
 class Season(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<Season>(SeasonTable)
 
+    @all:JsonProperty("id")
+    val jsonId
+        get() = id.value
+
     var show by Show referencedOn SeasonTable.show
+
+    @JsonProperty
     var index by SeasonTable.index
 
+    @JsonProperty
     val episodes by Episode referrersOn EpisodeTable.season
 
     override fun toString(): String {

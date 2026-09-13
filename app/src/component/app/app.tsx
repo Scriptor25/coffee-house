@@ -1,24 +1,30 @@
 import { computed } from "@runtime/computed";
+import { effect } from "@runtime/effect";
 import type { Component } from "@runtime/jsx-runtime";
 import { signal } from "@runtime/signal";
 import { getSessionToken } from "../../data/session";
 import { DashboardPage } from "../../page/dashboad";
 import { LoginPage } from "../../page/login";
-import { NotFoundPage } from "../../page/not-found";
-import { effect } from "@runtime/effect";
-import { MovieListPage } from "../../page/movie/list";
 import { MovieDetailPage } from "../../page/movie/detail";
+import { MovieListPage } from "../../page/movie/list";
+import { NotFoundPage } from "../../page/not-found";
+import { ShowDetailPage } from "../../page/show/detail";
+import { ShowListPage } from "../../page/show/list";
 
 type RouteNode =
   | Component<any>
   | ({ [segment: string]: RouteNode } & { "/"?: Component<any> });
 
-const config: RouteNode = {
+const routes: RouteNode = {
   "/": DashboardPage,
   login: LoginPage,
   movie: {
     "/": MovieListPage,
     "[id]": MovieDetailPage,
+  },
+  show: {
+    "/": ShowListPage,
+    "[id]": ShowDetailPage,
   },
 };
 
@@ -50,7 +56,7 @@ export function App() {
 
     const named: Record<string, string> = {};
 
-    let node: RouteNode | null = config;
+    let node: RouteNode | null = routes;
 
     for (const segment of segments) {
       if (typeof node === "function" || !node) {

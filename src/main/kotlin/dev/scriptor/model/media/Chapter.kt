@@ -1,5 +1,7 @@
 package dev.scriptor.model.media
 
+import dev.scriptor.JsonProperty
+import dev.scriptor.JsonSerializable
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.UuidTable
@@ -20,14 +22,29 @@ object ChapterTable : UuidTable("chapter") {
     }
 }
 
+@JsonSerializable
 class Chapter(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<Chapter>(ChapterTable)
 
+    @all:JsonProperty("id")
+    val jsonId
+        get() = id.value
+
     var media by Media referencedOn ChapterTable.media
+
+    @JsonProperty
     var index by ChapterTable.index
+
+    @JsonProperty
     var start by ChapterTable.start
+
+    @JsonProperty
     var end by ChapterTable.end
+
+    @JsonProperty
     var language by ChapterTable.language
+
+    @JsonProperty
     var title by ChapterTable.title
 
     override fun toString(): String {

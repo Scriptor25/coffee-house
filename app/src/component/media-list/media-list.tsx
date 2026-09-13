@@ -1,12 +1,18 @@
-import type { Media } from "../../data/media";
-import { MediaItem, type MediaItemMode } from "../media-item/media-item";
+import {
+  MediaItem,
+  type MediaItemMode,
+  type MediaItemProps,
+} from "../media-item/media-item";
 import styles from "./media-list.module.css";
 
-export function MediaList(props: { data: Media[]; mode?: MediaItemMode }) {
+export function MediaList(props: {
+  data: Omit<MediaItemProps, "mode">[];
+  mode?: MediaItemMode;
+}) {
   return (
     <ul className={styles.list} data-mode={props.mode ?? "grid"}>
-      {props.data.map((data) => (
-        <MediaItem data={data} mode={props.mode} />
+      {props.data.map((item) => (
+        <MediaItem mode={props.mode} {...item} />
       ))}
     </ul>
   );

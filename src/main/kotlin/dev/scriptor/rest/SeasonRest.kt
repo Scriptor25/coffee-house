@@ -3,8 +3,8 @@ package dev.scriptor.rest
 import dev.scriptor.context.AuthContext
 import dev.scriptor.model.AuthorizationHeader
 import dev.scriptor.model.OffsetLimitBody
+import dev.scriptor.model.show.Episode
 import dev.scriptor.model.show.Season
-import dev.scriptor.model.show.Show
 import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.UnauthorizedSignal
 import dev.scriptor.server.jvm.annotation.*
@@ -14,8 +14,8 @@ import java.util.logging.Logger
 import kotlin.uuid.Uuid
 
 @Suppress("unused")
-@Controller("/show")
-class ShowRest {
+@Controller("/season")
+class SeasonRest {
 
     @Get("/[id]", "application/json")
     context(
@@ -23,58 +23,36 @@ class ShowRest {
         database: Database,
         auth: AuthContext,
     )
-    fun getShow(
+    fun getSeason(
         @PathParameter id: Uuid,
         @Header authorization: AuthorizationHeader? = null,
-    ): Show {
+    ): Season {
         auth.auth(authorization)
             ?: throw UnauthorizedSignal()
 
-        return transaction(database) { Show.findById(id) }
+        return transaction(database) { Season.findById(id) }
             ?: throw NotFoundSignal()
     }
 
-    @Post("/[id]/seasons", "application/json", "application/json")
+    @Post("/[id]/episodes", "application/json", "application/json")
     context(
         _: Logger,
         database: Database,
         auth: AuthContext,
     )
-    fun getShowSeasons(
+    fun getSeasonEpisodes(
         @PathParameter id: Uuid,
         @Header authorization: AuthorizationHeader? = null,
         @Body body: OffsetLimitBody = OffsetLimitBody(),
-    ): List<Season> {
+    ): List<Episode> {
         auth.auth(authorization)
             ?: throw UnauthorizedSignal()
 
-        val show = transaction(database) { Show.findById(id) }
+        val season = transaction(database) { Season.findById(id) }
             ?: throw NotFoundSignal()
 
         return transaction(database) {
-            show.seasons
-                .offset(body.offset)
-                .limit(body.limit)
-                .toList()
-        }
-    }
-
-    @Post("/list", "application/json", "application/json")
-    context(
-        _: Logger,
-        database: Database,
-        auth: AuthContext,
-    )
-    fun getShowList(
-        @Header authorization: AuthorizationHeader? = null,
-        @Body body: OffsetLimitBody = OffsetLimitBody(),
-    ): List<Show> {
-        auth.auth(authorization)
-            ?: throw UnauthorizedSignal()
-
-        return transaction(database) {
-            Show
-                .all()
+            season.episodes
                 .offset(body.offset)
                 .limit(body.limit)
                 .toList()

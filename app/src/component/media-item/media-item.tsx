@@ -1,18 +1,25 @@
-import type { Media } from "../../data/media";
+import type { VNode } from "@runtime/jsx-runtime";
 import styles from "./media-item.module.css";
 
 export type MediaItemMode = "grid" | "grid-poster" | "list";
 
-export function MediaItem(props: { data: Media; mode?: MediaItemMode }) {
+export interface MediaItemProps {
+  mode?: MediaItemMode;
+  href: string;
+  title: VNode;
+  thumbnail?: (className?: string) => VNode;
+}
+
+export function MediaItem(props: MediaItemProps) {
   return (
     <li className={styles.item} data-mode={props.mode ?? "grid"}>
-      {props.data.thumbnail ? (
-        <img className={styles.thumbnail} src={props.data.thumbnail} />
+      {props.thumbnail ? (
+        props.thumbnail(styles.thumbnail)
       ) : (
         <div className={styles.thumbnail} />
       )}
-      <a className={styles.title} href={`#/media/${props.data.id}`}>
-        {props.data.title}
+      <a className={styles.title} href={props.href}>
+        {props.title}
       </a>
     </li>
   );

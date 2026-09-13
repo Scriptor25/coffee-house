@@ -1,5 +1,7 @@
 package dev.scriptor.converter
 
+import dev.scriptor.JsonNode
+import dev.scriptor.parseJson
 import dev.scriptor.server.Provider
 import dev.scriptor.server.RangeReadableByteChannel
 import dev.scriptor.server.converter.Converter
@@ -8,10 +10,10 @@ import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.channels.SeekableByteChannel
 
-class BodyStringConverter : Converter<MessageBody, String> {
+class MessageBodyJsonConverter : Converter<MessageBody, JsonNode> {
 
     context(provider: Provider)
-    override fun convert(value: MessageBody): String {
+    override fun convert(value: MessageBody): JsonNode {
         val bytes = when (val c = value.channel) {
             is RangeReadableByteChannel -> {
                 val count = c.remaining.toInt()
@@ -61,6 +63,8 @@ class BodyStringConverter : Converter<MessageBody, String> {
             }
         }
 
-        return bytes.decodeToString()
+        val text = bytes.decodeToString()
+
+        return parseJson(text)
     }
 }

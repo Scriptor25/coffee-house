@@ -1,5 +1,7 @@
 package dev.scriptor.model.media
 
+import dev.scriptor.JsonProperty
+import dev.scriptor.JsonSerializable
 import dev.scriptor.model.ffmpeg.Codec
 import dev.scriptor.model.ffmpeg.CodecTable
 import org.jetbrains.exposed.v1.core.ReferenceOption
@@ -26,18 +28,41 @@ object AudioTrackTable : UuidTable("audio_track") {
     }
 }
 
+@JsonSerializable
 class AudioTrack(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<AudioTrack>(AudioTrackTable)
 
+    @all:JsonProperty("id")
+    val jsonId
+        get() = id.value
+
     var media by Media referencedOn AudioTrackTable.media
+
+    @JsonProperty
     var index by AudioTrackTable.index
+
+    @JsonProperty
     var codec by Codec referencedOn AudioTrackTable.codec
+
+    @JsonProperty
     var bitRate by AudioTrackTable.bitRate
+
+    @JsonProperty
     var sampleRate by AudioTrackTable.sampleRate
+
+    @JsonProperty
     var channels by AudioTrackTable.channels
+
+    @JsonProperty
     var language by AudioTrackTable.language
+
+    @JsonProperty
     var title by AudioTrackTable.title
+
+    @JsonProperty
     var default by AudioTrackTable.default
+
+    @JsonProperty
     var forced by AudioTrackTable.forced
 
     override fun toString(): String {

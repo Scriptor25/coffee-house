@@ -1,5 +1,9 @@
 package dev.scriptor
 
+import dev.scriptor.reflect.getClass
+import dev.scriptor.reflect.getType
+import dev.scriptor.server.Provider
+import dev.scriptor.server.converter.Converter
 import kotlin.reflect.*
 import kotlin.reflect.full.*
 
@@ -615,51 +619,47 @@ fun parseJson(text: String): JsonNode {
     return parseJsonValue(Context(text))
 }
 
-typealias JsonCast = (JsonNode) -> Any?
-
-private fun cast(name: String, node: JsonNode, type: KType, map: Map<KType, JsonCast>): Any? {
-    if (node is JsonNullNode && type.isMarkedNullable) {
+context(provider: Provider)
+private fun valueFromJson(name: String, node: JsonNode, type: KType): Any? {
+    if (node is JsonNullNode) {
+        if (!type.isMarkedNullable) {
+            error("type $type is not nullable, but node '$name' is ${node.type}")
+        }
         return null
-    }
-
-    val convert = map[type]
-    if (convert != null) {
-        return convert(node)
     }
 
     return when (val c = type.classifier) {
         Boolean::class ->
             when (node) {
                 is JsonBooleanNode -> node.value
-                else -> error("invalid node '$name'")
+                else -> error("node '$name' (${node.type}) was expected to be ${JsonNodeType.BOOLEAN}")
             }
 
         Number::class ->
             when (node) {
                 is JsonNumberNode -> node.value
-                else -> error("invalid node '$name'")
+                else -> error("node '$name' (${node.type}) was expected to be ${JsonNodeType.NUMBER}")
             }
 
         String::class ->
             when (node) {
                 is JsonStringNode -> node.value
-                else -> error("invalid node '$name'")
+                else -> error("node '$name' (${node.type}) was expected to be ${JsonNodeType.STRING}")
             }
 
         List::class ->
             when (node) {
                 is JsonArrayNode -> {
                     node.mapIndexed { index, subnode ->
-                        cast(
+                        valueFromJson(
                             "$name[$index]",
                             subnode,
                             type.arguments[0].type!!,
-                            map,
                         )
                     }
                 }
 
-                else -> error("invalid node '$name'")
+                else -> error("node '$name' (${node.type}) was expected to be ${JsonNodeType.ARRAY}")
             }
 
         is KClass<*> if c.hasAnnotation<JsonSerializable>() ->
@@ -672,21 +672,26 @@ private fun cast(name: String, node: JsonNode, type: KType, map: Map<KType, Json
                             for (property in c.memberProperties) {
                                 if (property !is KMutableProperty<*>) continue
 
-                                val setter = property.setter
-
-                                val a = setter.findAnnotation<JsonProperty>()
-                                val propertyName = a?.value
-                                    ?: property.name
+                                val annotation = property.findAnnotation<JsonProperty>() ?: continue
+                                val propertyName = annotation.value.ifBlank { property.name }
 
                                 val subnode = node[propertyName]
-                                val value = cast(
-                                    "$name.${propertyName}",
-                                    subnode,
-                                    property.returnType,
-                                    map,
-                                )
+                                val value = when (annotation.from) {
+                                    FromJsonConverter::class -> {
+                                        valueFromJson(
+                                            "$name.${propertyName}",
+                                            subnode,
+                                            property.returnType,
+                                        )
+                                    }
 
-                                setter.call(instance, value)
+                                    else -> {
+                                        val instance = annotation.from.createInstance()
+                                        instance(subnode)
+                                    }
+                                }
+
+                                property.setter.call(instance, value)
                             }
 
                             instance
@@ -696,10 +701,11 @@ private fun cast(name: String, node: JsonNode, type: KType, map: Map<KType, Json
                             val args = mutableMapOf<KParameter, Any?>()
 
                             for (parameter in constructor.parameters) {
-                                val a = parameter.findAnnotation<JsonProperty>()
-                                val parameterName = a?.value
-                                    ?: parameter.name
-                                    ?: continue
+                                val annotation = parameter.findAnnotation<JsonProperty>()
+                                val parameterName = when {
+                                    annotation == null -> parameter.name
+                                    else -> annotation.value.ifBlank { parameter.name }
+                                } ?: continue
 
                                 val subnode = node[parameterName]
 
@@ -707,12 +713,20 @@ private fun cast(name: String, node: JsonNode, type: KType, map: Map<KType, Json
                                     continue
                                 }
 
-                                val value = cast(
-                                    "$name.${parameterName}",
-                                    subnode,
-                                    parameter.type,
-                                    map,
-                                )
+                                val value = when (annotation?.from) {
+                                    null, FromJsonConverter::class -> {
+                                        valueFromJson(
+                                            "$name.${parameterName}",
+                                            subnode,
+                                            parameter.type,
+                                        )
+                                    }
+
+                                    else -> {
+                                        val instance = annotation.from.createInstance()
+                                        instance(subnode)
+                                    }
+                                }
 
                                 args[parameter] = value
                             }
@@ -722,25 +736,96 @@ private fun cast(name: String, node: JsonNode, type: KType, map: Map<KType, Json
                     }
                 }
 
-                else -> error("invalid node '$name'")
+                else -> error("node '$name' (${node.type}) was expected to be ${JsonNodeType.OBJECT}")
             }
 
-        else -> error("invalid type '$type' for node '$name'")
+        else -> {
+            val src = getType<JsonNode>()
+            val dst = getType(type)
+
+            val convert = provider[src to dst]
+                ?: error("conversion from node '$name' (${node.type}) to type '$type' is not implemented")
+
+            convert(node)
+        }
     }
 }
 
-fun JsonNode.cast(type: KType, map: Map<KType, JsonCast> = emptyMap()): Any? {
-    return cast("<root>", this, type, map)
+context(_: Provider)
+fun JsonNode.valueFromJson(type: KType): Any? {
+    return valueFromJson("<root>", this, type)
 }
 
-inline fun <reified T> JsonNode.cast(map: Map<KType, JsonCast> = emptyMap()): T {
-    return cast(typeOf<T>(), map) as T
+context(_: Provider)
+inline fun <reified T> JsonNode.fromJson(): T {
+    return valueFromJson(typeOf<T>()) as T
 }
+
+context(provider: Provider)
+fun valueToJson(value: Any?, root: Boolean): JsonNode {
+    return when (value) {
+        null -> jsonNull()
+        is Boolean -> jsonOf(value)
+        is Number -> jsonOf(value)
+        is String -> jsonOf(value)
+
+        is Enum<*> -> jsonOf(value.toString().lowercase())
+
+        is List<*> -> jsonArray {
+            for (item in value) {
+                add(valueToJson(item, false))
+            }
+        }
+
+        else -> {
+            val klass = value::class
+
+            val convert = provider[getClass(klass).createType() to getType<JsonNode>()]
+            when {
+                !root && convert != null -> convert(value) as JsonNode
+
+                klass.hasAnnotation<JsonSerializable>() -> jsonObject {
+                    for (property in klass.memberProperties) {
+                        val annotation = property.findAnnotation<JsonProperty>() ?: continue
+                        val propertyName = annotation.value.ifBlank { property.name }
+
+                        val propertyValue = property.getter.call(value)
+
+                        this[propertyName] = when (annotation.to) {
+                            ToJsonConverter::class -> {
+                                valueToJson(propertyValue, false)
+                            }
+
+                            else -> {
+                                val instance = annotation.to.createInstance() as ToJsonConverter<Any?>
+                                instance(propertyValue)
+                            }
+                        }
+                    }
+                }
+
+                else -> error("conversion from $klass to node is not implemented")
+            }
+        }
+    }
+}
+
+context(_: Provider)
+inline fun <reified T> T.toJson(): JsonNode {
+    return valueToJson(this, true)
+}
+
+interface FromJsonConverter<T> : Converter<JsonNode, T>
+interface ToJsonConverter<T> : Converter<T, JsonNode>
 
 @Retention(AnnotationRetention.RUNTIME)
 @Target(AnnotationTarget.CLASS)
 annotation class JsonSerializable
 
 @Retention(AnnotationRetention.RUNTIME)
-@Target(AnnotationTarget.VALUE_PARAMETER, AnnotationTarget.PROPERTY_SETTER)
-annotation class JsonProperty(val value: String)
+@Target(AnnotationTarget.VALUE_PARAMETER, AnnotationTarget.PROPERTY)
+annotation class JsonProperty(
+    val value: String = "",
+    val from: KClass<FromJsonConverter<*>> = FromJsonConverter::class,
+    val to: KClass<ToJsonConverter<*>> = ToJsonConverter::class,
+)
