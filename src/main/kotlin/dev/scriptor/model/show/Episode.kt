@@ -16,7 +16,7 @@ object EpisodeTable : UuidTable("episode") {
     val media = reference("media_id", MediaTable, ReferenceOption.CASCADE)
     val index = integer("index")
     val title = text("title")
-    val description = text("description").nullable().default(null)
+    val description = text("description").nullable()
     val still = json<List<ImageData>>(
         "still",
         from = { it.fromJsonNoContext() },

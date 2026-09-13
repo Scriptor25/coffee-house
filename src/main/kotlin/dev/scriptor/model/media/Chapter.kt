@@ -14,8 +14,8 @@ object ChapterTable : UuidTable("chapter") {
     val index = integer("index")
     val start = double("start")
     val end = double("end")
-    val language = text("language").nullable().default(null)
-    val title = text("title").nullable().default(null)
+    val language = text("language").nullable()
+    val title = text("title").nullable()
 
     init {
         uniqueIndex(media, index)

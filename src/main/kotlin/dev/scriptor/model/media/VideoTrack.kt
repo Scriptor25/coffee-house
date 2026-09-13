@@ -19,10 +19,10 @@ object VideoTrackTable : UuidTable("video_track") {
     val height = integer("height")
     val bitRate = long("bit_rate")
     val frameRate = double("frame_rate")
-    val profile = text("profile").nullable().default(null)
-    val level = integer("level").nullable().default(null)
-    val language = text("language").nullable().default(null)
-    val title = text("title").nullable().default(null)
+    val profile = text("profile").nullable()
+    val level = integer("level").nullable()
+    val language = text("language").nullable()
+    val title = text("title").nullable()
     val default = bool("default")
 
     init {

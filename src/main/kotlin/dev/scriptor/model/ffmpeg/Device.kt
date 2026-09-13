@@ -7,6 +7,7 @@ import org.jetbrains.exposed.v1.dao.EntityClass
 
 object DeviceTable : IdTable<DeviceId>("device") {
     override val id = deviceId("id").entityId()
+    override val primaryKey = PrimaryKey(id)
 }
 
 class Device(id: EntityID<DeviceId>) : Entity<DeviceId>(id) {

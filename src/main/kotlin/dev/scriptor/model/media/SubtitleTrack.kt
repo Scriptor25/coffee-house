@@ -15,8 +15,8 @@ object SubtitleTrackTable : UuidTable("subtitle_track") {
     val media = reference("media_id", MediaTable, ReferenceOption.CASCADE)
     val index = integer("index")
     val codec = reference("codec", CodecTable, ReferenceOption.CASCADE)
-    val language = text("language").nullable().default(null)
-    val title = text("title").nullable().default(null)
+    val language = text("language").nullable()
+    val title = text("title").nullable()
     val default = bool("default")
     val forced = bool("forced")
 

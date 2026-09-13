@@ -7,6 +7,7 @@ import org.jetbrains.exposed.v1.dao.EntityClass
 
 object FilterTable : IdTable<FilterId>("filter") {
     override val id = filterId("id").entityId()
+    override val primaryKey = PrimaryKey(id)
 
     val transform = text("transform")
     val timelineSupport = bool("timeline_support")

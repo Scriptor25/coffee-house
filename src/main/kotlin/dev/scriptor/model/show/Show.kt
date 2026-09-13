@@ -10,9 +10,9 @@ import org.jetbrains.exposed.v1.dao.UuidEntityClass
 import kotlin.uuid.Uuid
 
 object ShowTable : UuidTable("show") {
-    val tmdbId = integer("tmdb_id").nullable().default(null)
+    val tmdbId = integer("tmdb_id").nullable()
     val title = text("title")
-    val description = text("description").nullable().default(null)
+    val description = text("description").nullable()
     val poster = json<List<ImageData>>(
         "poster",
         from = { it.fromJsonNoContext() },

@@ -12,8 +12,9 @@ import org.jetbrains.exposed.v1.dao.EntityClass
 
 object ImplementationTable : IdTable<ImplementationId>("implementation") {
     override val id = implementationId("id").entityId()
+    override val primaryKey = PrimaryKey(id)
 
-    val codec = reference("codec_id", CodecTable, ReferenceOption.CASCADE).nullable().default(null)
+    val codec = reference("codec_id", CodecTable, ReferenceOption.CASCADE).nullable()
     val direction = enumeration<ImplementationDirection>("direction")
 
     val frameLevelMultithreading = bool("frame_level_multithreading")

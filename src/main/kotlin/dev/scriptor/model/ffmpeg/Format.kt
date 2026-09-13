@@ -10,6 +10,7 @@ import org.jetbrains.exposed.v1.dao.EntityClass
 
 object FormatTable : IdTable<FormatId>("format") {
     override val id = formatId("id").entityId()
+    override val primaryKey = PrimaryKey(id)
 
     val components = json<List<Int>>(
         "components",
