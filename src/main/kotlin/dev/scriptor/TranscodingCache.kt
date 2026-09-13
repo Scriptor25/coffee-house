@@ -9,6 +9,8 @@ import dev.scriptor.model.ffmpeg.Device
 import dev.scriptor.model.ffmpeg.DeviceBackend
 import dev.scriptor.model.media.Media
 import dev.scriptor.model.media.VideoTrack
+import dev.scriptor.model.media.VideoTrackTable
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.nio.file.Path
@@ -150,7 +152,7 @@ class TranscodingCache(
     fun job(item: Media): TranscodingJob = jobs.computeIfAbsent(item.id.value) {
         transaction(database) {
 
-            val video = item.video.first { it.index == 0 }
+            val video = item.video.orderBy(VideoTrackTable.index to SortOrder.ASC).first()
 
             val input = video.codec
             val output = Codec[requirements.video]
