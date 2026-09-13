@@ -1,11 +1,10 @@
-import { resource } from "@runtime/resource";
 import { Image } from "../../component/image/image";
 import { MediaList } from "../../component/media-list/media-list";
 import { Suspense } from "../../component/suspense/suspense";
 import { getAllShows } from "../../data/show";
 
 export function ShowListPage() {
-  const $items = resource(getAllShows);
+  const $items = getAllShows();
 
   return (
     <main>

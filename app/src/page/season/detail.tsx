@@ -1,4 +1,3 @@
-import { resource } from "@runtime/resource";
 import { Image } from "../../component/image/image";
 import {
   MediaListItem,
@@ -12,7 +11,7 @@ import { createSeasonPlayback, getSeasonById } from "../../data/season";
 import styles from "./detail.module.css";
 
 export function SeasonEpisode(props: { id: string; mode: MediaListMode }) {
-  const $item = resource(() => getEpisodeById(props.id));
+  const $item = getEpisodeById(props.id);
 
   return (
     <Suspense
@@ -39,7 +38,7 @@ export function SeasonEpisode(props: { id: string; mode: MediaListMode }) {
 }
 
 export function SeasonDetailPage(props: { id: string }) {
-  const $item = resource(() => getSeasonById(props.id));
+  const $item = getSeasonById(props.id);
 
   return (
     <main>
@@ -51,11 +50,13 @@ export function SeasonDetailPage(props: { id: string }) {
         {(item) => (
           <>
             <section className={styles.header}>
-              <Image
-                className={styles.poster}
-                src={item.poster}
-                sizes="(max-width: 768px) 100vw, 30vw"
-              />
+              {item.poster.length ? (
+                <Image
+                  className={styles.poster}
+                  src={item.poster}
+                  sizes="(max-width: 768px) 100vw, 30vw"
+                />
+              ) : undefined}
               <div>
                 <h1>{item.title}</h1>
                 <p>{item.description}</p>

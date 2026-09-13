@@ -1,4 +1,3 @@
-import { resource } from "@runtime/resource";
 import { Image } from "../../component/image/image";
 import {
   MediaListItem,
@@ -11,7 +10,7 @@ import { getShowById } from "../../data/show";
 import styles from "./detail.module.css";
 
 export function ShowSeason(props: { id: string; mode: MediaListMode }) {
-  const $item = resource(() => getSeasonById(props.id));
+  const $item = getSeasonById(props.id);
 
   return (
     <Suspense
@@ -42,7 +41,7 @@ export function ShowSeason(props: { id: string; mode: MediaListMode }) {
 }
 
 export function ShowDetailPage(props: { id: string }) {
-  const $item = resource(() => getShowById(props.id));
+  const $item = getShowById(props.id);
 
   return (
     <Suspense
@@ -53,12 +52,22 @@ export function ShowDetailPage(props: { id: string }) {
       {(item) => (
         <>
           <div className={styles.banner}>
-            <Image
-              className={styles.backdrop}
-              src={item.backdrop}
-              sizes="100vw"
-            />
-            <Image className={styles.poster} src={item.poster} sizes="200px" />
+            {item.backdrop.length ? (
+              <Image
+                className={styles.backdrop}
+                src={item.backdrop}
+                sizes="100vw"
+              />
+            ) : (
+              <div className={styles.backdrop} />
+            )}
+            {item.poster.length ? (
+              <Image
+                className={styles.poster}
+                src={item.poster}
+                sizes="200px"
+              />
+            ) : undefined}
           </div>
           <main className={styles.content}>
             <h1>{item.title}</h1>

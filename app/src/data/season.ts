@@ -1,3 +1,4 @@
+import { resource } from "@runtime/resource";
 import type { ImageData } from "../component/image/image";
 import { createEntityPlayback, getAllEntities, getEntityById } from "./api";
 
@@ -9,14 +10,16 @@ export interface Season {
   episodes: string[];
 }
 
-export async function getAllSeasons(): Promise<Season[]> {
+export const getAllSeasons = resource.cache(async (): Promise<Season[]> => {
   return getAllEntities("season");
-}
+});
 
-export async function getSeasonById(id: string): Promise<Season> {
-  return getEntityById("season", id);
-}
+export const getSeasonById = resource.cache(
+  async (id: string): Promise<Season> => {
+    return getEntityById("season", id);
+  },
+);
 
-export async function createSeasonPlayback(id: string): Promise<string> {
+export const createSeasonPlayback = async (id: string): Promise<string> => {
   return createEntityPlayback("season", id);
-}
+};

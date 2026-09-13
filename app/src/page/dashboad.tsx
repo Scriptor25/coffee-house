@@ -1,4 +1,3 @@
-import { resource } from "@runtime/resource";
 import { Image } from "../component/image/image";
 import { MediaList } from "../component/media-list/media-list";
 import { Suspense } from "../component/suspense/suspense";
@@ -8,8 +7,8 @@ import { setMetadata } from "../meta/meta";
 import styles from "./dashboard.module.css";
 
 export function DashboardPage() {
-  const $movies = resource(() => getAllMovies(4));
-  const $shows = resource(() => getAllShows(4));
+  const $movies = getAllMovies(4);
+  const $shows = getAllShows(4);
 
   setMetadata({
     type: "website",

@@ -1,3 +1,4 @@
+import { resource } from "@runtime/resource";
 import type { ImageData } from "../component/image/image";
 import { getAllEntities, getEntityById } from "./api";
 
@@ -10,13 +11,12 @@ export interface Show {
   seasons: string[];
 }
 
-export async function getAllShows(
-  limit?: number,
-  offset?: number,
-): Promise<Show[]> {
-  return getAllEntities("show", limit, offset);
-}
+export const getAllShows = resource.cache(
+  async (limit?: number, offset?: number): Promise<Show[]> => {
+    return getAllEntities("show", limit, offset);
+  },
+);
 
-export async function getShowById(id: string): Promise<Show> {
+export const getShowById = resource.cache(async (id: string): Promise<Show> => {
   return getEntityById("show", id);
-}
+});

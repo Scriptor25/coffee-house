@@ -1,4 +1,3 @@
-import { resource } from "@runtime/resource";
 import { Image } from "../../component/image/image";
 import { MediaList } from "../../component/media-list/media-list";
 import { Suspense } from "../../component/suspense/suspense";
@@ -6,7 +5,7 @@ import { getAllMovies } from "../../data/movie";
 import { setMetadata } from "../../meta/meta";
 
 export function MovieListPage() {
-  const $items = resource(getAllMovies);
+  const $items = getAllMovies();
 
   setMetadata({
     type: "website",

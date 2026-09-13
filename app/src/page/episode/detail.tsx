@@ -1,4 +1,3 @@
-import { resource } from "@runtime/resource";
 import { Image } from "../../component/image/image";
 import { Suspense } from "../../component/suspense/suspense";
 import { createEpisodePlayback, getEpisodeById } from "../../data/episode";
@@ -6,7 +5,7 @@ import { sharePlayback } from "../../data/playback";
 import styles from "./detail.module.css";
 
 export function EpisodeDetailPage(props: { id: string }) {
-  const $item = resource(() => getEpisodeById(props.id));
+  const $item = getEpisodeById(props.id);
 
   return (
     <main>
@@ -18,11 +17,13 @@ export function EpisodeDetailPage(props: { id: string }) {
         {(item) => (
           <>
             <section className={styles.header}>
-              <Image
-                className={styles.still}
-                src={item.still}
-                sizes="(max-width: 768px) 100vw, 30vw"
-              />
+              {item.still.length ? (
+                <Image
+                  className={styles.still}
+                  src={item.still}
+                  sizes="(max-width: 768px) 100vw, 30vw"
+                />
+              ) : undefined}
               <div>
                 <h1>{item.title}</h1>
                 <p>{item.description}</p>

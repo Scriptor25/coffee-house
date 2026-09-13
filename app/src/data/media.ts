@@ -1,3 +1,4 @@
+import { resource } from "@runtime/resource";
 import { getAllEntities, getEntityById } from "./api";
 
 export interface Media {
@@ -6,10 +7,12 @@ export interface Media {
   path: string;
 }
 
-export async function getAllMedia(): Promise<Media[]> {
+export const getAllMedia = resource.cache(async (): Promise<Media[]> => {
   return getAllEntities("media");
-}
+});
 
-export async function getMediaById(id: string): Promise<Media> {
-  return getEntityById("media", id);
-}
+export const getMediaById = resource.cache(
+  async (id: string): Promise<Media> => {
+    return getEntityById("media", id);
+  },
+);

@@ -1,4 +1,3 @@
-import { resource } from "@runtime/resource";
 import { Image } from "../../component/image/image";
 import { Suspense } from "../../component/suspense/suspense";
 import { createMoviePlayback, getMovieById } from "../../data/movie";
@@ -7,7 +6,7 @@ import { setMetadata } from "../../meta/meta";
 import styles from "./detail.module.css";
 
 export function MovieDetailPage(props: { id: string }) {
-  const $item = resource(() => getMovieById(props.id));
+  const $item = getMovieById(props.id);
 
   setMetadata({
     type: "website",
@@ -33,16 +32,22 @@ export function MovieDetailPage(props: { id: string }) {
         return (
           <>
             <div className={styles.banner}>
-              <Image
-                className={styles.backdrop}
-                src={item.backdrop}
-                sizes="100vw"
-              />
-              <Image
-                className={styles.poster}
-                src={item.poster}
-                sizes="200px"
-              />
+              {item.backdrop.length ? (
+                <Image
+                  className={styles.backdrop}
+                  src={item.backdrop}
+                  sizes="100vw"
+                />
+              ) : (
+                <div className={styles.backdrop} />
+              )}
+              {item.poster.length ? (
+                <Image
+                  className={styles.poster}
+                  src={item.poster}
+                  sizes="200px"
+                />
+              ) : undefined}
             </div>
             <main className={styles.content}>
               <h1>{item.title}</h1>
