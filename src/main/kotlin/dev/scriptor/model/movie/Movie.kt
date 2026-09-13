@@ -17,9 +17,9 @@ data class ImageData(
 )
 
 object MovieTable : UuidTable("movie") {
-    val tmdbId = integer("tmdb_id").nullable()
+    val tmdbId = integer("tmdb_id").nullable().default(null)
     val title = text("title")
-    val description = text("description").nullable()
+    val description = text("description").nullable().default(null)
     val poster = json<List<ImageData>>(
         "poster",
         from = { it.fromJsonNoContext() },

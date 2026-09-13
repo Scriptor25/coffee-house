@@ -14,7 +14,7 @@ object SeasonTable : UuidTable("season") {
     val show = reference("show_id", ShowTable, ReferenceOption.CASCADE)
     val index = integer("index")
     val title = text("title")
-    val description = text("description").nullable()
+    val description = text("description").nullable().default(null)
     val poster = json<List<ImageData>>(
         "poster",
         from = { it.fromJsonNoContext() },

@@ -18,8 +18,8 @@ object AudioTrackTable : UuidTable("audio_track") {
     val bitRate = long("bit_rate")
     val sampleRate = long("sample_rate")
     val channels = integer("channels")
-    val language = text("language").nullable()
-    val title = text("title").nullable()
+    val language = text("language").nullable().default(null)
+    val title = text("title").nullable().default(null)
     val default = bool("default")
     val forced = bool("forced")
 
