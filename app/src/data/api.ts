@@ -4,7 +4,7 @@ import { getSessionToken, setSessionToken } from "./session";
 export async function fetchData(resource: string, init?: RequestInit) {
   const token = getSessionToken();
 
-  const response = await fetch(new URL(resource, getOrigin()), {
+  const response = await fetch(new URL(`/resource/${resource}`, getOrigin()), {
     ...init,
     headers: token
       ? {
@@ -26,7 +26,7 @@ export async function getAllEntities<T>(
   limit?: number,
   offset?: number,
 ): Promise<T[]> {
-  const response = await fetchData(`/${resource}/list`, {
+  const response = await fetchData(`${resource}/list`, {
     method: "post",
     body: JSON.stringify({ limit, offset }),
   });
@@ -44,7 +44,7 @@ export async function getEntityById<T>(
   resource: string,
   id: string,
 ): Promise<T> {
-  const response = await fetchData(`/${resource}/${id}`, { method: "get" });
+  const response = await fetchData(`${resource}/${id}`, { method: "get" });
 
   if (!response.ok) {
     throw new Error(
@@ -59,7 +59,7 @@ export async function createEntityPlayback(
   resource: string,
   id: string,
 ): Promise<string> {
-  const response = await fetchData(`/${resource}/${id}/playback`, {
+  const response = await fetchData(`${resource}/${id}/playback`, {
     method: "post",
   });
 

@@ -17,7 +17,7 @@ export async function createSession(
   password: string,
 ): Promise<string | null> {
   try {
-    const response = await fetchData("/session", {
+    const response = await fetchData("session", {
       method: "post",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ username, password }),

@@ -15,7 +15,7 @@ import java.util.logging.Logger
 import kotlin.uuid.Uuid
 
 @Suppress("unused")
-@Controller("/season")
+@Controller("/resource/season")
 class SeasonRest {
 
     @Get("/[id]", "application/json")

@@ -23,7 +23,7 @@ import kotlin.io.path.readText
 import kotlin.io.path.useLines
 
 @Suppress("unused")
-@Controller("/playback")
+@Controller("/resource/playback")
 class PlaybackRest {
 
     context(

@@ -13,7 +13,7 @@ import java.util.logging.Logger
 import kotlin.uuid.Uuid
 
 @Suppress("unused")
-@Controller("/episode")
+@Controller("/resource/episode")
 class EpisodeRest {
 
     @Get("/[id]", "application/json")

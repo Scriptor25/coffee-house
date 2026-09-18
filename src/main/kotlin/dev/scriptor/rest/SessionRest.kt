@@ -20,7 +20,7 @@ import kotlin.time.Clock
 import kotlin.time.toKotlinDuration
 
 @Suppress("unused")
-@Controller("/session")
+@Controller("/resource/session")
 class SessionRest {
 
     @Post("/", "application/json", "text/plain")

@@ -16,7 +16,7 @@ import java.util.logging.Logger
 import kotlin.uuid.Uuid
 
 @Suppress("unused")
-@Controller("/show")
+@Controller("/resource/show")
 class ShowRest {
 
     @Get("/[id]", "application/json")

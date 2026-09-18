@@ -17,7 +17,7 @@ import java.util.logging.Logger
 import kotlin.uuid.Uuid
 
 @Suppress("unused")
-@Controller("/user")
+@Controller("/resource/user")
 class UserRest {
 
     @Post("/", "application/json", "application/json")
