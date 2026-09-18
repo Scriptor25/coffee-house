@@ -20,9 +20,13 @@ class AuthContext {
         database: Database,
     )
     fun auth(
-        token: String,
+        token: String?,
         instant: Instant = Clock.System.now(),
     ): Session? {
+        if (token == null) {
+            return null
+        }
+
         val jwt: Jwt
         try {
             jwt = Jwt.decode(token)
