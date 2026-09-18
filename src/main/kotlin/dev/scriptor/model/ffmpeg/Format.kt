@@ -1,9 +1,8 @@
 package dev.scriptor.model.ffmpeg
 
-import dev.scriptor.JsonArrayNode
-import dev.scriptor.JsonNumberNode
-import dev.scriptor.jsonArray
-import dev.scriptor.jsonOf
+import dev.scriptor.fromJsonNoContext
+import dev.scriptor.json
+import dev.scriptor.toJsonNoContext
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.IdTable
 import org.jetbrains.exposed.v1.dao.Entity
@@ -11,23 +10,12 @@ import org.jetbrains.exposed.v1.dao.EntityClass
 
 object FormatTable : IdTable<FormatId>("format") {
     override val id = formatId("id").entityId()
+    override val primaryKey = PrimaryKey(id)
 
     val components = json<List<Int>>(
         "components",
-        from = {
-            if (it !is JsonArrayNode) {
-                error("invalid node")
-            }
-
-            it.map { node ->
-                if (node !is JsonNumberNode) {
-                    error("invalid node '[N]'")
-                }
-
-                node.value.toInt()
-            }
-        },
-        to = { jsonArray { it.forEach { entry -> add(jsonOf(entry)) } } },
+        from = { it.fromJsonNoContext() },
+        to = { it.toJsonNoContext() },
     )
 
     val bitsPerPixel = integer("bits_per_pixel")

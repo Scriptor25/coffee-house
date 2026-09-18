@@ -7,6 +7,6 @@ import kotlin.io.path.Path
 
 class StringPathConverter : Converter<String, Path> {
 
-    context(provider: Provider)
+    context(provider: Provider?)
     override fun convert(value: String) = Path(value)
 }

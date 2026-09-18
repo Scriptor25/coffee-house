@@ -6,6 +6,6 @@ import dev.scriptor.server.converter.Converter
 
 class JwtStringConverter : Converter<Jwt, String> {
 
-    context(provider: Provider)
+    context(provider: Provider?)
     override fun convert(value: Jwt) = value.toString()
 }

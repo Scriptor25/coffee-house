@@ -7,6 +7,7 @@ import org.jetbrains.exposed.v1.dao.EntityClass
 
 object CodecTable : IdTable<CodecId>("codec") {
     override val id = codecId("id").entityId()
+    override val primaryKey = PrimaryKey(id)
 
     val type = enumeration<CodecType>("type")
 

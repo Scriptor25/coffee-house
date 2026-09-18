@@ -7,6 +7,6 @@ import kotlin.io.path.absolutePathString
 
 class PathStringConverter : Converter<Path, String> {
 
-    context(provider: Provider)
+    context(provider: Provider?)
     override fun convert(value: Path) = value.absolutePathString()
 }

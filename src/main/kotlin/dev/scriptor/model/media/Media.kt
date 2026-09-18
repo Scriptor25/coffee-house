@@ -1,5 +1,7 @@
 package dev.scriptor.model.media
 
+import dev.scriptor.JsonProperty
+import dev.scriptor.JsonSerializable
 import org.jetbrains.exposed.v1.core.Column
 import org.jetbrains.exposed.v1.core.ColumnType
 import org.jetbrains.exposed.v1.core.Table
@@ -54,19 +56,42 @@ object MediaTable : UuidTable("media") {
     val duration = double("duration")
 }
 
+@JsonSerializable
 class Media(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<Media>(MediaTable)
 
+    @all:JsonProperty("id")
+    val jsonId
+        get() = id.value
+
+    @JsonProperty
     var path by MediaTable.path
+
+    @JsonProperty
     var size by MediaTable.size
+
+    @JsonProperty
     var title by MediaTable.title
+
+    @JsonProperty
     var createdAt by MediaTable.createdAt
+
+    @JsonProperty
     var modifiedAt by MediaTable.modifiedAt
+
+    @JsonProperty
     var duration by MediaTable.duration
 
+    @JsonProperty
     val video by VideoTrack referrersOn VideoTrackTable.media
+
+    @JsonProperty
     val audio by AudioTrack referrersOn AudioTrackTable.media
+
+    @JsonProperty
     val subtitles by SubtitleTrack referrersOn SubtitleTrackTable.media
+
+    @JsonProperty
     val chapters by Chapter referrersOn ChapterTable.media
 
     override fun toString(): String {

@@ -1,20 +1,19 @@
 package dev.scriptor.converter
 
-import dev.scriptor.JsonObjectNode
-import dev.scriptor.jsonOf
+import dev.scriptor.JsonNode
 import dev.scriptor.model.media.SubtitleTrack
 import dev.scriptor.server.Provider
 import dev.scriptor.server.converter.Converter
+import dev.scriptor.toJson
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
-class SubtitleTrackJsonConverter : Converter<SubtitleTrack, JsonObjectNode> {
+class SubtitleTrackJsonConverter : Converter<SubtitleTrack, JsonNode> {
 
-    context(provider: Provider)
-    override fun convert(value: SubtitleTrack): JsonObjectNode = jsonOf(
-        "index" to jsonOf(value.index),
-        "codec" to jsonOf(value.codec.id.toString()),
-        "language" to jsonOf(value.language),
-        "title" to jsonOf(value.title),
-        "default" to jsonOf(value.default),
-        "forced" to jsonOf(value.forced),
-    )
+    context(provider: Provider?)
+    override fun convert(value: SubtitleTrack): JsonNode {
+        val database: Database = provider?.getT()
+            ?: error("missing database")
+        return transaction(database) { value.toJson() }
+    }
 }

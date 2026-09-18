@@ -6,7 +6,7 @@ import dev.scriptor.server.converter.Converter
 
 class StringCookieConverter : Converter<String, CookieHeader> {
 
-    context(provider: Provider)
+    context(provider: Provider?)
     override fun convert(value: String): CookieHeader {
         val values = value
             .split(";")

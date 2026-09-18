@@ -6,6 +6,6 @@ import kotlin.time.Instant
 
 class InstantStringConverter : Converter<Instant, String> {
 
-    context(provider: Provider)
+    context(provider: Provider?)
     override fun convert(value: Instant) = value.toString()
 }

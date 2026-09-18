@@ -6,6 +6,6 @@ import dev.scriptor.server.converter.Converter
 
 class JsonStringConverter : Converter<JsonNode, String> {
 
-    context(provider: Provider)
+    context(provider: Provider?)
     override fun convert(value: JsonNode) = value.toString()
 }

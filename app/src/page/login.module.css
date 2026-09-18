@@ -12,6 +12,7 @@
     "a b"
     "c c";
   gap: 10px;
+  align-items: center;
 
   label {
     display: contents;

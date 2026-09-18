@@ -36,8 +36,9 @@ class Probe(
 
             probeDeviceToDevice(devices)
 
-            probeFormats()
-            probeFilters()
+            val formats = probeFormats()
+
+            val filters = probeFilters()
 
             val decodersMap = mutableMapOf<CodecId, Set<ImplementationId>>()
             val encodersMap = mutableMapOf<CodecId, Set<ImplementationId>>()
@@ -52,6 +53,7 @@ class Probe(
 
             probeImplementations(
                 devices.map { it.id.value }.toSet(),
+                formats.map { it.id.value }.toSet(),
                 decoders + encoders,
             )
         }
@@ -119,7 +121,7 @@ class Probe(
     }
 
     context(database: Database)
-    private fun probeFormats() {
+    private fun probeFormats(): List<Format> {
         log.fine("probe formats")
 
         val result = command(
@@ -131,14 +133,14 @@ class Probe(
         if (result.error) {
             val message = result.stderr.ifBlank(result::stdout)
             log.fine("failed to probe formats:\n$message")
-            return
+            return emptyList()
         }
 
-        parseFormats(result.stdout)
+        return parseFormats(result.stdout)
     }
 
     context(database: Database)
-    private fun probeFilters() {
+    private fun probeFilters(): List<Filter> {
         log.fine("probe filters")
 
         val result = command(
@@ -150,10 +152,10 @@ class Probe(
         if (result.error) {
             val message = result.stderr.ifBlank(result::stdout)
             log.fine("failed to probe filters:\n$message")
-            return
+            return emptyList()
         }
 
-        parseFilters(result.stdout)
+        return parseFilters(result.stdout)
     }
 
     context(database: Database)
@@ -223,6 +225,7 @@ class Probe(
     context(database: Database)
     private fun probeImplementations(
         devices: Set<DeviceId>,
+        formats: Set<FormatId>,
         implementations: List<Implementation>,
     ) {
         if (implementations.isEmpty()) return
@@ -230,7 +233,7 @@ class Probe(
         log.fine("probe ${implementations.size} implementations")
 
         for (implementation in implementations) {
-            probeImplementation(devices, implementation)
+            probeImplementation(devices, formats, implementation)
         }
     }
 
@@ -436,6 +439,7 @@ class Probe(
     context(database: Database)
     private fun probeImplementation(
         devices: Set<DeviceId>,
+        formats: Set<FormatId>,
         implementation: Implementation,
     ): Boolean {
         val kind = when (implementation.direction) {
@@ -464,6 +468,7 @@ class Probe(
         val supportedPixelFormats =
             parseSpaceSeparatedSequence(implementationSupportedPixelFormatsRegex, result.stdout)
                 .map { FormatId(it) }
+                .filter { it in formats }
                 .toSet()
         val supportedSampleRates =
             parseSpaceSeparatedSequence(implementationSupportedSampleRatesRegex, result.stdout)
@@ -489,6 +494,8 @@ class Probe(
             implementation.supportedChannelLayouts = supportedChannelLayouts
 
             supportedHardwareDevices.forEach { device ->
+
+
                 ImplementationDeviceTable.insert {
                     it[ImplementationDeviceTable.implementation] = implementation.id
                     it[ImplementationDeviceTable.device] = device
@@ -573,13 +580,15 @@ class Probe(
     private val formatLineRegex = """^\s*([IOHPB.]{5})\s+(\S+)\s+(\d+)\s+(\d+)\s+(\d(?:-\d)*)$""".toRegex()
 
     context(database: Database)
-    private fun parseFormats(text: String) {
+    private fun parseFormats(text: String): List<Format> {
         val existing = transaction(database) {
             FormatTable
                 .select(FormatTable.id)
                 .map { it[FormatTable.id].value }
                 .toSet()
         }
+
+        val result = mutableListOf<Format>()
 
         for (line in text.lines().dropWhile { !it.trim().startsWith('-') }) {
             val match = formatLineRegex.matchEntire(line) ?: continue
@@ -599,7 +608,7 @@ class Probe(
             val paletted = flags[3] == 'P'
             val bitstream = flags[4] == 'B'
 
-            transaction(database) {
+            result += transaction(database) {
                 Format.new(id) {
                     this.components = bitDepths
                     this.bitsPerPixel = bitsPerPixel
@@ -611,18 +620,22 @@ class Probe(
                 }
             }
         }
+
+        return result
     }
 
     private val filterLineRegex = """^\s*([TS.]{2,3})\s+(\S+)\s+([AVN|\->]+)\s+(.+)$""".toRegex()
 
     context(database: Database)
-    private fun parseFilters(text: String) {
+    private fun parseFilters(text: String): List<Filter> {
         val existing = transaction(database) {
             FilterTable
                 .select(FilterTable.id)
                 .map { it[FilterTable.id].value }
                 .toSet()
         }
+
+        val result = mutableListOf<Filter>()
 
         for (line in text.lineSequence().dropWhile { !it.trim().startsWith('-') }) {
             val match = filterLineRegex.matchEntire(line) ?: continue
@@ -634,7 +647,7 @@ class Probe(
             val id = FilterId(name)
             if (id in existing) continue
 
-            transaction(database) {
+            result += transaction(database) {
                 Filter.new(id) {
                     this.transform = transform
                     this.timelineSupport = flags[0] == 'T'
@@ -642,6 +655,8 @@ class Probe(
                 }
             }
         }
+
+        return result
     }
 
     private data class CommandResult(

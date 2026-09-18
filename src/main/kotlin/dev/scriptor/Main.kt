@@ -1,35 +1,36 @@
 package dev.scriptor
 
 import dev.scriptor.context.PlaybackContext
+import dev.scriptor.context.TmdbContext
 import dev.scriptor.model.ffmpeg.*
 import dev.scriptor.model.media.*
+import dev.scriptor.model.movie.ImageData
+import dev.scriptor.model.movie.Movie
 import dev.scriptor.model.movie.MovieMediaTable
 import dev.scriptor.model.movie.MovieTable
-import dev.scriptor.model.show.EpisodeMediaTable
-import dev.scriptor.model.show.EpisodeTable
-import dev.scriptor.model.show.SeasonTable
-import dev.scriptor.model.show.ShowTable
+import dev.scriptor.model.show.*
 import dev.scriptor.model.user.UserTable
 import dev.scriptor.server.Provider
 import dev.scriptor.server.http.Server
 import dev.scriptor.server.jvm.scan
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.notInList
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.batchInsert
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
 import java.sql.DriverManager
 import java.time.Duration.ofMinutes
+import java.util.concurrent.Callable
 import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import java.util.logging.Level
 import java.util.logging.Logger
-import kotlin.concurrent.atomics.AtomicInt
-import kotlin.concurrent.atomics.ExperimentalAtomicApi
-import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.io.path.*
 import kotlin.time.Duration
 import kotlin.time.Instant
@@ -37,8 +38,6 @@ import kotlin.time.toKotlinDuration
 import kotlin.time.toKotlinInstant
 
 fun getEnvironment(): Map<String, String> = System.getenv()
-
-val EXTENSIONS = arrayOf("mkv", "mp4", "webm")
 
 fun parseFrameRate(value: String?): Double {
     if (value == null || value == "0/0") return 0.0
@@ -50,67 +49,106 @@ fun parseFrameRate(value: String?): Double {
     return if (den == 0.0) 0.0 else num / den
 }
 
+@JsonSerializable
 data class FormatTagsNode(
+    @all:JsonProperty
     val title: String? = null,
 )
 
+@JsonSerializable
 data class FormatNode(
+    @all:JsonProperty
     val size: String,
+    @all:JsonProperty
     val duration: String,
-    val tags: FormatTagsNode,
+    @all:JsonProperty
+    val tags: FormatTagsNode = FormatTagsNode(),
 )
 
+@JsonSerializable
 data class StreamTagsNode(
+    @all:JsonProperty
     val title: String? = null,
+    @all:JsonProperty
     val language: String? = null,
+    @all:JsonProperty
     val filename: String? = null,
+    @all:JsonProperty
     val mimetype: String? = null,
 )
 
+@JsonSerializable
 data class StreamDispositionNode(
+    @all:JsonProperty
     val default: Number? = null,
+    @all:JsonProperty
     val forced: Number? = null,
 )
 
+@JsonSerializable
 data class StreamNode(
+    @all:JsonProperty
     val index: Number,
-    val codec_type: String,
-    val codec_name: String? = null,
+    @all:JsonProperty("codec_type")
+    val codecType: String,
+    @all:JsonProperty("codec_name")
+    val codecName: String? = null,
+    @all:JsonProperty
     val width: Number? = null,
+    @all:JsonProperty
     val height: Number? = null,
-    val bit_rate: String? = null,
-    val avg_frame_rate: String? = null,
+    @all:JsonProperty("bit_rate")
+    val bitRate: String? = null,
+    @all:JsonProperty("avg_frame_rate")
+    val avgFrameRate: String? = null,
+    @all:JsonProperty
     val profile: String? = null,
+    @all:JsonProperty
     val level: Number? = null,
-    val color_transfer: String? = null,
-    val sample_rate: String? = null,
+    @all:JsonProperty("sample_rate")
+    val sampleRate: String? = null,
+    @all:JsonProperty
     val channels: Number? = null,
-    val tags: StreamTagsNode,
-    val disposition: StreamDispositionNode,
+    @all:JsonProperty
+    val tags: StreamTagsNode = StreamTagsNode(),
+    @all:JsonProperty
+    val disposition: StreamDispositionNode = StreamDispositionNode(),
 )
 
+@JsonSerializable
 data class ChapterTagsNode(
+    @all:JsonProperty
     val title: String? = null,
+    @all:JsonProperty
     val language: String? = null,
 )
 
+@JsonSerializable
 data class ChapterNode(
-    val start_time: String,
-    val end_time: String,
-    val tags: ChapterTagsNode,
+    @all:JsonProperty("start_time")
+    val startTime: String,
+    @all:JsonProperty("end_time")
+    val endTime: String,
+    @all:JsonProperty
+    val tags: ChapterTagsNode = ChapterTagsNode(),
 )
 
+@JsonSerializable
 data class MetadataNode(
+    @all:JsonProperty
     val format: FormatNode,
+    @all:JsonProperty
     val streams: List<StreamNode>,
+    @all:JsonProperty
     val chapters: List<ChapterNode>,
 )
 
 context(
+    _: Provider,
     log: Logger,
     database: Database,
 )
-fun getMetadata(
+fun getFileMetadata(
     ffprobe: String,
     path: Path,
     createdAt: Instant,
@@ -132,7 +170,7 @@ fun getMetadata(
     val value = process.waitFor()
     if (value != 0) error("failed to get metadata for $path")
 
-    val node: MetadataNode = parseJson(json).cast()
+    val node: MetadataNode = parseJson(json).fromJson()
 
     val size = node.format.size.toLong()
     val duration = node.format.duration.toDouble()
@@ -150,23 +188,18 @@ fun getMetadata(
     }
 
     for (stream in node.streams) {
-        val codecType = stream.codec_type.lowercase()
+        val codecType = stream.codecType.lowercase()
 
         when (codecType) {
             "video" -> {
                 val index = stream.index.toInt()
-                val codec = stream.codec_name?.lowercase()
+                val codec = stream.codecName?.lowercase()
                 val width = stream.width?.toInt()
                 val height = stream.height?.toInt()
-                val bitRate = stream.bit_rate?.toLongOrNull() ?: 0L
-                val frameRate = parseFrameRate(stream.avg_frame_rate)
+                val bitRate = stream.bitRate?.toLongOrNull() ?: 0L
+                val frameRate = parseFrameRate(stream.avgFrameRate)
                 val profile = stream.profile
                 val level = stream.level?.toInt()
-
-                val hdr = when (stream.color_transfer) {
-                    "smpte2084", "arib-std-b67" -> true
-                    else -> false
-                }
 
                 val language = stream.tags.language
                 val title = stream.tags.title
@@ -186,7 +219,6 @@ fun getMetadata(
                         this.frameRate = frameRate
                         this.profile = profile
                         this.level = level
-                        this.hdr = hdr
                         this.language = language
                         this.title = title
                         this.default = default
@@ -196,9 +228,9 @@ fun getMetadata(
 
             "audio" -> {
                 val index = stream.index.toInt()
-                val codec = stream.codec_name?.lowercase()
-                val bitRate = stream.bit_rate?.toLongOrNull() ?: 0L
-                val sampleRate = stream.sample_rate?.toLong()
+                val codec = stream.codecName?.lowercase()
+                val bitRate = stream.bitRate?.toLongOrNull() ?: 0L
+                val sampleRate = stream.sampleRate?.toLong()
                 val channels = stream.channels?.toInt()
 
                 val language = stream.tags.language
@@ -225,7 +257,7 @@ fun getMetadata(
 
             "subtitle" -> {
                 val index = stream.index.toInt()
-                val codec = stream.codec_name?.lowercase()
+                val codec = stream.codecName?.lowercase()
 
                 val language = stream.tags.language
                 val title = stream.tags.title
@@ -248,7 +280,7 @@ fun getMetadata(
 
             "attachment" -> {
                 val index = stream.index.toInt()
-                val codec = stream.codec_name?.lowercase()
+                val codec = stream.codecName?.lowercase()
 
                 val filename = stream.tags.filename
                 val mimetype = stream.tags.mimetype
@@ -262,8 +294,8 @@ fun getMetadata(
     for (chapter in node.chapters) {
         val index = i++
 
-        val start = chapter.start_time.toDouble()
-        val end = chapter.end_time.toDouble()
+        val start = chapter.startTime.toDouble()
+        val end = chapter.endTime.toDouble()
 
         val language = chapter.tags.language
         val title = chapter.tags.title
@@ -281,58 +313,406 @@ fun getMetadata(
     }
 }
 
-@OptIn(ExperimentalAtomicApi::class)
 context(
+    _: Provider,
     log: Logger,
     database: Database,
 )
-fun getMetadata(
+fun getFileMetadata(
     ffprobe: String,
     paths: List<Path>,
 ) {
-    while (true) {
-        val existing = transaction(database) {
-            MediaTable
-                .select(MediaTable.path)
-                .map { it[MediaTable.path] }
-                .toSet()
+    val existing = transaction(database) {
+        MediaTable
+            .select(MediaTable.path)
+            .map { it[MediaTable.path] }
+            .toSet()
+    }
+
+    val revalidate = paths.filterNot { it in existing }
+
+    val executor = Executors.newFixedThreadPool(
+        minOf(
+            4,
+            Runtime.getRuntime().availableProcessors(),
+        ),
+    )
+
+    val tasks = mutableListOf<Callable<Unit>>()
+
+    for ((index, path) in revalidate.withIndex()) {
+        val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
+
+        val createdAt = attributes.creationTime().toInstant().toKotlinInstant()
+        val modifiedAt = attributes.lastModifiedTime().toInstant().toKotlinInstant()
+
+        tasks.add {
+            log.info("${index + 1} / ${revalidate.size}")
+
+            getFileMetadata(
+                ffprobe,
+                path,
+                createdAt,
+                modifiedAt,
+            )
         }
+    }
 
-        val revalidate = paths.filterNot { it in existing }
+    val results = executor.invokeAll(tasks)
 
-        val executor = Executors.newFixedThreadPool(
-            minOf(
-                4,
-                Runtime.getRuntime().availableProcessors(),
-            ),
-        )
-
-        val index = AtomicInt(0)
-
-        for (path in revalidate) {
-            val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
-
-            val createdAt = attributes.creationTime().toInstant().toKotlinInstant()
-            val modifiedAt = attributes.lastModifiedTime().toInstant().toKotlinInstant()
-
-            executor.execute {
-                log.info("${index.incrementAndFetch()} / ${revalidate.size}")
-
-                getMetadata(
-                    ffprobe,
-                    path,
-                    createdAt,
-                    modifiedAt,
-                )
-            }
-        }
-
-        executor.shutdown()
-        if (executor.awaitTermination(60, TimeUnit.MINUTES)) break
+    for (result in results) {
+        result.get()
     }
 }
 
+enum class TmdbImageType {
+    BACKDROP,
+    LOGO,
+    POSTER,
+    PROFILE,
+    STILL,
+}
+
+fun buildTmdbImages(configuration: TmdbContext.Configuration, type: TmdbImageType, path: String): List<ImageData> {
+    val base = configuration.images.secureBaseUrl
+
+    val sizes = when (type) {
+        TmdbImageType.BACKDROP -> configuration.images.backdropSizes
+        TmdbImageType.LOGO -> configuration.images.logoSizes
+        TmdbImageType.POSTER -> configuration.images.posterSizes
+        TmdbImageType.PROFILE -> configuration.images.profileSizes
+        TmdbImageType.STILL -> configuration.images.stillSizes
+    }
+
+    return sizes.map {
+        val url = "$base$it$path"
+        val width = when (it) {
+            "original" -> -1
+            else -> it.slice(1 until it.length).toInt()
+        }
+
+        ImageData(url, width)
+    }
+}
+
+context(
+    _: Provider,
+    _: Logger,
+    database: Database,
+)
+fun getTmdbMetadata(nodes: Nodes) {
+    val context = TmdbContext()
+    val tmdbIdRegex = """^[^\[]*\[tmdbid-(\d+)].*$""".toRegex()
+    val seasonNumberRegex = """^.*(\d{1,2}).*$""".toRegex()
+    val episodeNumberRegex = """^.*S(\d{1,2})E(\d{1,2}).*$""".toRegex()
+
+    val configuration = context.getConfiguration()
+        ?: error("failed to get tmdb configuration")
+
+    for (movieNode in nodes.movies) {
+        val match = tmdbIdRegex.matchEntire(movieNode.path.name) ?: continue
+        val movieId = match.groupValues[1].toInt()
+
+        var movie = transaction(database) {
+            Movie
+                .find(MovieTable.tmdbId eq movieId)
+                .firstOrNull()
+        }
+
+        if (movie == null) {
+            val details = context.getMovieDetails(movieId) ?: continue
+
+            movie = transaction(database) {
+                Movie.new {
+                    this.tmdbId = movieId
+                    this.title = details.title
+                    this.description = details.overview
+                    this.poster = when (val path = details.posterPath) {
+                        null -> listOf()
+                        else -> buildTmdbImages(configuration, TmdbImageType.POSTER, path)
+                    }
+                    this.backdrop = when (val path = details.backdropPath) {
+                        null -> listOf()
+                        else -> buildTmdbImages(configuration, TmdbImageType.BACKDROP, path)
+                    }
+                }
+            }
+        }
+
+        transaction(database) {
+            val items = movieNode.items
+                .flatMap { Media.find(MediaTable.path eq it).toList() }
+                .filter { it !in movie.items }
+            val extra = movieNode.extra
+                .flatMap { Media.find(MediaTable.path eq it).toList() }
+                .filter { it !in movie.items }
+
+            MovieMediaTable.batchInsert(items) { media ->
+                this[MovieMediaTable.movie] = movie.id
+                this[MovieMediaTable.media] = media.id
+                this[MovieMediaTable.extra] = false
+            }
+            MovieMediaTable.batchInsert(extra) { media ->
+                this[MovieMediaTable.movie] = movie.id
+                this[MovieMediaTable.media] = media.id
+                this[MovieMediaTable.extra] = true
+            }
+        }
+    }
+
+    for (showNode in nodes.shows) {
+        val match = tmdbIdRegex.matchEntire(showNode.path.name) ?: continue
+        val showId = match.groupValues[1].toInt()
+
+        var show = transaction(database) {
+            Show
+                .find(ShowTable.tmdbId eq showId)
+                .firstOrNull()
+        }
+
+        if (show == null) {
+            val details = context.getShowDetails(showId) ?: continue
+
+            show = transaction(database) {
+                Show.new {
+                    this.tmdbId = showId
+                    this.title = details.name
+                    this.description = details.overview
+                    this.poster = when (val path = details.posterPath) {
+                        null -> listOf()
+                        else -> buildTmdbImages(configuration, TmdbImageType.POSTER, path)
+                    }
+                    this.backdrop = when (val path = details.backdropPath) {
+                        null -> listOf()
+                        else -> buildTmdbImages(configuration, TmdbImageType.BACKDROP, path)
+                    }
+                }
+            }
+        }
+
+        for (seasonNode in showNode.seasons) {
+            val match = seasonNumberRegex.matchEntire(seasonNode.path.name) ?: continue
+            val seasonNumber = match.groupValues[1].toInt()
+
+            var season = transaction(database) {
+                Season
+                    .find((SeasonTable.show eq show.id) and (SeasonTable.index eq seasonNumber))
+                    .firstOrNull()
+            }
+
+            if (season == null) {
+                val details = context.getSeasonDetails(showId, seasonNumber) ?: continue
+
+                season = transaction(database) {
+                    Season.new {
+                        this.show = show
+                        this.index = seasonNumber
+                        this.title = details.name
+                        this.description = details.overview
+                        this.poster = when (val path = details.posterPath) {
+                            null -> listOf()
+                            else -> buildTmdbImages(configuration, TmdbImageType.POSTER, path)
+                        }
+                    }
+                }
+            }
+
+            for (episodePath in seasonNode.episodes) {
+                val match = episodeNumberRegex.matchEntire(episodePath.name) ?: continue
+                val seasonNumber = match.groupValues[1].toInt()
+                val episodeNumber = match.groupValues[2].toInt()
+
+                var episode = transaction(database) {
+                    Episode
+                        .find((EpisodeTable.season eq season.id) and (EpisodeTable.index eq episodeNumber))
+                        .firstOrNull()
+                }
+
+                if (episode == null) {
+                    val details = context.getEpisodeDetails(showId, seasonNumber, episodeNumber) ?: continue
+
+                    episode = transaction(database) {
+                        Episode.new {
+                            this.season = season
+                            this.media = Media.find(MediaTable.path eq episodePath).first()
+                            this.index = episodeNumber
+                            this.title = details.name
+                            this.description = details.overview
+                            this.still = when (val path = details.stillPath) {
+                                null -> listOf()
+                                else -> buildTmdbImages(configuration, TmdbImageType.STILL, path)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+data class MovieNode(
+    val path: Path,
+    val items: List<Path>,
+    val extra: List<Path>,
+)
+
+data class SeasonNode(
+    val path: Path,
+    val episodes: List<Path>,
+)
+
+data class ShowNode(
+    val path: Path,
+    val seasons: List<SeasonNode>,
+)
+
+data class Nodes(
+    val movies: List<MovieNode>,
+    val shows: List<ShowNode>,
+    val others: List<Path>,
+) {
+    val paths: List<Path>
+        get() = movies.flatMap { movie -> movie.items + movie.extra } +
+                shows.flatMap { show -> show.seasons.flatMap { season -> season.episodes } } +
+                others
+}
+
+fun walkFileTree(log: Logger, root: Path): Nodes {
+    var moviesPath: Path? = null
+    var moviePath: Path? = null
+    var extraPath: Path? = null
+
+    var showsPath: Path? = null
+    var showPath: Path? = null
+    var seasonPath: Path? = null
+
+    lateinit var movieNode: MovieNode
+    lateinit var movieItems: MutableList<Path>
+    lateinit var movieExtra: MutableList<Path>
+
+    lateinit var showNode: ShowNode
+    lateinit var showSeasons: MutableList<SeasonNode>
+    lateinit var seasonNode: SeasonNode
+    lateinit var seasonEpisodes: MutableList<Path>
+
+    val movies = mutableListOf<MovieNode>()
+    val shows = mutableListOf<ShowNode>()
+    val others = mutableListOf<Path>()
+
+    root.visitFileTree {
+        onPreVisitDirectory { directory, attributes ->
+            when {
+                moviesPath != null -> when {
+                    moviePath == null -> {
+                        moviePath = directory
+                        movieItems = mutableListOf()
+                        movieExtra = mutableListOf()
+                        movieNode = MovieNode(directory, movieItems, movieExtra)
+                        FileVisitResult.CONTINUE
+                    }
+
+                    extraPath == null -> {
+                        extraPath = directory
+                        FileVisitResult.CONTINUE
+                    }
+
+                    else -> FileVisitResult.CONTINUE
+                }
+
+                showsPath != null -> when {
+                    showPath == null -> {
+                        showPath = directory
+                        showSeasons = mutableListOf()
+                        showNode = ShowNode(directory, showSeasons)
+                        FileVisitResult.CONTINUE
+                    }
+
+                    seasonPath == null -> {
+                        seasonPath = directory
+                        seasonEpisodes = mutableListOf()
+                        seasonNode = SeasonNode(directory, seasonEpisodes)
+                        FileVisitResult.CONTINUE
+                    }
+
+                    else -> FileVisitResult.CONTINUE
+                }
+
+                directory.name.equals("movies", true) -> {
+                    moviesPath = directory
+                    FileVisitResult.CONTINUE
+                }
+
+                directory.name.equals("shows", true) -> {
+                    showsPath = directory
+                    FileVisitResult.CONTINUE
+                }
+
+                else -> FileVisitResult.CONTINUE
+            }
+        }
+
+        onPostVisitDirectory { directory, exception ->
+            if (exception != null) {
+                log.warning("error when visiting directory $directory: ${exception.stackTraceToString()}")
+            }
+
+            when (directory) {
+                moviesPath -> moviesPath = null
+
+                moviePath -> {
+                    movies.add(movieNode)
+                    moviePath = null
+                }
+
+                extraPath -> extraPath = null
+
+                showsPath -> showsPath = null
+
+                showPath -> {
+                    shows.add(showNode)
+                    showPath = null
+                }
+
+                seasonPath -> {
+                    showSeasons.add(seasonNode)
+                    seasonPath = null
+                }
+            }
+
+            FileVisitResult.CONTINUE
+        }
+
+        onVisitFile { file, attributes ->
+            when {
+                extraPath != null -> movieExtra.add(file)
+                moviePath != null -> movieItems.add(file)
+
+                seasonPath != null -> seasonEpisodes.add(file)
+
+                else -> others.add(file)
+            }
+
+            FileVisitResult.CONTINUE
+        }
+
+        onVisitFileFailed { file, exception ->
+            log.warning("error when visiting file $file: ${exception.stackTraceToString()}")
+
+            FileVisitResult.CONTINUE
+        }
+    }
+
+    return Nodes(
+        movies,
+        shows,
+        others,
+    )
+}
+
 fun main() {
+    val provider = Provider()
+    scan(provider, "dev.scriptor")
+
     val env = getEnvironment()
 
     val host = env["HOST"]
@@ -354,21 +734,43 @@ fun main() {
     val ffmpeg = env["FFMPEG"] ?: "ffmpeg"
     val ffprobe = env["FFPROBE"] ?: "ffprobe"
 
-    val log = getLogger("coffee-house")
-    log.level = Level.ALL
+    val tmdbToken = env["TMDB_TOKEN"]
 
-    val provider = Provider()
+    provider["host"] = host
+    provider["port"] = port
+
+    provider["data"] = data
+    provider["cache"] = cache
 
     provider["username"] = username
     provider["password"] = password
 
-    provider.registerT(log)
+    provider["transcoding-enable"] = transcodingEnable
+    provider["transcoding-device"] = transcodingDevice
+
+    provider["target-video-codec"] = targetVideoCodec
+    provider["target-audio-codec"] = targetAudioCodec
+    provider["target-subtitle-codec"] = targetSubtitleCodec
+
+    provider["ffmpeg"] = ffmpeg
+    provider["ffprobe"] = ffprobe
+
+    provider["tmdb-token"] = tmdbToken
+
+    val log = getLogger("coffee-house")
+    log.level = Level.ALL
+
+    provider.setT(log)
 
     val databasePath = cache.resolve("index.db")
     databasePath.createParentDirectories()
 
-    val database = Database.connect({ DriverManager.getConnection("jdbc:sqlite:$databasePath") })
-    provider.registerT(database)
+    val database = Database.connect({
+        val connection = DriverManager.getConnection("jdbc:sqlite:$databasePath")
+        connection.createStatement().use { it.execute("PRAGMA foreign_keys = ON") }
+        connection
+    })
+    provider.setT(database)
 
     transaction(database) {
         SchemaUtils.create(
@@ -395,7 +797,6 @@ fun main() {
             ShowTable,
             SeasonTable,
             EpisodeTable,
-            EpisodeMediaTable,
         )
     }
 
@@ -413,16 +814,14 @@ fun main() {
             CodecId(targetSubtitleCodec),
         ),
     )
-    provider.registerT(transcoding)
+    provider.setT(transcoding)
 
-    log.info("walking file tree")
+    log.info("walk file tree")
 
-    val paths = data
-        .walk()
-        .filter { it.extension in EXTENSIONS }
-        .toList()
+    val nodes = walkFileTree(log, data)
+    val paths = nodes.paths
 
-    log.info("found ${paths.size} files")
+    log.info("found ${paths.size} files (${nodes.movies.size} movies, ${nodes.shows.size} shows, ${nodes.others.size} others)")
 
     transaction(database) {
         Media
@@ -430,8 +829,9 @@ fun main() {
             .forEach { it.delete() }
     }
 
-    context(log, database) {
-        getMetadata(ffprobe, paths)
+    context(provider, log, database) {
+        getFileMetadata(ffprobe, paths)
+        getTmdbMetadata(nodes)
     }
 
     val server = when {
@@ -459,7 +859,7 @@ fun main() {
             Duration.ZERO,
             ofMinutes(60L).toKotlinDuration(),
         ) {
-            val context: PlaybackContext = provider.getContextT()
+            val context: PlaybackContext = provider.getT()
                 ?: error("missing playback context")
             context.deleteExpiredPlaybacks()
         }

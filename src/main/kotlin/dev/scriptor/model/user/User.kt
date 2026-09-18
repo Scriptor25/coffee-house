@@ -1,5 +1,7 @@
 package dev.scriptor.model.user
 
+import dev.scriptor.JsonProperty
+import dev.scriptor.JsonSerializable
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.UuidTable
 import org.jetbrains.exposed.v1.dao.UuidEntity
@@ -12,11 +14,20 @@ object UserTable : UuidTable("user") {
     val role = enumeration("role", UserRole::class)
 }
 
+@JsonSerializable
 class User(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<User>(UserTable)
 
+    @all:JsonProperty("id")
+    val jsonId
+        get() = id.value
+
+    @JsonProperty
     var name by UserTable.name
+
     var hash by UserTable.hash
+
+    @JsonProperty
     var role by UserTable.role
 
     override fun toString(): String {
