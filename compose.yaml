@@ -18,7 +18,8 @@ services:
       CACHE: "/cache"
       USERNAME: "root"
       PASSWORD: "root"
-      TRANSCODING: "true"
+      TRANSCODING: "false"
+      TMDB_TOKEN: ${TMDB_TOKEN}
 
     devices:
       - /dev/dri:/dev/dri

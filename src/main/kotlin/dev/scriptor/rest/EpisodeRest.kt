@@ -3,6 +3,7 @@ package dev.scriptor.rest
 import dev.scriptor.context.AuthContext
 import dev.scriptor.context.PlaybackContext
 import dev.scriptor.model.AuthorizationHeader
+import dev.scriptor.model.CookieHeader
 import dev.scriptor.model.show.Episode
 import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.UnauthorizedSignal
@@ -25,8 +26,9 @@ class EpisodeRest {
     fun getEpisode(
         @PathParameter id: Uuid,
         @Header authorization: AuthorizationHeader? = null,
+        @Header cookie: CookieHeader = CookieHeader(),
     ): Episode {
-        auth.auth(authorization)
+        auth.auth(authorization, cookie)
             ?: throw UnauthorizedSignal()
 
         return transaction(database) { Episode.findById(id) }
@@ -43,8 +45,9 @@ class EpisodeRest {
     fun createEpisodePlayback(
         @PathParameter id: Uuid,
         @Header authorization: AuthorizationHeader? = null,
+        @Header cookie: CookieHeader = CookieHeader(),
     ): String {
-        val session = auth.auth(authorization)
+        val session = auth.auth(authorization, cookie)
             ?: throw UnauthorizedSignal()
 
         val userId = session.user?.id?.value

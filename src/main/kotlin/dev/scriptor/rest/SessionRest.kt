@@ -3,6 +3,7 @@ package dev.scriptor.rest
 import dev.scriptor.context.AuthContext
 import dev.scriptor.context.SessionContext
 import dev.scriptor.model.AuthorizationHeader
+import dev.scriptor.model.CookieHeader
 import dev.scriptor.model.CreateSessionBody
 import dev.scriptor.security.Jwt
 import dev.scriptor.server.Provider
@@ -35,7 +36,8 @@ class SessionRest {
     )
     fun renewSession(
         @Header authorization: AuthorizationHeader? = null,
+        @Header cookie: CookieHeader = CookieHeader(),
     ): Jwt {
-        return sessions.renewSession(authorization)
+        return sessions.renewSession(authorization, cookie)
     }
 }

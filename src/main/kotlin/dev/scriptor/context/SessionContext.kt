@@ -1,6 +1,7 @@
 package dev.scriptor.context
 
 import dev.scriptor.model.AuthorizationHeader
+import dev.scriptor.model.CookieHeader
 import dev.scriptor.model.user.User
 import dev.scriptor.model.user.UserTable
 import dev.scriptor.security.Jwt
@@ -73,10 +74,13 @@ class SessionContext {
         _: Database,
         auth: AuthContext,
     )
-    fun renewSession(authorization: AuthorizationHeader?): Jwt {
+    fun renewSession(
+        authorization: AuthorizationHeader?,
+        cookie: CookieHeader,
+    ): Jwt {
         val instant = Clock.System.now()
 
-        val session = auth.auth(authorization, instant)
+        val session = auth.auth(authorization, cookie, instant)
             ?: throw UnauthorizedSignal()
 
         val jwt = session.jwt

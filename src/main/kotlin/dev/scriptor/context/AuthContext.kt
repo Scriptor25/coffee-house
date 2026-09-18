@@ -1,6 +1,7 @@
 package dev.scriptor.context
 
 import dev.scriptor.model.AuthorizationHeader
+import dev.scriptor.model.CookieHeader
 import dev.scriptor.model.Session
 import dev.scriptor.model.user.User
 import dev.scriptor.security.Jwt
@@ -74,17 +75,24 @@ class AuthContext {
     )
     fun auth(
         authorization: AuthorizationHeader?,
+        cookie: CookieHeader,
         instant: Instant = Clock.System.now(),
     ): Session? {
-        if (authorization == null) {
-            return null
-        }
+        val token = when (val token = cookie["token"]) {
+            null -> when {
+                authorization == null -> {
+                    return null
+                }
 
-        if (authorization.scheme != "Bearer") {
-            return null
-        }
+                authorization.scheme != "Bearer" -> {
+                    return null
+                }
 
-        val token = authorization.credentials
+                else -> authorization.credentials
+            }
+
+            else -> token
+        }
 
         return auth(token, instant)
     }

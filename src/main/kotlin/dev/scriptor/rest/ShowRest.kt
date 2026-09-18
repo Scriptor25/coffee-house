@@ -2,6 +2,7 @@ package dev.scriptor.rest
 
 import dev.scriptor.context.AuthContext
 import dev.scriptor.model.AuthorizationHeader
+import dev.scriptor.model.CookieHeader
 import dev.scriptor.model.OffsetLimitBody
 import dev.scriptor.model.show.Season
 import dev.scriptor.model.show.Show
@@ -28,8 +29,9 @@ class ShowRest {
     fun getShow(
         @PathParameter id: Uuid,
         @Header authorization: AuthorizationHeader? = null,
+        @Header cookie: CookieHeader = CookieHeader(),
     ): Show {
-        auth.auth(authorization)
+        auth.auth(authorization, cookie)
             ?: throw UnauthorizedSignal()
 
         return transaction(database) { Show.findById(id) }
@@ -45,9 +47,10 @@ class ShowRest {
     fun getShowSeasons(
         @PathParameter id: Uuid,
         @Header authorization: AuthorizationHeader? = null,
+        @Header cookie: CookieHeader = CookieHeader(),
         @Body body: OffsetLimitBody = OffsetLimitBody(),
     ): List<Season> {
-        auth.auth(authorization)
+        auth.auth(authorization, cookie)
             ?: throw UnauthorizedSignal()
 
         val show = transaction(database) { Show.findById(id) }
@@ -69,9 +72,10 @@ class ShowRest {
     )
     fun getShowList(
         @Header authorization: AuthorizationHeader? = null,
+        @Header cookie: CookieHeader = CookieHeader(),
         @Body body: OffsetLimitBody = OffsetLimitBody(),
     ): List<Show> {
-        auth.auth(authorization)
+        auth.auth(authorization, cookie)
             ?: throw UnauthorizedSignal()
 
         return transaction(database) {

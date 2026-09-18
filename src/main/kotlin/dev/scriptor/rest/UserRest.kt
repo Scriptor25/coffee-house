@@ -1,10 +1,7 @@
 package dev.scriptor.rest
 
 import dev.scriptor.context.AuthContext
-import dev.scriptor.model.AuthorizationHeader
-import dev.scriptor.model.CreateUserBody
-import dev.scriptor.model.OffsetLimitBody
-import dev.scriptor.model.UpdateUserBody
+import dev.scriptor.model.*
 import dev.scriptor.model.user.User
 import dev.scriptor.model.user.UserRole
 import dev.scriptor.server.ForbiddenSignal
@@ -28,9 +25,10 @@ class UserRest {
     )
     fun createUser(
         @Header authorization: AuthorizationHeader? = null,
+        @Header cookie: CookieHeader = CookieHeader(),
         @Body body: CreateUserBody,
     ): User {
-        val session = auth.auth(authorization)
+        val session = auth.auth(authorization, cookie)
             ?: throw UnauthorizedSignal()
 
         if (session.role != UserRole.ADMIN) {
@@ -55,8 +53,9 @@ class UserRest {
     fun getUser(
         @PathParameter id: Uuid,
         @Header authorization: AuthorizationHeader? = null,
+        @Header cookie: CookieHeader = CookieHeader(),
     ): User {
-        val session = auth.auth(authorization)
+        val session = auth.auth(authorization, cookie)
             ?: throw UnauthorizedSignal()
 
         if (session.role != UserRole.ADMIN && session.id != id) {
@@ -76,9 +75,10 @@ class UserRest {
     fun updateUser(
         @PathParameter id: Uuid,
         @Header authorization: AuthorizationHeader? = null,
+        @Header cookie: CookieHeader = CookieHeader(),
         @Body body: UpdateUserBody,
     ): User {
-        val session = auth.auth(authorization)
+        val session = auth.auth(authorization, cookie)
             ?: throw UnauthorizedSignal()
 
         if (session.role != UserRole.ADMIN && session.id != id) {
@@ -104,8 +104,9 @@ class UserRest {
     fun deleteUser(
         @PathParameter id: Uuid,
         @Header authorization: AuthorizationHeader? = null,
+        @Header cookie: CookieHeader = CookieHeader(),
     ): User {
-        val session = auth.auth(authorization)
+        val session = auth.auth(authorization, cookie)
             ?: throw UnauthorizedSignal()
 
         if (session.role != UserRole.ADMIN && session.id != id) {
@@ -127,9 +128,10 @@ class UserRest {
     )
     fun getUserList(
         @Header authorization: AuthorizationHeader? = null,
+        @Header cookie: CookieHeader = CookieHeader(),
         @Body body: OffsetLimitBody = OffsetLimitBody(),
     ): List<User> {
-        val session = auth.auth(authorization)
+        val session = auth.auth(authorization, cookie)
             ?: throw UnauthorizedSignal()
 
         return when (session.role) {

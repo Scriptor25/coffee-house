@@ -2,6 +2,7 @@ package dev.scriptor.rest
 
 import dev.scriptor.context.AuthContext
 import dev.scriptor.model.AuthorizationHeader
+import dev.scriptor.model.CookieHeader
 import dev.scriptor.model.OffsetLimitBody
 import dev.scriptor.model.media.Media
 import dev.scriptor.server.NotFoundSignal
@@ -25,8 +26,9 @@ class MediaRest {
     fun getMedia(
         @PathParameter id: Uuid,
         @Header authorization: AuthorizationHeader? = null,
+        @Header cookie: CookieHeader = CookieHeader(),
     ): Media {
-        auth.auth(authorization)
+        auth.auth(authorization, cookie)
             ?: throw UnauthorizedSignal()
 
         return transaction(database) { Media.findById(id) }
@@ -41,9 +43,10 @@ class MediaRest {
     )
     fun getMediaList(
         @Header authorization: AuthorizationHeader? = null,
+        @Header cookie: CookieHeader = CookieHeader(),
         @Body body: OffsetLimitBody = OffsetLimitBody(),
     ): List<Media> {
-        auth.auth(authorization)
+        auth.auth(authorization, cookie)
             ?: throw UnauthorizedSignal()
 
         return transaction(database) {

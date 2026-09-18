@@ -6,6 +6,7 @@ import dev.scriptor.context.AuthContext
 import dev.scriptor.context.PlaybackContext
 import dev.scriptor.jsonOf
 import dev.scriptor.model.AuthorizationHeader
+import dev.scriptor.model.CookieHeader
 import dev.scriptor.model.CreatePlaybackBody
 import dev.scriptor.model.RangeHeader
 import dev.scriptor.model.media.Chapter
@@ -83,9 +84,10 @@ class PlaybackRest {
     )
     fun createPlayback(
         @Header authorization: AuthorizationHeader? = null,
+        @Header cookie: CookieHeader = CookieHeader(),
         @Body body: CreatePlaybackBody,
     ): String {
-        val session = auth.auth(authorization)
+        val session = auth.auth(authorization, cookie)
             ?: throw UnauthorizedSignal()
 
         val userId = session.user?.id?.value

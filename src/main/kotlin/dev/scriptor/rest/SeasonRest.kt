@@ -3,6 +3,7 @@ package dev.scriptor.rest
 import dev.scriptor.context.AuthContext
 import dev.scriptor.context.PlaybackContext
 import dev.scriptor.model.AuthorizationHeader
+import dev.scriptor.model.CookieHeader
 import dev.scriptor.model.OffsetLimitBody
 import dev.scriptor.model.show.Episode
 import dev.scriptor.model.show.Season
@@ -27,8 +28,9 @@ class SeasonRest {
     fun getSeason(
         @PathParameter id: Uuid,
         @Header authorization: AuthorizationHeader? = null,
+        @Header cookie: CookieHeader = CookieHeader(),
     ): Season {
-        auth.auth(authorization)
+        auth.auth(authorization, cookie)
             ?: throw UnauthorizedSignal()
 
         return transaction(database) { Season.findById(id) }
@@ -44,9 +46,10 @@ class SeasonRest {
     fun getSeasonEpisodes(
         @PathParameter id: Uuid,
         @Header authorization: AuthorizationHeader? = null,
+        @Header cookie: CookieHeader = CookieHeader(),
         @Body body: OffsetLimitBody = OffsetLimitBody(),
     ): List<Episode> {
-        auth.auth(authorization)
+        auth.auth(authorization, cookie)
             ?: throw UnauthorizedSignal()
 
         val season = transaction(database) { Season.findById(id) }
@@ -70,8 +73,9 @@ class SeasonRest {
     fun createSeasonPlayback(
         @PathParameter id: Uuid,
         @Header authorization: AuthorizationHeader? = null,
+        @Header cookie: CookieHeader = CookieHeader(),
     ): String {
-        val session = auth.auth(authorization)
+        val session = auth.auth(authorization, cookie)
             ?: throw UnauthorizedSignal()
 
         val userId = session.user?.id?.value
