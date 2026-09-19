@@ -499,7 +499,11 @@ class DashboardRest {
                 })
             }
             this["start_url"] = jsonOf("/")
-            this["display"] = jsonOf("minimal-ui")
+            this["display"] = jsonOf("standalone")
+            this["display_override"] = jsonArray {
+                add(jsonOf("fullscreen"))
+                add(jsonOf("minimal-ui"))
+            }
         }
     }
 
