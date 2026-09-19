@@ -2,7 +2,6 @@ package dev.scriptor.rest
 
 import dev.scriptor.JsonArrayNode
 import dev.scriptor.TranscodingCache
-import dev.scriptor.context.AuthContext
 import dev.scriptor.context.PlaybackContext
 import dev.scriptor.jsonOf
 import dev.scriptor.model.AuthorizationHeader
@@ -11,10 +10,14 @@ import dev.scriptor.model.CreatePlaybackBody
 import dev.scriptor.model.RangeHeader
 import dev.scriptor.model.media.Chapter
 import dev.scriptor.model.media.Media
-import dev.scriptor.server.*
+import dev.scriptor.server.NotFoundSignal
+import dev.scriptor.server.ParameterList
+import dev.scriptor.server.RangeNotSatisfiableSignal
+import dev.scriptor.server.RangeReadableByteChannel
 import dev.scriptor.server.jvm.annotation.*
 import dev.scriptor.server.result.ChannelResult
 import dev.scriptor.server.result.Result
+import dev.scriptor.server.security.Principal
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.nio.channels.FileChannel
@@ -23,7 +26,6 @@ import java.util.logging.Logger
 import kotlin.io.path.readText
 import kotlin.io.path.useLines
 
-@Suppress("unused")
 @Controller("/resource/playback")
 class PlaybackRest {
 
@@ -75,11 +77,10 @@ class PlaybackRest {
         )
     }
 
+    @RequireAuth
     @Post("/", "application/json", "text/plain")
     context(
-        _: Logger,
-        database: Database,
-        auth: AuthContext,
+        principal: Principal,
         context: PlaybackContext,
     )
     fun createPlayback(
@@ -87,12 +88,9 @@ class PlaybackRest {
         @Header cookie: CookieHeader = CookieHeader(),
         @Body body: CreatePlaybackBody,
     ): String {
-        val session = auth.auth(authorization, cookie)
-            ?: throw UnauthorizedSignal()
+        val id = principal.id
 
-        val userId = session.user?.id?.value
-
-        return context.createPlayback(userId, body.name, body.items)
+        return context.createPlayback(id, body.name, body.items)
     }
 
     @Get("/[token]/playlist.m3u8", "application/x-mpegurl")

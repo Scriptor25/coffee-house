@@ -1,57 +1,31 @@
 package dev.scriptor.rest
 
-import dev.scriptor.context.AuthContext
 import dev.scriptor.context.PlaybackContext
-import dev.scriptor.model.AuthorizationHeader
-import dev.scriptor.model.CookieHeader
 import dev.scriptor.model.OffsetLimitBody
 import dev.scriptor.model.movie.Movie
 import dev.scriptor.model.movie.MovieTable
 import dev.scriptor.server.NotFoundSignal
-import dev.scriptor.server.UnauthorizedSignal
 import dev.scriptor.server.jvm.annotation.*
+import dev.scriptor.server.security.Principal
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import java.util.logging.Logger
 import kotlin.uuid.Uuid
 
-@Suppress("unused")
+@RequireAuth
 @Controller("/resource/movie")
 class MovieRest {
 
     @Get("/[id]", "application/json")
-    context(
-        _: Logger,
-        database: Database,
-        auth: AuthContext,
-    )
-    fun getMovie(
-        @PathParameter id: Uuid,
-        @Header authorization: AuthorizationHeader? = null,
-        @Header cookie: CookieHeader = CookieHeader(),
-    ): Movie {
-        auth.auth(authorization, cookie)
-            ?: throw UnauthorizedSignal()
-
+    context(database: Database)
+    fun getMovie(@PathParameter id: Uuid): Movie {
         return transaction(database) { Movie.findById(id) }
             ?: throw NotFoundSignal()
     }
 
     @Post("/list", "application/json", "application/json")
-    context(
-        _: Logger,
-        database: Database,
-        auth: AuthContext,
-    )
-    fun getMovieList(
-        @Header authorization: AuthorizationHeader? = null,
-        @Header cookie: CookieHeader = CookieHeader(),
-        @Body body: OffsetLimitBody = OffsetLimitBody(),
-    ): List<Movie> {
-        auth.auth(authorization, cookie)
-            ?: throw UnauthorizedSignal()
-
+    context(database: Database)
+    fun getMovieList(@Body body: OffsetLimitBody = OffsetLimitBody()): List<Movie> {
         return transaction(database) {
             Movie
                 .all()
@@ -63,29 +37,15 @@ class MovieRest {
     }
 
     @Post("/[id]/playback", "*/*", "text/plain")
-    context(
-        _: Logger,
-        database: Database,
-        auth: AuthContext,
-        context: PlaybackContext,
-    )
-    fun createMoviePlayback(
-        @PathParameter id: Uuid,
-        @Header authorization: AuthorizationHeader? = null,
-        @Header cookie: CookieHeader = CookieHeader(),
-    ): String {
-        val session = auth.auth(authorization, cookie)
-            ?: throw UnauthorizedSignal()
-
-        val userId = session.user?.id?.value
-
+    context(principal: Principal, database: Database, context: PlaybackContext)
+    fun createMoviePlayback(@PathParameter id: Uuid): String {
         val movie = transaction(database) { Movie.findById(id) }
             ?: throw NotFoundSignal()
 
         val items = transaction(database) { movie.items.map { it.id.value } }
 
         return context.createPlayback(
-            userId,
+            principal.id,
             movie.title,
             items,
         )

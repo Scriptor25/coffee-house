@@ -1,18 +1,20 @@
 package dev.scriptor.rest
 
-import dev.scriptor.context.AuthContext
 import dev.scriptor.context.SessionContext
-import dev.scriptor.model.CookieHeader
 import dev.scriptor.model.movie.ImageData
 import dev.scriptor.model.movie.Movie
 import dev.scriptor.model.movie.MovieTable
 import dev.scriptor.model.show.*
+import dev.scriptor.model.user.User
 import dev.scriptor.server.*
 import dev.scriptor.server.jvm.annotation.*
+import dev.scriptor.server.request.OriginRequestTarget
+import dev.scriptor.server.request.Request
 import dev.scriptor.server.result.Result
 import dev.scriptor.server.result.StreamResult
 import dev.scriptor.server.result.StringResult
 import dev.scriptor.server.result.UnitResult
+import dev.scriptor.server.security.Principal
 import dev.scriptor.ui.Bundle
 import dev.scriptor.ui.css.builder.*
 import dev.scriptor.ui.dom.Attribute
@@ -32,7 +34,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.logging.Logger
 import kotlin.uuid.Uuid
 
-@Suppress("unused")
+@RequireAuth
 @Controller("/")
 class DashboardRest {
 
@@ -61,11 +63,13 @@ class DashboardRest {
         )
     }
 
+    @Public
     @Get("/favicon.[]", "image/svg+xml")
     fun getFavicon(): Result {
         return resource("favicon.svg")
     }
 
+    @Public
     @Get("/health")
     fun getHealth(): Unit = throw NoContentSignal()
 
@@ -480,19 +484,8 @@ class DashboardRest {
     }
 
     @Get("/", "text/html")
-    context(
-        _: Logger,
-        database: Database,
-        auth: AuthContext,
-    )
-    fun getDashboardPage(@Header cookie: CookieHeader = CookieHeader()): Result {
-        val token = cookie["token"]
-
-        val session = auth.auth(token)
-            ?: throw FoundSignal(ParameterList("location" to "/login"))
-
-        val user = session.user
-
+    context(principal: Principal, database: Database)
+    fun getDashboardPage(): Result {
         val movies = transaction(database) {
             Movie
                 .all()
@@ -508,6 +501,8 @@ class DashboardRest {
                 .limit(4)
                 .toList()
         }
+
+        val user = transaction(database) { User.findById(principal.id) }
 
         return Bundle().html {
             head {
@@ -584,6 +579,7 @@ class DashboardRest {
         }.toXmlString().cache()
     }
 
+    @Public
     @Post("/login", "application/x-www-form-urlencoded")
     context(
         _: Logger,
@@ -591,7 +587,7 @@ class DashboardRest {
         _: Database,
         sessions: SessionContext,
     )
-    fun login(@Body body: String): Result {
+    fun login(@QueryParameter next: String = "/", @Body body: String): Result {
         val parameters = body
             .split("&")
             .map { it.trim().split("=", limit = 2) }
@@ -617,22 +613,16 @@ class DashboardRest {
             statusText = "Found",
             headers = ParameterList(
                 "set-cookie" to "token=$token; Path=/; HttpOnly; Max-Age=$maxAge; SameSite=Strict",
-                "location" to "/",
+                "location" to next,
             ),
         )
     }
 
+    @Public
     @Get("/login", "text/html")
-    context(
-        _: Logger,
-        _: Database,
-        auth: AuthContext,
-    )
-    fun getLoginPage(@Header cookie: CookieHeader = CookieHeader()): Result {
-        val token = cookie["token"]
-
-        val session = auth.auth(token)
-        if (session != null) {
+    context(principal: Principal?)
+    fun getLoginPage(@QueryParameter next: String?): Result {
+        if (principal != null) {
             throw FoundSignal(ParameterList("location" to "/"))
         }
 
@@ -652,6 +642,12 @@ class DashboardRest {
                         encType = "application/x-www-form-urlencoded"
                         method = "post"
                     }) {
+                        input {
+                            type = HtmlInputElementType.HIDDEN
+                            name = "next"
+                            value = next
+                        }
+
                         div({ htmlClass = "set" }) {
                             label {
                                 span { +"Username" }
@@ -717,17 +713,8 @@ class DashboardRest {
     }
 
     @Get("/movie", "text/html")
-    context(
-        _: Logger,
-        database: Database,
-        auth: AuthContext,
-    )
-    fun getMovieListPage(@Header cookie: CookieHeader = CookieHeader()): Result {
-        val token = cookie["token"]
-
-        val session = auth.auth(token)
-            ?: throw FoundSignal(ParameterList("location" to "/login"))
-
+    context(database: Database)
+    fun getMovieListPage(): Result {
         val movies = transaction(database) {
             Movie
                 .all()
@@ -774,20 +761,8 @@ class DashboardRest {
     }
 
     @Get("/movie/[id]", "text/html")
-    context(
-        _: Logger,
-        database: Database,
-        auth: AuthContext,
-    )
-    fun getMovieDetailPage(
-        @PathParameter id: Uuid,
-        @Header cookie: CookieHeader = CookieHeader(),
-    ): Result {
-        val token = cookie["token"]
-
-        val session = auth.auth(token)
-            ?: throw FoundSignal(ParameterList("location" to "/login"))
-
+    context(database: Database)
+    fun getMovieDetailPage(@PathParameter id: Uuid): Result {
         val movie = transaction(database) { Movie.findById(id) }
             ?: throw NotFoundSignal()
 
@@ -918,17 +893,8 @@ class DashboardRest {
     }
 
     @Get("/show", "text/html")
-    context(
-        _: Logger,
-        database: Database,
-        auth: AuthContext,
-    )
-    fun getShowListPage(@Header cookie: CookieHeader = CookieHeader()): Result {
-        val token = cookie["token"]
-
-        val session = auth.auth(token)
-            ?: throw FoundSignal(ParameterList("location" to "/login"))
-
+    context(database: Database)
+    fun getShowListPage(): Result {
         val shows = transaction(database) {
             Show
                 .all()
@@ -975,20 +941,8 @@ class DashboardRest {
     }
 
     @Get("/show/[id]", "text/html")
-    context(
-        _: Logger,
-        database: Database,
-        auth: AuthContext,
-    )
-    fun getShowDetailPage(
-        @PathParameter id: Uuid,
-        @Header cookie: CookieHeader = CookieHeader(),
-    ): Result {
-        val token = cookie["token"]
-
-        val session = auth.auth(token)
-            ?: throw FoundSignal(ParameterList("location" to "/login"))
-
+    context(database: Database)
+    fun getShowDetailPage(@PathParameter id: Uuid): Result {
         val show = transaction(database) { Show.findById(id) }
             ?: throw NotFoundSignal()
 
@@ -1107,20 +1061,8 @@ class DashboardRest {
     }
 
     @Get("/season/[id]", "text/html")
-    context(
-        _: Logger,
-        database: Database,
-        auth: AuthContext,
-    )
-    fun getSeasonDetailPage(
-        @PathParameter id: Uuid,
-        @Header cookie: CookieHeader = CookieHeader(),
-    ): Result {
-        val token = cookie["token"]
-
-        val session = auth.auth(token)
-            ?: throw FoundSignal(ParameterList("location" to "/login"))
-
+    context(database: Database)
+    fun getSeasonDetailPage(@PathParameter id: Uuid): Result {
         val season = transaction(database) { Season.findById(id) }
             ?: throw NotFoundSignal()
 
@@ -1253,20 +1195,8 @@ class DashboardRest {
     }
 
     @Get("/episode/[id]", "text/html")
-    context(
-        _: Logger,
-        database: Database,
-        auth: AuthContext,
-    )
-    fun getEpisodeDetailPage(
-        @PathParameter id: Uuid,
-        @Header cookie: CookieHeader = CookieHeader(),
-    ): Result {
-        val token = cookie["token"]
-
-        val session = auth.auth(token)
-            ?: throw FoundSignal(ParameterList("location" to "/login"))
-
+    context(database: Database)
+    fun getEpisodeDetailPage(@PathParameter id: Uuid): Result {
         val episode = transaction(database) { Episode.findById(id) }
             ?: throw NotFoundSignal()
 
@@ -1375,5 +1305,17 @@ class DashboardRest {
                 }
             }
         }.toXmlString().cache()
+    }
+
+    @Handle(UnauthorizedSignal::class)
+    fun handleUnauthorizedSignal(request: Request, signal: UnauthorizedSignal): Result {
+        val next = when (val target = request.target) {
+            is OriginRequestTarget -> target.path
+            else -> null
+        }
+
+        val location = if (next == null) "/login" else "/login?next=$next"
+
+        return FoundSignal(ParameterList("location" to location)).generate()
     }
 }

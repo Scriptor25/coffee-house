@@ -1,7 +1,5 @@
 package dev.scriptor.context
 
-import dev.scriptor.model.AuthorizationHeader
-import dev.scriptor.model.CookieHeader
 import dev.scriptor.model.user.User
 import dev.scriptor.model.user.UserTable
 import dev.scriptor.security.Jwt
@@ -10,16 +8,37 @@ import dev.scriptor.security.JwtPayload
 import dev.scriptor.server.Provider
 import dev.scriptor.server.UnauthorizedSignal
 import dev.scriptor.server.jvm.annotation.Context
+import dev.scriptor.server.security.Principal
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.Duration.ofMinutes
-import java.util.logging.Logger
 import kotlin.time.Clock
 import kotlin.time.toKotlinDuration
+import kotlin.uuid.Uuid
 
 @Context
 class SessionContext {
+
+    private fun generateToken(id: Uuid): Jwt {
+
+        val createdAt = Clock.System.now()
+        val expiresAt = createdAt + ofMinutes(60).toKotlinDuration()
+
+        return Jwt.encode(
+            JwtHeader(
+                alg = "HS256",
+            ),
+            JwtPayload(
+                sub = id.toHexDashString(),
+                iat = createdAt,
+                exp = expiresAt,
+                aud = "coffee-house",
+                iss = "dev.scriptor.coffee-house", // TODO: change to application domain
+            ),
+            "hello-world-secret", // TODO: change to something more secure
+        )
+    }
 
     context(
         provider: Provider,
@@ -29,19 +48,21 @@ class SessionContext {
         val rootUsername: String? = provider.getT("username")
         val rootPassword: String? = provider.getT("password")
 
-        val user: User?
+        val id: Uuid
         if (rootUsername != null && rootPassword != null && username == rootUsername) {
-            user = null
+            id = Uuid.NIL
 
             if (password != rootPassword) {
                 throw UnauthorizedSignal()
             }
         } else {
-            user = transaction(database) {
+            val user = transaction(database) {
                 User
                     .find { UserTable.name eq username }
                     .firstOrNull()
             } ?: throw UnauthorizedSignal()
+
+            id = user.id.value
 
             // TODO: generate password hash
             if (password != user.hash) {
@@ -49,51 +70,10 @@ class SessionContext {
             }
         }
 
-        val createdAt = Clock.System.now()
-        val expiresAt = createdAt + ofMinutes(60).toKotlinDuration()
-
-        val jwt = Jwt.encode(
-            JwtHeader(
-                alg = "HS256",
-            ),
-            JwtPayload(
-                sub = user?.id?.toString(),
-                iat = createdAt,
-                exp = expiresAt,
-                aud = "coffee-house",
-                iss = "dev.scriptor.coffee-house", // TODO: change to application domain
-            ),
-            "hello-world-secret", // TODO: change to something more secure
-        )
-
-        return jwt
+        return generateToken(id)
     }
 
-    context(
-        _: Logger,
-        _: Database,
-        auth: AuthContext,
-    )
-    fun renewSession(
-        authorization: AuthorizationHeader?,
-        cookie: CookieHeader,
-    ): Jwt {
-        val instant = Clock.System.now()
-
-        val session = auth.auth(authorization, cookie, instant)
-            ?: throw UnauthorizedSignal()
-
-        val jwt = session.jwt
-
-        val expiresAt = instant + ofMinutes(60).toKotlinDuration()
-
-        return Jwt.encode(
-            jwt.header,
-            jwt.payload.copy(
-                iat = instant,
-                exp = expiresAt,
-            ),
-            "hello-world-secret", // TODO: change to something more secure
-        )
+    fun renewSession(principal: Principal): Jwt {
+        return generateToken(principal.id)
     }
 }

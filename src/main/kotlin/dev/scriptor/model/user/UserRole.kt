@@ -1,6 +1,6 @@
 package dev.scriptor.model.user
 
-enum class UserRole {
-    ADMIN,
-    USER,
+data object UserRole {
+    const val ADMIN = "admin"
+    const val USER = "user"
 }

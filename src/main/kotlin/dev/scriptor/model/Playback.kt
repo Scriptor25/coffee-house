@@ -8,7 +8,7 @@ import kotlin.uuid.Uuid
 @JsonSerializable
 data class Playback(
     @all:JsonProperty
-    val userId: Uuid?,
+    val userId: Uuid,
     @all:JsonProperty
     val name: String,
     @all:JsonProperty

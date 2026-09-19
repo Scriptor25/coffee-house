@@ -18,7 +18,7 @@ class PlaybackContext {
     private val map = mutableMapOf<String, Playback>()
 
     fun createPlayback(
-        userId: Uuid?,
+        userId: Uuid,
         name: String,
         items: List<Uuid>,
     ): String {

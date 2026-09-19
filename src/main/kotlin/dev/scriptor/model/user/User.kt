@@ -11,7 +11,7 @@ import kotlin.uuid.Uuid
 object UserTable : UuidTable("user") {
     val name = text("name")
     val hash = text("hash")
-    val role = enumeration("role", UserRole::class)
+    val role = text("role")
 }
 
 @JsonSerializable

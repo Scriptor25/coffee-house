@@ -2,6 +2,8 @@ package dev.scriptor
 
 import dev.scriptor.context.PlaybackContext
 import dev.scriptor.context.TmdbContext
+import dev.scriptor.model.AuthorizationHeader
+import dev.scriptor.model.CookieHeader
 import dev.scriptor.model.ffmpeg.*
 import dev.scriptor.model.media.*
 import dev.scriptor.model.movie.ImageData
@@ -9,10 +11,16 @@ import dev.scriptor.model.movie.Movie
 import dev.scriptor.model.movie.MovieMediaTable
 import dev.scriptor.model.movie.MovieTable
 import dev.scriptor.model.show.*
+import dev.scriptor.model.user.User
+import dev.scriptor.model.user.UserRole
 import dev.scriptor.model.user.UserTable
+import dev.scriptor.security.Jwt
 import dev.scriptor.server.Provider
-import dev.scriptor.server.http.Server
 import dev.scriptor.server.jvm.scan
+import dev.scriptor.server.request.Request
+import dev.scriptor.server.security.Authenticator
+import dev.scriptor.server.security.Principal
+import dev.scriptor.server.server
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.notInList
@@ -32,10 +40,8 @@ import java.util.concurrent.Executors
 import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.io.path.*
-import kotlin.time.Duration
-import kotlin.time.Instant
-import kotlin.time.toKotlinDuration
-import kotlin.time.toKotlinInstant
+import kotlin.time.*
+import kotlin.uuid.Uuid
 
 fun getEnvironment(): Map<String, String> = System.getenv()
 
@@ -721,8 +727,8 @@ fun main() {
     val data = Path(env["DATA"] ?: "/data")
     val cache = Path(env["CACHE"] ?: "/cache")
 
-    val username = env["USERNAME"]
-    val password = env["PASSWORD"]
+    val defaultUsername = env["USERNAME"]
+    val defaultPassword = env["PASSWORD"]
 
     val transcodingEnable = env["TRANSCODING"].toBoolean()
     val transcodingDevice = env["TRANSCODING_DEVICE"]
@@ -742,8 +748,8 @@ fun main() {
     provider["data"] = data
     provider["cache"] = cache
 
-    provider["username"] = username
-    provider["password"] = password
+    provider["username"] = defaultUsername
+    provider["password"] = defaultPassword
 
     provider["transcoding-enable"] = transcodingEnable
     provider["transcoding-device"] = transcodingDevice
@@ -834,12 +840,19 @@ fun main() {
         getTmdbMetadata(nodes)
     }
 
-    val server = when {
-        host == null && port == null -> Server(log, provider)
-        host == null && port != null -> Server(log, provider, port)
-        host != null && port == null -> Server(log, provider, host, 0)
-        host != null && port != null -> Server(log, provider, host, port)
-        else -> Server(log, provider)
+    val server = server(log, provider) {
+        when {
+            host == null && port != null -> bind(port)
+            host != null && port == null -> bind(host, 0)
+            host != null && port != null -> bind(host, port)
+        }
+
+        authenticator = HeaderAuthenticator(
+            log,
+            database,
+            defaultUsername,
+            defaultPassword,
+        )
     }
 
     Runtime.getRuntime().addShutdownHook(Thread {
@@ -865,5 +878,77 @@ fun main() {
         }
 
         server.start()
+    }
+}
+
+data class HeaderAuthenticator(
+    val log: Logger,
+    val database: Database,
+    val defaultUsername: String?,
+    val defaultPassword: String?,
+) : Authenticator {
+
+    override fun authenticate(request: Request): Principal? {
+        val authorization = request.headers["authorization"]
+        val cookie = request.headers["cookie"]
+
+        val token = when {
+            authorization != null -> {
+                val (scheme, credentials) = AuthorizationHeader.parse(authorization)
+
+                if (scheme == "Bearer") credentials else null
+            }
+
+            cookie != null -> {
+                val values = CookieHeader.parse(cookie)
+
+                values["token"]
+            }
+
+            else -> null
+        } ?: return null
+
+        val jwt: Jwt
+        try {
+            jwt = Jwt.decode(token)
+                ?: return null
+        } catch (e: Throwable) {
+            log.warning(e.stackTraceToString())
+            return null
+        }
+
+        // TODO: change to something more secure
+        if (!jwt.verify("hello-world-secret")) {
+            return null
+        }
+
+        val instant = Clock.System.now()
+
+        when (val exp = jwt.payload.exp) {
+            null -> Unit
+            else -> {
+                val delta = exp - instant
+                if (delta.isNegative()) {
+                    return null
+                }
+            }
+        }
+
+        val id =
+            when (val sub = jwt.payload.sub) {
+                null -> Uuid.NIL
+                else -> Uuid.parseHexDash(sub)
+            }
+
+        val role = if (id == Uuid.NIL) {
+            UserRole.ADMIN
+        } else {
+            val user = transaction(database) { User.findById(id) }
+                ?: return null
+
+            user.role
+        }
+
+        return Principal(id, setOf(role))
     }
 }
