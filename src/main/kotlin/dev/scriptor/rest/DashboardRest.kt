@@ -1,6 +1,5 @@
 package dev.scriptor.rest
 
-import dev.scriptor.MultipartParser
 import dev.scriptor.context.AuthContext
 import dev.scriptor.context.SessionContext
 import dev.scriptor.model.CookieHeader
@@ -12,6 +11,7 @@ import dev.scriptor.server.*
 import dev.scriptor.server.jvm.annotation.*
 import dev.scriptor.server.result.Result
 import dev.scriptor.server.result.StreamResult
+import dev.scriptor.server.result.StringResult
 import dev.scriptor.server.result.UnitResult
 import dev.scriptor.ui.Bundle
 import dev.scriptor.ui.css.builder.*
@@ -36,7 +36,7 @@ import kotlin.uuid.Uuid
 @Controller("/")
 class DashboardRest {
 
-    private fun resource(name: String): StreamResult {
+    private fun resource(name: String): Result {
         val stream = ClassLoader.getSystemResourceAsStream(name)
             ?: throw NotFoundSignal()
 
@@ -50,8 +50,19 @@ class DashboardRest {
         )
     }
 
+    private fun String.cache(): Result {
+        val headers = ParameterList(
+            "cache-control" to "public, max-age=120, immutable",
+        )
+
+        return StringResult(
+            headers = headers,
+            value = this,
+        )
+    }
+
     @Get("/favicon.[]", "image/svg+xml")
-    fun getFavicon(): StreamResult {
+    fun getFavicon(): Result {
         return resource("favicon.svg")
     }
 
@@ -474,7 +485,7 @@ class DashboardRest {
         database: Database,
         auth: AuthContext,
     )
-    fun getDashboardPage(@Header cookie: CookieHeader = CookieHeader()): String {
+    fun getDashboardPage(@Header cookie: CookieHeader = CookieHeader()): Result {
         val token = cookie["token"]
 
         val session = auth.auth(token)
@@ -570,55 +581,26 @@ class DashboardRest {
                     }
                 }
             }
-        }.toXmlString()
+        }.toXmlString().cache()
     }
 
-    @Post("/login", "multipart/form-data")
+    @Post("/login", "application/x-www-form-urlencoded")
     context(
         _: Logger,
         _: Provider,
         _: Database,
         sessions: SessionContext,
     )
-    fun login(@Header("content-type") contentType: String, @Body body: ByteArray): Result {
-        val message = MultipartParser(body).parse(contentType)
+    fun login(@Body body: String): Result {
+        val parameters = body
+            .split("&")
+            .map { it.trim().split("=", limit = 2) }
+            .associate { it[0] to it[1] }
 
-        var username: String? = null
-        var password: String? = null
-
-        for (part in message.parts) {
-            val contentDisposition = part.headers["content-disposition"]
-                ?: continue
-
-            val parameters = contentDisposition
-                .split(";")
-                .map(String::trim)
-
-            for (parameter in parameters) {
-                val segments = parameter.split("=", limit = 2)
-                if (segments.size != 2) continue
-
-                val (key, raw) = segments
-
-                if (key == "name") {
-                    val value = raw
-                        .substringAfter('"')
-                        .substringBeforeLast('"')
-
-                    when (value) {
-                        "username" -> username = part.body.decodeToString()
-                        "password" -> password = part.body.decodeToString()
-                        else -> continue
-                    }
-
-                    break
-                }
-            }
-        }
-
-        if (username == null || password == null) {
-            throw BadRequestSignal()
-        }
+        val username = parameters["username"]
+            ?: throw BadRequestSignal()
+        val password = parameters["password"]
+            ?: throw BadRequestSignal()
 
         val token = sessions.createSession(username, password)
 
@@ -646,7 +628,7 @@ class DashboardRest {
         _: Database,
         auth: AuthContext,
     )
-    fun getLoginPage(@Header cookie: CookieHeader = CookieHeader()): String {
+    fun getLoginPage(@Header cookie: CookieHeader = CookieHeader()): Result {
         val token = cookie["token"]
 
         val session = auth.auth(token)
@@ -667,8 +649,8 @@ class DashboardRest {
 
                     form({
                         htmlClass = "form"
-                        encType = "multipart/form-data"
-                        method = "POST"
+                        encType = "application/x-www-form-urlencoded"
+                        method = "post"
                     }) {
                         div({ htmlClass = "set" }) {
                             label {
@@ -731,7 +713,7 @@ class DashboardRest {
                     }
                 }
             }
-        }.toXmlString()
+        }.toXmlString().cache()
     }
 
     @Get("/movie", "text/html")
@@ -740,7 +722,7 @@ class DashboardRest {
         database: Database,
         auth: AuthContext,
     )
-    fun getMovieListPage(@Header cookie: CookieHeader = CookieHeader()): String {
+    fun getMovieListPage(@Header cookie: CookieHeader = CookieHeader()): Result {
         val token = cookie["token"]
 
         val session = auth.auth(token)
@@ -788,7 +770,7 @@ class DashboardRest {
                     mediaListItemStyle()
                 }
             }
-        }.toXmlString()
+        }.toXmlString().cache()
     }
 
     @Get("/movie/[id]", "text/html")
@@ -800,7 +782,7 @@ class DashboardRest {
     fun getMovieDetailPage(
         @PathParameter id: Uuid,
         @Header cookie: CookieHeader = CookieHeader(),
-    ): String {
+    ): Result {
         val token = cookie["token"]
 
         val session = auth.auth(token)
@@ -932,7 +914,7 @@ class DashboardRest {
                     }
                 }
             }
-        }.toXmlString()
+        }.toXmlString().cache()
     }
 
     @Get("/show", "text/html")
@@ -941,7 +923,7 @@ class DashboardRest {
         database: Database,
         auth: AuthContext,
     )
-    fun getShowListPage(@Header cookie: CookieHeader = CookieHeader()): String {
+    fun getShowListPage(@Header cookie: CookieHeader = CookieHeader()): Result {
         val token = cookie["token"]
 
         val session = auth.auth(token)
@@ -989,7 +971,7 @@ class DashboardRest {
                     mediaListItemStyle()
                 }
             }
-        }.toXmlString()
+        }.toXmlString().cache()
     }
 
     @Get("/show/[id]", "text/html")
@@ -1001,7 +983,7 @@ class DashboardRest {
     fun getShowDetailPage(
         @PathParameter id: Uuid,
         @Header cookie: CookieHeader = CookieHeader(),
-    ): String {
+    ): Result {
         val token = cookie["token"]
 
         val session = auth.auth(token)
@@ -1121,7 +1103,7 @@ class DashboardRest {
                     }
                 }
             }
-        }.toXmlString()
+        }.toXmlString().cache()
     }
 
     @Get("/season/[id]", "text/html")
@@ -1133,7 +1115,7 @@ class DashboardRest {
     fun getSeasonDetailPage(
         @PathParameter id: Uuid,
         @Header cookie: CookieHeader = CookieHeader(),
-    ): String {
+    ): Result {
         val token = cookie["token"]
 
         val session = auth.auth(token)
@@ -1267,7 +1249,7 @@ class DashboardRest {
                     }
                 }
             }
-        }.toXmlString()
+        }.toXmlString().cache()
     }
 
     @Get("/episode/[id]", "text/html")
@@ -1279,7 +1261,7 @@ class DashboardRest {
     fun getEpisodeDetailPage(
         @PathParameter id: Uuid,
         @Header cookie: CookieHeader = CookieHeader(),
-    ): String {
+    ): Result {
         val token = cookie["token"]
 
         val session = auth.auth(token)
@@ -1392,6 +1374,6 @@ class DashboardRest {
                     }
                 }
             }
-        }.toXmlString()
+        }.toXmlString().cache()
     }
 }
