@@ -6,7 +6,6 @@ import dev.scriptor.security.Jwt
 import dev.scriptor.security.JwtHeader
 import dev.scriptor.security.JwtPayload
 import dev.scriptor.server.Provider
-import dev.scriptor.server.UnauthorizedSignal
 import dev.scriptor.server.jvm.annotation.Context
 import dev.scriptor.server.security.Principal
 import org.jetbrains.exposed.v1.core.eq
@@ -44,29 +43,29 @@ class SessionContext {
         provider: Provider,
         database: Database,
     )
-    fun createSession(username: String, password: String): Jwt {
-        val rootUsername: String? = provider.getT("username")
-        val rootPassword: String? = provider.getT("password")
+    fun createSession(username: String, password: String): Jwt? {
+        val defaultUsername: String? = provider.getT("username")
+        val defaultPassword: String? = provider.getT("password")
 
         val id: Uuid
-        if (rootUsername != null && rootPassword != null && username == rootUsername) {
+        if (defaultUsername != null && defaultPassword != null && username == defaultUsername) {
             id = Uuid.NIL
 
-            if (password != rootPassword) {
-                throw UnauthorizedSignal()
+            if (password != defaultPassword) {
+                return null
             }
         } else {
             val user = transaction(database) {
                 User
                     .find { UserTable.name eq username }
                     .firstOrNull()
-            } ?: throw UnauthorizedSignal()
+            } ?: return null
 
             id = user.id.value
 
             // TODO: generate password hash
             if (password != user.hash) {
-                throw UnauthorizedSignal()
+                return null
             }
         }
 

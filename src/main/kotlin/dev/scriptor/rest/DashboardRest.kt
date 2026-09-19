@@ -13,7 +13,6 @@ import dev.scriptor.server.request.Request
 import dev.scriptor.server.result.Result
 import dev.scriptor.server.result.StreamResult
 import dev.scriptor.server.result.StringResult
-import dev.scriptor.server.result.UnitResult
 import dev.scriptor.server.security.Principal
 import dev.scriptor.ui.Bundle
 import dev.scriptor.ui.css.builder.*
@@ -31,7 +30,7 @@ import dev.scriptor.ui.js.builder.JsBuilder
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import java.util.logging.Logger
+import java.net.URLDecoder
 import kotlin.uuid.Uuid
 
 @RequireAuth
@@ -54,7 +53,7 @@ class DashboardRest {
 
     private fun String.cache(): Result {
         val headers = ParameterList(
-            "cache-control" to "public, max-age=120, immutable",
+            // "cache-control" to "public, max-age=120, immutable",
         )
 
         return StringResult(
@@ -582,7 +581,6 @@ class DashboardRest {
     @Public
     @Post("/login", "application/x-www-form-urlencoded")
     context(
-        _: Logger,
         _: Provider,
         _: Database,
         sessions: SessionContext,
@@ -591,7 +589,7 @@ class DashboardRest {
         val parameters = body
             .split("&")
             .map { it.trim().split("=", limit = 2) }
-            .associate { it[0] to it[1] }
+            .associate { URLDecoder.decode(it[0], Charsets.UTF_8) to URLDecoder.decode(it[1], Charsets.UTF_8) }
 
         val username = parameters["username"]
             ?: throw BadRequestSignal()
@@ -599,6 +597,7 @@ class DashboardRest {
             ?: throw BadRequestSignal()
 
         val token = sessions.createSession(username, password)
+            ?: throw UnauthorizedSignal()
 
         val maxAge = when (val exp = token.payload.exp) {
             null -> 2592000L
@@ -608,22 +607,24 @@ class DashboardRest {
             }
         }
 
-        return UnitResult(
-            statusCode = 302,
-            statusText = "Found",
-            headers = ParameterList(
+        return FoundSignal(
+            ParameterList(
                 "set-cookie" to "token=$token; Path=/; HttpOnly; Max-Age=$maxAge; SameSite=Strict",
-                "location" to next,
+                "location" to if (next.startsWith("/login")) "/" else next,
             ),
-        )
+        ).generate()
     }
 
     @Public
     @Get("/login", "text/html")
     context(principal: Principal?)
-    fun getLoginPage(@QueryParameter next: String?): Result {
+    fun getLoginPage(@QueryParameter next: String = "/"): Result {
         if (principal != null) {
-            throw FoundSignal(ParameterList("location" to "/"))
+            throw FoundSignal(
+                ParameterList(
+                    "location" to if (next.startsWith("/login")) "/" else next,
+                ),
+            )
         }
 
         return Bundle().html {
@@ -642,12 +643,6 @@ class DashboardRest {
                         encType = "application/x-www-form-urlencoded"
                         method = "post"
                     }) {
-                        input {
-                            type = HtmlInputElementType.HIDDEN
-                            name = "next"
-                            value = next
-                        }
-
                         div({ htmlClass = "set" }) {
                             label {
                                 span { +"Username" }
