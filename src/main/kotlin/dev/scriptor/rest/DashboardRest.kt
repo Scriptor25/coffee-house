@@ -1,6 +1,10 @@
 package dev.scriptor.rest
 
+import dev.scriptor.JsonNode
 import dev.scriptor.context.SessionContext
+import dev.scriptor.jsonArray
+import dev.scriptor.jsonObject
+import dev.scriptor.jsonOf
 import dev.scriptor.model.movie.ImageData
 import dev.scriptor.model.movie.Movie
 import dev.scriptor.model.movie.MovieTable
@@ -482,6 +486,23 @@ class DashboardRest {
         )
     }
 
+    @Public
+    @Get("/manifest.json", "application/json")
+    fun getManifest(): JsonNode {
+        return jsonObject {
+            this["name"] = jsonOf("Coffee House")
+            this["icons"] = jsonArray {
+                this.add(jsonObject {
+                    this["src"] = jsonOf("/favicon.svg")
+                    this["type"] = jsonOf("image/svg+xml")
+                    this["sizes"] = jsonOf("any")
+                })
+            }
+            this["start_url"] = jsonOf("/")
+            this["display"] = jsonOf("minimal-ui")
+        }
+    }
+
     @Get("/", "text/html")
     context(principal: Principal, database: Database)
     fun getDashboardPage(): Result {
@@ -507,6 +528,7 @@ class DashboardRest {
             head {
                 meta(charset = "utf-8")
                 meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
+                link(rel = "manifest", href = "/manifest.json")
                 title("Dashboard")
             }
             body {
@@ -631,6 +653,7 @@ class DashboardRest {
             head {
                 meta(charset = "utf-8")
                 meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
+                link(rel = "manifest", href = "/manifest.json")
                 title("Login")
             }
 
@@ -721,6 +744,7 @@ class DashboardRest {
             head {
                 meta(charset = "utf-8")
                 meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
+                link(rel = "manifest", href = "/manifest.json")
                 title("Movies")
             }
 
@@ -765,6 +789,7 @@ class DashboardRest {
             head {
                 meta(charset = "utf-8")
                 meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
+                link(rel = "manifest", href = "/manifest.json")
                 title("${movie.title} | Movies")
             }
 
@@ -901,6 +926,7 @@ class DashboardRest {
             head {
                 meta(charset = "utf-8")
                 meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
+                link(rel = "manifest", href = "/manifest.json")
                 title("Shows")
             }
 
@@ -951,6 +977,7 @@ class DashboardRest {
             head {
                 meta(charset = "utf-8")
                 meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
+                link(rel = "manifest", href = "/manifest.json")
                 title("${show.title} | Shows")
             }
 
@@ -1068,6 +1095,7 @@ class DashboardRest {
             head {
                 meta(charset = "utf-8")
                 meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
+                link(rel = "manifest", href = "/manifest.json")
                 title("${show.title} - ${season.title} | Shows")
             }
 
@@ -1202,6 +1230,7 @@ class DashboardRest {
             head {
                 meta(charset = "utf-8")
                 meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
+                link(rel = "manifest", href = "/manifest.json")
                 title("${show.title} - ${season.title} - ${episode.title} | Shows")
             }
 
