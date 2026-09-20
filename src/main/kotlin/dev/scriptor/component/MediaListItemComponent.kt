@@ -35,7 +35,7 @@ class MediaListItemComponent : Component {
                 },
             )
 
-            +a({
+            a({
                 htmlClass = "title"
                 href = listItem.href
             }) { +listItem.title }
