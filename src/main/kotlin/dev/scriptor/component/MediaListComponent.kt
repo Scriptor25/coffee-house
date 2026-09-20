@@ -27,10 +27,8 @@ class MediaListComponent : Component {
                 Attribute("data-mode", AttributeValue.StringValue(mode.value)),
             ),
         ).apply {
-            val children = mutableListOf<Node>()
-
             for (item in items) {
-                children += component(::MediaListItemComponent) {
+                +component(::MediaListItemComponent) {
                     listItem = item
                     listMode = mode
                 }
@@ -39,7 +37,7 @@ class MediaListComponent : Component {
             when (val item = end) {
                 null -> Unit
                 else -> {
-                    children += component(::MediaListItemComponent) {
+                    +component(::MediaListItemComponent) {
                         listItem = item
                         listMode = mode
                     }

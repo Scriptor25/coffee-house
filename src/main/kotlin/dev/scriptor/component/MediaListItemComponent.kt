@@ -10,8 +10,7 @@ import dev.scriptor.ui.css.builder.CssNodesBuilder
 import dev.scriptor.ui.dom.Attribute
 import dev.scriptor.ui.dom.AttributeValue
 import dev.scriptor.ui.dom.Node
-import dev.scriptor.ui.dom.Text
-import dev.scriptor.ui.html.HtmlElement
+import dev.scriptor.ui.html.builder.HtmlGenericBuilder
 
 class MediaListItemComponent : Component {
 
@@ -20,37 +19,27 @@ class MediaListItemComponent : Component {
 
     context(bundle: Bundle)
     override fun build(): Node {
-        val children = mutableListOf<Node>()
-
-        children += listItem.thumbnail(
-            "thumbnail",
-            when (listMode) {
-                MediaListMode.LIST -> "30vw"
-                else -> "(max-width: 600px) 50vw, 300px"
-            },
-        )
-
-        children += HtmlElement(
-            false,
-            "a",
-            listOf(
-                Attribute("class", AttributeValue.StringValue("title")),
-                Attribute("href", AttributeValue.StringValue(listItem.href)),
-            ),
-            listOf(
-                Text(listItem.title),
-            ),
-        )
-
-        return HtmlElement(
+        return HtmlGenericBuilder(
             false,
             "li",
             listOf(
                 Attribute("class", AttributeValue.StringValue("item")),
                 Attribute("data-mode", AttributeValue.StringValue(listMode.value)),
             ),
-            children,
-        )
+        ).apply {
+            +listItem.thumbnail(
+                "thumbnail",
+                when (listMode) {
+                    MediaListMode.LIST -> "30vw"
+                    else -> "(max-width: 600px) 50vw, 300px"
+                },
+            )
+
+            +a({
+                htmlClass = "title"
+                href = listItem.href
+            }) { +listItem.title }
+        }.build()
     }
 
     override fun style(): List<CssNode> {
