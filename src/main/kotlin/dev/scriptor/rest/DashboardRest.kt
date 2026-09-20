@@ -1,11 +1,14 @@
 package dev.scriptor.rest
 
 import dev.scriptor.JsonNode
+import dev.scriptor.component.ImageComponent
+import dev.scriptor.component.MediaListComponent
+import dev.scriptor.component.MediaListItem
+import dev.scriptor.component.MediaListMode
 import dev.scriptor.context.SessionContext
 import dev.scriptor.jsonArray
 import dev.scriptor.jsonObject
 import dev.scriptor.jsonOf
-import dev.scriptor.model.movie.ImageData
 import dev.scriptor.model.movie.Movie
 import dev.scriptor.model.movie.MovieTable
 import dev.scriptor.model.show.*
@@ -19,22 +22,19 @@ import dev.scriptor.server.result.StreamResult
 import dev.scriptor.server.result.StringResult
 import dev.scriptor.server.security.Principal
 import dev.scriptor.ui.Bundle
+import dev.scriptor.ui.bundle
+import dev.scriptor.ui.component
 import dev.scriptor.ui.css.builder.*
-import dev.scriptor.ui.dom.Attribute
-import dev.scriptor.ui.dom.Comment
-import dev.scriptor.ui.dom.Node
-import dev.scriptor.ui.dom.Text
-import dev.scriptor.ui.html.HtmlElement
 import dev.scriptor.ui.html.builder.HtmlButtonElementType
 import dev.scriptor.ui.html.builder.HtmlInputElementType
 import dev.scriptor.ui.js.JsExpression
-import dev.scriptor.ui.js.JsObject
 import dev.scriptor.ui.js.JsString
-import dev.scriptor.ui.js.builder.JsBuilder
+import dev.scriptor.ui.js.builder.JsNodeBuilder
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.net.URLDecoder
+import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
 @RequireAuth
@@ -55,14 +55,14 @@ class DashboardRest {
         )
     }
 
-    private fun String.cache(): Result {
+    private fun Bundle.cache(): Result {
         val headers = ParameterList(
-            // "cache-control" to "public, max-age=120, immutable",
+            "cache-control" to "public, max-age=120, immutable",
         )
 
         return StringResult(
             headers = headers,
-            value = this,
+            value = toString(),
         )
     }
 
@@ -211,278 +211,34 @@ class DashboardRest {
         }
     }
 
-    fun <T> CssBuilder<T>.mediaListStyle() {
-        define(".list") {
-            display = CssDisplay.GRID
-            this["gap"] = "var(--space-m)"
-
-            this["padding"] = "0"
-            this["margin"] = "0"
-
-            this["list-style"] = "none"
-
-            define("&[data-mode='grid'],&[data-mode='grid-poster']") {
-                this["grid-template-columns"] = "repeat(auto-fill, minmax(300px, 1fr))"
-            }
-
-            define("&[data-mode='list']") {
-                this["grid-template-columns"] = "1fr"
-            }
-        }
-    }
-
-    fun <T> CssBuilder<T>.mediaListItemStyle() {
-        define(".item") {
-            this["position"] = "relative"
-
-            display = CssDisplay.FLEX
-            flexWrap = CssFlexWrap.NOWRAP
-
-            this["background-color"] = "var(--color-panel)"
-
-            this["border-radius"] = "var(--border-radius)"
-            this["overflow"] = "hidden"
-
-            define(".thumbnail") {
-                display = CssDisplay.BLOCK
-                this["position"] = "relative"
-
-                this["background-color"] = "#111"
-
-                this["object-fit"] = "cover"
-            }
-
-            define(".title") {
-                this["margin"] = "var(--space-m)"
-
-                this["overflow"] = "hidden"
-
-                this["text-overflow"] = "ellipsis"
-
-                this["display"] = "-webkit-box"
-                this["-webkit-box-orient"] = "vertical"
-                this["-webkit-line-clamp"] = "1"
-
-                this["line-clamp"] = "1"
-
-                this["font-size"] = "var(--font-size-small)"
-
-                this["text-decoration"] = "none"
-                this["color"] = "var(--color-foreground)"
-                this["background-color"] = "transparent"
-
-                define("&::after") {
-                    this["content"] = "''"
-                    this["position"] = "absolute"
-                    this["inset"] = "0"
-                }
-            }
-
-            define("&[data-mode='grid']") {
-                flexDirection = CssFlexDirection.COLUMN
-
-                define(".thumbnail") {
-                    this["max-width"] = "100%"
-
-                    this["width"] = "100%"
-                    this["height"] = "auto"
-
-                    this["aspect-ratio"] = "5 / 3"
-                }
-
-                define(".title") {
-                    this["text-align"] = "center"
-                }
-            }
-
-            define("&[data-mode='grid-poster']") {
-                flexDirection = CssFlexDirection.COLUMN
-
-                define(".thumbnail") {
-                    this["max-width"] = "100%"
-
-                    this["width"] = "100%"
-                    this["height"] = "auto"
-
-                    this["aspect-ratio"] = "3 / 4"
-                }
-
-                define(".title") {
-                    this["text-align"] = "center"
-                }
-            }
-
-            define("&[data-mode='list']") {
-                flexDirection = CssFlexDirection.ROW
-
-                this["align-items"] = "center"
-
-                define(".thumbnail") {
-                    this["width"] = "30vw"
-                    this["height"] = "100%"
-
-                    this["aspect-ratio"] = "2 / 1"
-                }
-            }
-
-            define("&:has(.title:is(:hover,:focus-visible))") {
-                this["background-color"] = "var(--color-panel-active)"
-                this["box-shadow"] = "5px 5px 10px #111"
-
-                define(".title") {
-                    this["text-decoration"] = "underline"
-                }
-            }
-        }
-    }
-
-    fun <T> JsBuilder<T>.emitShareUrl(title: JsExpression, url: JsExpression) {
-        emitIf(
-            window.navigator.share,
-            thenBlock = {
-                window.navigator.share(
-                    JsObject(
-                        "title" to title,
-                        "url" to url,
-                    ),
-                ).emit()
-            },
-            elseBlock = {
-                emitIf(
-                    window.navigator.clipboard,
-                    thenBlock = {
-                        window.navigator.clipboard.writeText(url).emit()
-                    },
-                    elseBlock = {
-                        window.open(url).emit()
-                    },
-                )
-            },
-        )
-    }
-
-    data class MediaListItem(
-        val href: String,
-        val title: String,
-        val thumbnail: ((className: String?, sizes: String?) -> Node) = { className, _ ->
-            HtmlElement(
-                false,
-                "div",
-                listOf(
-                    Attribute("class", className),
-                ),
-                listOf()
+    fun <T> JsNodeBuilder<T>.emitShareUrl(title: JsExpression, url: JsExpression) {
+        emit(
+            jsIfElse(
+                window.navigator.share,
+                thenBlock = {
+                    emit(
+                        window.navigator.share(
+                            jsObject {
+                                this["title"] = title
+                                this["url"] = url
+                            },
+                        ),
+                    )
+                },
+                elseBlock = {
+                    emit(
+                        jsIfElse(
+                            window.navigator.clipboard,
+                            thenBlock = {
+                                emit(window.navigator.clipboard.writeText(url))
+                            },
+                            elseBlock = {
+                                emit(window.open(url))
+                            },
+                        ),
+                    )
+                },
             )
-        },
-    )
-
-    enum class MediaListMode(val value: String) {
-        LIST("list"),
-        GRID("grid"),
-        GRID_POSTER("grid-poster"),
-    }
-
-    fun mediaListItemComponent(item: MediaListItem, mode: MediaListMode): Node {
-        val children = mutableListOf<Node>()
-
-        children += item.thumbnail(
-            "thumbnail",
-            when (mode) {
-                MediaListMode.LIST -> "30vw"
-                else -> "(max-width: 600px) 50vw, 300px"
-            },
-        )
-
-        children += HtmlElement(
-            false,
-            "a",
-            listOf(
-                Attribute("class", "title"),
-                Attribute("href", item.href),
-            ),
-            listOf(
-                Text(item.title),
-            ),
-        )
-
-        return HtmlElement(
-            false,
-            "li",
-            listOf(
-                Attribute("class", "item"),
-                Attribute("data-mode", mode.value),
-            ),
-            children,
-        )
-    }
-
-    fun mediaListComponent(
-        items: List<MediaListItem>,
-        end: MediaListItem? = null,
-        mode: MediaListMode = MediaListMode.GRID,
-    ): Node {
-        val children = mutableListOf<Node>()
-        for (item in items) {
-            children += mediaListItemComponent(item, mode)
-        }
-        if (end != null) {
-            children += mediaListItemComponent(end, mode)
-        }
-
-        return HtmlElement(
-            false,
-            "ul",
-            listOf(
-                Attribute("class", "list"),
-                Attribute("data-mode", mode.value),
-            ),
-            children,
-        )
-    }
-
-    fun imageComponent(
-        className: String? = null,
-        sizes: String? = null,
-        src: List<ImageData>,
-        noFallback: Boolean = false,
-    ): Node {
-        val attributes = mutableListOf<Attribute>()
-
-        if (className != null) {
-            attributes += Attribute("class", className)
-        }
-
-        if (sizes != null) {
-            attributes += Attribute("sizes", sizes)
-        }
-
-        if (src.isEmpty()) {
-            if (noFallback) {
-                return Comment("empty image src set")
-            }
-
-            return HtmlElement(
-                false,
-                "div",
-                attributes,
-                listOf(),
-            )
-        }
-
-        val srcset = src.joinToString(", ") {
-            if (it.width >= 0)
-                "${it.url} ${it.width}w"
-            else
-                "${it.url} 1920w"
-        }
-
-        attributes += Attribute("srcset", srcset)
-
-        return HtmlElement(
-            true,
-            "img",
-            attributes,
-            listOf(),
         )
     }
 
@@ -528,80 +284,80 @@ class DashboardRest {
 
         val user = transaction(database) { User.findById(principal.id) }
 
-        return Bundle().html {
-            head {
-                meta(charset = "utf-8")
-                meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
-                link(rel = "manifest", href = "/manifest.json")
-                title("Dashboard")
-            }
-            body {
-                main {
-                    h1 { +"Dashboard" }
-                    h2 { +"Welcome back${if (user != null) ", ${user.name}" else ""}" }
-
-                    section({ htmlClass = "section" }) {
-                        h3 { +"Movies" }
-
-                        +mediaListComponent(
-                            items = movies.map {
-                                MediaListItem(
-                                    href = "/movie/${it.id}",
-                                    title = it.title,
-                                    thumbnail = { className, sizes ->
-                                        imageComponent(
-                                            className = className,
-                                            sizes = sizes,
-                                            src = it.poster,
-                                        )
-                                    },
-                                )
-                            },
-                            end = MediaListItem(
-                                href = "/movie",
-                                title = "All movies",
-                            ),
-                            mode = MediaListMode.GRID,
-                        )
-                    }
-
-                    section({ htmlClass = "section" }) {
-                        h3 { +"Shows" }
-
-                        +mediaListComponent(
-                            items = shows.map {
-                                MediaListItem(
-                                    href = "/show/${it.id}",
-                                    title = it.title,
-                                    thumbnail = { className, sizes ->
-                                        imageComponent(
-                                            className = className,
-                                            sizes = sizes,
-                                            src = it.poster,
-                                        )
-                                    },
-                                )
-                            },
-                            end = MediaListItem(
-                                href = "/show",
-                                title = "All shows",
-                            ),
-                            mode = MediaListMode.GRID,
-                        )
-                    }
+        return bundle {
+            html {
+                head {
+                    meta(charset = "utf-8")
+                    meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
+                    link(rel = "manifest", href = "/manifest.json")
+                    title("Dashboard")
                 }
+                body {
+                    main {
+                        h1 { +"Dashboard" }
+                        h2 { +"Welcome back${if (user != null) ", ${user.name}" else ""}" }
 
-                style {
-                    globalStyle()
-                    mediaListStyle()
-                    mediaListItemStyle()
+                        section({ htmlClass = "section" }) {
+                            h3 { +"Movies" }
 
-                    define(".section") {
-                        this["margin-bottom"] = "var(--space-xl)"
+                            +component(::MediaListComponent) {
+                                items = movies.map {
+                                    MediaListItem(
+                                        href = "/movie/${it.id}",
+                                        title = it.title,
+                                        thumbnail = { className, sizes ->
+                                            component(::ImageComponent) {
+                                                this.className = className
+                                                this.sizes = sizes
+                                                this.src = it.poster
+                                            }
+                                        },
+                                    )
+                                }
+                                end = MediaListItem(
+                                    href = "/movie",
+                                    title = "All movies",
+                                )
+                                mode = MediaListMode.GRID
+                            }
+                        }
+
+                        section({ htmlClass = "section" }) {
+                            h3 { +"Shows" }
+
+                            +component(::MediaListComponent) {
+                                items = shows.map {
+                                    MediaListItem(
+                                        href = "/show/${it.id}",
+                                        title = it.title,
+                                        thumbnail = { className, sizes ->
+                                            component(::ImageComponent) {
+                                                this.className = className
+                                                this.sizes = sizes
+                                                this.src = it.poster
+                                            }
+                                        },
+                                    )
+                                }
+                                end = MediaListItem(
+                                    href = "/show",
+                                    title = "All shows",
+                                )
+                                mode = MediaListMode.GRID
+                            }
+                        }
                     }
                 }
             }
-        }.toXmlString().cache()
+
+            style {
+                globalStyle()
+
+                define(".section") {
+                    this["margin-bottom"] = "var(--space-xl)"
+                }
+            }
+        }.cache()
     }
 
     @Public
@@ -622,20 +378,25 @@ class DashboardRest {
         val password = parameters["password"]
             ?: throw BadRequestSignal()
 
-        val token = sessions.createSession(username, password)
+        val instant = Clock.System.now()
+
+        val token = sessions.createSession(username, password, instant)
             ?: throw UnauthorizedSignal()
 
         val maxAge = when (val exp = token.payload.exp) {
-            null -> 2592000L
-            else -> when (val iat = token.payload.iat) {
-                null -> 2592000L
-                else -> (exp - iat).inWholeSeconds
+            null -> null
+            else -> {
+                val delta = exp - instant
+                if (delta.isNegative())
+                    null
+                else
+                    delta.inWholeSeconds
             }
         }
 
         return FoundSignal(
             ParameterList(
-                "set-cookie" to "token=$token; Path=/; HttpOnly; Max-Age=$maxAge; SameSite=Strict",
+                "set-cookie" to "token=$token; Path=/; HttpOnly; ${if (maxAge != null) "Max-Age=$maxAge; " else ""}SameSite=Strict",
                 "location" to if (next.startsWith("/login")) "/" else next,
             ),
         ).generate()
@@ -653,85 +414,87 @@ class DashboardRest {
             )
         }
 
-        return Bundle().html {
-            head {
-                meta(charset = "utf-8")
-                meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
-                link(rel = "manifest", href = "/manifest.json")
-                title("Login")
-            }
+        return bundle {
+            html {
+                head {
+                    meta(charset = "utf-8")
+                    meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
+                    link(rel = "manifest", href = "/manifest.json")
+                    title("Login")
+                }
 
-            body {
-                main {
-                    h1 { +"Login" }
+                body {
+                    main {
+                        h1 { +"Login" }
 
-                    form({
-                        htmlClass = "form"
-                        encType = "application/x-www-form-urlencoded"
-                        method = "post"
-                    }) {
-                        div({ htmlClass = "set" }) {
-                            label {
-                                span { +"Username" }
-                                input {
-                                    type = HtmlInputElementType.TEXT
-                                    name = "username"
-                                    autoComplete = "username"
-                                    required = true
+                        form({
+                            htmlClass = "form"
+                            encType = "application/x-www-form-urlencoded"
+                            method = "post"
+                        }) {
+                            div({ htmlClass = "set" }) {
+                                label {
+                                    span { +"Username" }
+                                    input {
+                                        type = HtmlInputElementType.TEXT
+                                        name = "username"
+                                        autoComplete = "username"
+                                        required = true
+                                    }
+                                }
+                                label {
+                                    span { +"Password" }
+                                    input {
+                                        type = HtmlInputElementType.PASSWORD
+                                        name = "password"
+                                        autoComplete = "current-password"
+                                        required = true
+                                    }
                                 }
                             }
-                            label {
-                                span { +"Password" }
-                                input {
-                                    type = HtmlInputElementType.PASSWORD
-                                    name = "password"
-                                    autoComplete = "current-password"
-                                    required = true
-                                }
+                            button({ type = HtmlButtonElementType.SUBMIT }) {
+                                +"Login"
                             }
-                        }
-                        button({ type = HtmlButtonElementType.SUBMIT }) {
-                            +"Login"
                         }
                     }
                 }
+            }
 
-                style {
-                    globalStyle()
+            style {
+                globalStyle()
 
-                    define("form") {
-                        define("input") {
-                            this["border"] = "none"
-                            this["padding"] = "var(--space-xs)"
-                            this["background-color"] = "var(--color-panel)"
-                        }
+                define("form") {
+                    define("input") {
+                        this["border"] = "none"
+                        this["padding"] = "var(--space-xs)"
+                        this["background-color"] = "var(--color-panel)"
                     }
+                }
 
-                    define(".form") {
-                        display = CssDisplay.FLEX
-                        flexDirection = CssFlexDirection.COLUMN
-                        flexWrap = CssFlexWrap.NOWRAP
-                        alignItems = CssAlignItems.FLEX_START
-                        justifyContent = CssJustifyContent.FLEX_START
-                    }
+                define(".form") {
+                    display = CssDisplay.FLEX
+                    flexDirection = CssFlexDirection.COLUMN
+                    flexWrap = CssFlexWrap.NOWRAP
+                    alignItems = CssAlignItems.FLEX_START
+                    justifyContent = CssJustifyContent.FLEX_START
+                }
 
-                    define(".set") {
-                        display = CssDisplay.GRID
-                        this["grid-template"] = """
+                define(".set") {
+                    display = CssDisplay.GRID
+                    this["grid-template"] = """
                             "a b"
                             "a b"
                             "c c"
                         """.trimIndent()
-                        this["gap"] = "10px"
-                        alignItems = CssAlignItems.CENTER
+                    this["gap"] = "10px"
+                    alignItems = CssAlignItems.CENTER
 
-                        define("label") {
-                            display = CssDisplay.CONTENTS
-                        }
+                    define("label") {
+                        display = CssDisplay.CONTENTS
                     }
                 }
             }
-        }.toXmlString().cache()
+        }.cache()
     }
 
     @Get("/movie", "text/html")
@@ -744,43 +507,43 @@ class DashboardRest {
                 .toList()
         }
 
-        return Bundle().html {
-            head {
-                meta(charset = "utf-8")
-                meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
-                link(rel = "manifest", href = "/manifest.json")
-                title("Movies")
-            }
-
-            body {
-                main {
-                    h1 { +"Movies" }
-
-                    +mediaListComponent(
-                        items = movies.map {
-                            MediaListItem(
-                                href = "/movie/${it.id}",
-                                title = it.title,
-                                thumbnail = { className, sizes ->
-                                    imageComponent(
-                                        className = className,
-                                        sizes = sizes,
-                                        src = it.poster,
-                                    )
-                                },
-                            )
-                        },
-                        mode = MediaListMode.GRID_POSTER,
-                    )
+        return bundle {
+            html {
+                head {
+                    meta(charset = "utf-8")
+                    meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
+                    link(rel = "manifest", href = "/manifest.json")
+                    title("Movies")
                 }
 
-                style {
-                    globalStyle()
-                    mediaListStyle()
-                    mediaListItemStyle()
+                body {
+                    main {
+                        h1 { +"Movies" }
+
+                        +component(::MediaListComponent) {
+                            items = movies.map {
+                                MediaListItem(
+                                    href = "/movie/${it.id}",
+                                    title = it.title,
+                                    thumbnail = { className, sizes ->
+                                        component(::ImageComponent) {
+                                            this.className = className
+                                            this.sizes = sizes
+                                            this.src = it.poster
+                                        }
+                                    },
+                                )
+                            }
+                            mode = MediaListMode.GRID_POSTER
+                        }
+                    }
                 }
             }
-        }.toXmlString().cache()
+
+            style {
+                globalStyle()
+            }
+        }.cache()
     }
 
     @Get("/movie/[id]", "text/html")
@@ -789,131 +552,133 @@ class DashboardRest {
         val movie = transaction(database) { Movie.findById(id) }
             ?: throw NotFoundSignal()
 
-        return Bundle().html {
-            head {
-                meta(charset = "utf-8")
-                meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
-                link(rel = "manifest", href = "/manifest.json")
-                title("${movie.title} | Movies")
-            }
-
-            body {
-                div({ htmlClass = "banner" }) {
-                    +imageComponent(
-                        className = "backdrop",
-                        sizes = "100vw",
-                        src = movie.backdrop,
-                    )
-
-                    +imageComponent(
-                        className = "poster",
-                        sizes = "200px",
-                        src = movie.poster,
-                        noFallback = true,
-                    )
+        return bundle {
+            html {
+                head {
+                    meta(charset = "utf-8")
+                    meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
+                    link(rel = "manifest", href = "/manifest.json")
+                    title("${movie.title} | Movies")
                 }
 
-                main({ htmlClass = "content" }) {
-                    h1 { +movie.title }
+                body {
+                    div({ htmlClass = "banner" }) {
+                        +component(::ImageComponent) {
+                            className = "backdrop"
+                            sizes = "100vw"
+                            src = movie.backdrop
+                        }
 
-                    when (val description = movie.description) {
-                        null -> {}
-                        else -> {
-                            p { +description }
+                        +component(::ImageComponent) {
+                            className = "poster"
+                            sizes = "200px"
+                            src = movie.poster
+                            noFallback = true
                         }
                     }
 
-                    p {
-                        button({ type = HtmlButtonElementType.BUTTON }) {
-                            +"Play"
+                    main({ htmlClass = "content" }) {
+                        h1 { +movie.title }
 
-                            on("click") {
-                                val response = window.fetch(
-                                    "/resource/movie/${movie.id}/playback",
-                                    JsObject(
-                                        "method" to JsString("post"),
-                                    ),
-                                )
+                        when (val description = movie.description) {
+                            null -> {}
+                            else -> {
+                                p { +description }
+                            }
+                        }
 
-                                val responseToText = function("response") { (response) ->
-                                    emitReturn(response["text"]())
+                        p {
+                            button({ type = HtmlButtonElementType.BUTTON }) {
+                                +"Play"
+
+                                on("click") {
+                                    val response = window.fetch(
+                                        "/resource/movie/${movie.id}/playback",
+                                        jsObject {
+                                            this["method"] = jsString("post")
+                                        },
+                                    )
+
+                                    val responseToText = jsFunction("response") { (response) ->
+                                        emit(jsReturn(response["text"]()))
+                                    }
+
+                                    val text = response["then"](responseToText)
+
+                                    val textToUrl = jsFunction("text") { (text) ->
+                                        val origin = window.location.origin
+                                        val url = origin +
+                                                JsString("/resource/playback/") +
+                                                text +
+                                                JsString("/playlist.m3u8")
+
+                                        emit(jsReturn(url))
+                                    }
+
+                                    val url = text["then"](textToUrl)
+
+                                    val callback = jsFunction("url") { (url) ->
+                                        emitShareUrl(JsString(movie.title), url)
+                                    }
+
+                                    emit(url["then"](callback))
                                 }
-
-                                val text = response["then"](responseToText)
-
-                                val textToUrl = function("text") { (text) ->
-                                    val origin = window.location.origin
-                                    val url = origin +
-                                            JsString("/resource/playback/") +
-                                            text +
-                                            JsString("/playlist.m3u8")
-
-                                    emitReturn(url)
-                                }
-
-                                val url = text["then"](textToUrl)
-
-                                val callback = function("url") { (url) ->
-                                    emitShareUrl(JsString(movie.title), url)
-                                }
-
-                                url["then"](callback).emit()
                             }
                         }
                     }
                 }
+            }
 
-                style {
-                    globalStyle()
+            style {
+                globalStyle()
 
-                    define(".banner") {
+                define(".banner") {
+                    display = CssDisplay.BLOCK
+                    this["position"] = "relative"
+                    this["width"] = "100%"
+
+                    define(".backdrop") {
                         display = CssDisplay.BLOCK
-                        this["position"] = "relative"
+
                         this["width"] = "100%"
+                        this["height"] = "400px"
 
-                        define(".backdrop") {
-                            display = CssDisplay.BLOCK
+                        this["object-fit"] = "cover"
+                    }
 
-                            this["width"] = "100%"
-                            this["height"] = "400px"
+                    define(".poster") {
+                        display = CssDisplay.BLOCK
 
-                            this["object-fit"] = "cover"
-                        }
+                        this["position"] = "absolute"
+                        this["bottom"] = "0"
+                        this["left"] = "100px"
 
+                        this["transform"] = "translateY(50%)"
+
+                        this["width"] = "200px"
+                        this["height"] = "300px"
+
+                        this["object-fit"] = "cover"
+                    }
+                }
+
+                define(".content") {
+                    this["margin-left"] = "300px"
+                }
+
+                define("@media(max-width:768px)") {
+                    define(".banner") {
                         define(".poster") {
-                            display = CssDisplay.BLOCK
-
-                            this["position"] = "absolute"
-                            this["bottom"] = "0"
-                            this["left"] = "100px"
-
-                            this["transform"] = "translateY(50%)"
-
-                            this["width"] = "200px"
-                            this["height"] = "300px"
-
-                            this["object-fit"] = "cover"
+                            display = CssDisplay.NONE
                         }
                     }
 
                     define(".content") {
-                        this["margin-left"] = "300px"
-                    }
-
-                    define("@media(max-width:768px)") {
-                        define(".banner") {
-                            define(".poster") {
-                                display = CssDisplay.NONE
-                            }
-                        }
-
-                        define(".content") {
-                            this["margin-left"] = "0"
-                        }
+                        this["margin-left"] = "0"
                     }
                 }
             }
-        }.toXmlString().cache()
+        }.cache()
     }
 
     @Get("/show", "text/html")
@@ -926,43 +691,43 @@ class DashboardRest {
                 .toList()
         }
 
-        return Bundle().html {
-            head {
-                meta(charset = "utf-8")
-                meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
-                link(rel = "manifest", href = "/manifest.json")
-                title("Shows")
-            }
-
-            body {
-                main {
-                    h1 { +"Shows" }
-
-                    +mediaListComponent(
-                        items = shows.map {
-                            MediaListItem(
-                                href = "/show/${it.id}",
-                                title = it.title,
-                                thumbnail = { className, sizes ->
-                                    imageComponent(
-                                        className = className,
-                                        sizes = sizes,
-                                        src = it.poster,
-                                    )
-                                },
-                            )
-                        },
-                        mode = MediaListMode.GRID_POSTER,
-                    )
+        return bundle {
+            html {
+                head {
+                    meta(charset = "utf-8")
+                    meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
+                    link(rel = "manifest", href = "/manifest.json")
+                    title("Shows")
                 }
 
-                style {
-                    globalStyle()
-                    mediaListStyle()
-                    mediaListItemStyle()
+                body {
+                    main {
+                        h1 { +"Shows" }
+
+                        +component(::MediaListComponent) {
+                            items = shows.map {
+                                MediaListItem(
+                                    href = "/show/${it.id}",
+                                    title = it.title,
+                                    thumbnail = { className, sizes ->
+                                        component(::ImageComponent) {
+                                            this.className = className
+                                            this.sizes = sizes
+                                            this.src = it.poster
+                                        }
+                                    },
+                                )
+                            }
+                            mode = MediaListMode.GRID_POSTER
+                        }
+                    }
                 }
             }
-        }.toXmlString().cache()
+
+            style {
+                globalStyle()
+            }
+        }.cache()
     }
 
     @Get("/show/[id]", "text/html")
@@ -977,113 +742,113 @@ class DashboardRest {
                 .toList()
         }
 
-        return Bundle().html {
-            head {
-                meta(charset = "utf-8")
-                meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
-                link(rel = "manifest", href = "/manifest.json")
-                title("${show.title} | Shows")
-            }
-
-            body {
-                div({ htmlClass = "banner" }) {
-                    +imageComponent(
-                        className = "backdrop",
-                        sizes = "100vw",
-                        src = show.backdrop,
-                    )
-
-                    +imageComponent(
-                        className = "poster",
-                        sizes = "200px",
-                        src = show.poster,
-                        noFallback = true,
-                    )
+        return bundle {
+            html {
+                head {
+                    meta(charset = "utf-8")
+                    meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
+                    link(rel = "manifest", href = "/manifest.json")
+                    title("${show.title} | Shows")
                 }
 
-                main({ htmlClass = "content" }) {
-                    h1 { +show.title }
+                body {
+                    div({ htmlClass = "banner" }) {
+                        +component(::ImageComponent) {
+                            className = "backdrop"
+                            sizes = "100vw"
+                            src = show.backdrop
+                        }
 
-                    when (val description = show.description) {
-                        null -> {}
-                        else -> {
-                            p { +description }
+                        +component(::ImageComponent) {
+                            className = "poster"
+                            sizes = "200px"
+                            src = show.poster
+                            noFallback = true
                         }
                     }
 
-                    h2 { +"Seasons" }
+                    main({ htmlClass = "content" }) {
+                        h1 { +show.title }
 
-                    +mediaListComponent(
-                        items = seasons.map {
-                            MediaListItem(
-                                href = "/season/${it.id}",
-                                title = it.title,
-                                thumbnail = { className, sizes ->
-                                    imageComponent(
-                                        className = className,
-                                        sizes = sizes,
-                                        src = it.poster,
-                                    )
-                                },
-                            )
-                        },
-                        mode = MediaListMode.GRID_POSTER,
-                    )
-                }
-
-                style {
-                    globalStyle()
-                    mediaListStyle()
-                    mediaListItemStyle()
-
-                    define(".banner") {
-                        display = CssDisplay.BLOCK
-                        this["position"] = "relative"
-                        this["width"] = "100%"
-
-                        define(".backdrop") {
-                            display = CssDisplay.BLOCK
-
-                            this["width"] = "100%"
-                            this["height"] = "400px"
-
-                            this["object-fit"] = "cover"
+                        when (val description = show.description) {
+                            null -> {}
+                            else -> {
+                                p { +description }
+                            }
                         }
 
+                        h2 { +"Seasons" }
+
+                        +component(::MediaListComponent) {
+                            items = seasons.map {
+                                MediaListItem(
+                                    href = "/season/${it.id}",
+                                    title = it.title,
+                                    thumbnail = { className, sizes ->
+                                        component(::ImageComponent) {
+                                            this.className = className
+                                            this.sizes = sizes
+                                            this.src = it.poster
+                                        }
+                                    },
+                                )
+                            }
+                            mode = MediaListMode.GRID_POSTER
+                        }
+                    }
+                }
+            }
+
+            style {
+                globalStyle()
+
+                define(".banner") {
+                    display = CssDisplay.BLOCK
+                    this["position"] = "relative"
+                    this["width"] = "100%"
+
+                    define(".backdrop") {
+                        display = CssDisplay.BLOCK
+
+                        this["width"] = "100%"
+                        this["height"] = "400px"
+
+                        this["object-fit"] = "cover"
+                    }
+
+                    define(".poster") {
+                        display = CssDisplay.BLOCK
+
+                        this["position"] = "absolute"
+                        this["bottom"] = "0"
+                        this["left"] = "100px"
+
+                        this["transform"] = "translateY(50%)"
+
+                        this["width"] = "200px"
+                        this["height"] = "300px"
+
+                        this["object-fit"] = "cover"
+                    }
+                }
+
+                define(".content") {
+                    this["margin-left"] = "300px"
+                }
+
+                define("@media(max-width:768px)") {
+                    define(".banner") {
                         define(".poster") {
-                            display = CssDisplay.BLOCK
-
-                            this["position"] = "absolute"
-                            this["bottom"] = "0"
-                            this["left"] = "100px"
-
-                            this["transform"] = "translateY(50%)"
-
-                            this["width"] = "200px"
-                            this["height"] = "300px"
-
-                            this["object-fit"] = "cover"
+                            display = CssDisplay.NONE
                         }
                     }
 
                     define(".content") {
-                        this["margin-left"] = "300px"
-                    }
-
-                    define("@media(max-width:768px)") {
-                        define(".banner") {
-                            define(".poster") {
-                                display = CssDisplay.NONE
-                            }
-                        }
-
-                        define(".content") {
-                            this["margin-left"] = "0"
-                        }
+                        this["margin-left"] = "0"
                     }
                 }
             }
-        }.toXmlString().cache()
+        }.cache()
     }
 
     @Get("/season/[id]", "text/html")
@@ -1095,130 +860,130 @@ class DashboardRest {
         val show = transaction(database) { season.show }
         val episodes = transaction(database) { season.episodes.toList() }
 
-        return Bundle().html {
-            head {
-                meta(charset = "utf-8")
-                meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
-                link(rel = "manifest", href = "/manifest.json")
-                title("${show.title} - ${season.title} | Shows")
-            }
+        return bundle {
+            html {
+                head {
+                    meta(charset = "utf-8")
+                    meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
+                    link(rel = "manifest", href = "/manifest.json")
+                    title("${show.title} - ${season.title} | Shows")
+                }
 
-            body {
-                main {
-                    section({ htmlClass = "header" }) {
-                        +imageComponent(
-                            className = "poster",
-                            sizes = "(max-width: 768px) 100vw, 30vw",
-                            src = season.poster,
-                            noFallback = true,
-                        )
-
-                        div {
-                            h1 { +season.title }
-
-                            when (val description = season.description) {
-                                null -> {}
-                                else -> {
-                                    p { +description }
-                                }
+                body {
+                    main {
+                        section({ htmlClass = "header" }) {
+                            +component(::ImageComponent) {
+                                className = "poster"
+                                sizes = "(max-width: 768px) 100vw, 30vw"
+                                src = season.poster
+                                noFallback = true
                             }
 
-                            p {
-                                button({ type = HtmlButtonElementType.BUTTON }) {
-                                    +"Play all"
+                            div {
+                                h1 { +season.title }
 
-                                    on("click") {
-                                        val response = window.fetch(
-                                            "/resource/season/${season.id}/playback",
-                                            JsObject(
-                                                "method" to JsString("post"),
-                                            ),
-                                        )
+                                when (val description = season.description) {
+                                    null -> {}
+                                    else -> {
+                                        p { +description }
+                                    }
+                                }
 
-                                        val responseToText = function("response") { (response) ->
-                                            emitReturn(response["text"]())
+                                p {
+                                    button({ type = HtmlButtonElementType.BUTTON }) {
+                                        +"Play all"
+
+                                        on("click") {
+                                            val response = window.fetch(
+                                                "/resource/season/${season.id}/playback",
+                                                jsObject {
+                                                    this["method"] = jsString("post")
+                                                },
+                                            )
+
+                                            val responseToText = jsFunction("response") { (response) ->
+                                                emit(jsReturn(response["text"]()))
+                                            }
+
+                                            val text = response["then"](responseToText)
+
+                                            val textToUrl = jsFunction("text") { (text) ->
+                                                val origin = window.location.origin
+                                                val url = origin +
+                                                        JsString("/resource/playback/") +
+                                                        text +
+                                                        JsString("/playlist.m3u8")
+
+                                                emit(jsReturn(url))
+                                            }
+
+                                            val url = text["then"](textToUrl)
+
+                                            val callback = jsFunction("url") { (url) ->
+                                                emitShareUrl(JsString(season.title), url)
+                                            }
+
+                                            emit(url["then"](callback))
                                         }
-
-                                        val text = response["then"](responseToText)
-
-                                        val textToUrl = function("text") { (text) ->
-                                            val origin = window.location.origin
-                                            val url = origin +
-                                                    JsString("/resource/playback/") +
-                                                    text +
-                                                    JsString("/playlist.m3u8")
-
-                                            emitReturn(url)
-                                        }
-
-                                        val url = text["then"](textToUrl)
-
-                                        val callback = function("url") { (url) ->
-                                            emitShareUrl(JsString(season.title), url)
-                                        }
-
-                                        url["then"](callback).emit()
                                     }
                                 }
                             }
                         }
-                    }
 
-                    h2 { +"Episodes" }
+                        h2 { +"Episodes" }
 
-                    +mediaListComponent(
-                        items = episodes.map {
-                            MediaListItem(
-                                href = "/episode/${it.id}",
-                                title = it.title,
-                                thumbnail = { className, sizes ->
-                                    imageComponent(
-                                        className = className,
-                                        sizes = sizes,
-                                        src = it.still,
-                                    )
-                                },
-                            )
-                        },
-                        mode = MediaListMode.LIST,
-                    )
-                }
-
-                style {
-                    globalStyle()
-                    mediaListStyle()
-                    mediaListItemStyle()
-
-                    define(".header") {
-                        display = CssDisplay.FLEX
-                        flexDirection = CssFlexDirection.ROW
-                        flexWrap = CssFlexWrap.NOWRAP
-                        this["gap"] = "var(--space-l)"
-
-                        this["margin-bottom"] = "var(--space-l)"
-
-                        define(".poster") {
-                            this["width"] = "30vw"
-                            this["height"] = "auto"
-                            this["max-height"] = "400px"
-
-                            this["object-fit"] = "contain"
-                        }
-                    }
-
-                    define("@media(max-width:768px)") {
-                        define(".header") {
-                            flexDirection = CssFlexDirection.COLUMN
-                            flexWrap = CssFlexWrap.NOWRAP
-
-                            define(".poster") {
-                                this["width"] = "100%"
+                        +component(::MediaListComponent) {
+                            items = episodes.map {
+                                MediaListItem(
+                                    href = "/episode/${it.id}",
+                                    title = it.title,
+                                    thumbnail = { className, sizes ->
+                                        component(::ImageComponent) {
+                                            this.className = className
+                                            this.sizes = sizes
+                                            this.src = it.still
+                                        }
+                                    },
+                                )
                             }
+                            mode = MediaListMode.LIST
                         }
                     }
                 }
             }
-        }.toXmlString().cache()
+
+            style {
+                globalStyle()
+
+                define(".header") {
+                    display = CssDisplay.FLEX
+                    flexDirection = CssFlexDirection.ROW
+                    flexWrap = CssFlexWrap.NOWRAP
+                    this["gap"] = "var(--space-l)"
+
+                    this["margin-bottom"] = "var(--space-l)"
+
+                    define(".poster") {
+                        this["width"] = "30vw"
+                        this["height"] = "auto"
+                        this["max-height"] = "400px"
+
+                        this["object-fit"] = "contain"
+                    }
+                }
+
+                define("@media(max-width:768px)") {
+                    define(".header") {
+                        flexDirection = CssFlexDirection.COLUMN
+                        flexWrap = CssFlexWrap.NOWRAP
+
+                        define(".poster") {
+                            this["width"] = "100%"
+                        }
+                    }
+                }
+            }
+        }.cache()
     }
 
     @Get("/episode/[id]", "text/html")
@@ -1230,109 +995,111 @@ class DashboardRest {
         val season = transaction(database) { episode.season }
         val show = transaction(database) { season.show }
 
-        return Bundle().html {
-            head {
-                meta(charset = "utf-8")
-                meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
-                link(rel = "manifest", href = "/manifest.json")
-                title("${show.title} - ${season.title} - ${episode.title} | Shows")
-            }
+        return bundle {
+            html {
+                head {
+                    meta(charset = "utf-8")
+                    meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
+                    link(rel = "manifest", href = "/manifest.json")
+                    title("${show.title} - ${season.title} - ${episode.title} | Shows")
+                }
 
-            body {
-                main {
-                    section({ htmlClass = "header" }) {
-                        +imageComponent(
-                            className = "still",
-                            sizes = "(max-width: 768px) 100vw, 30vw",
-                            src = episode.still,
-                            noFallback = true,
-                        )
-
-                        div {
-                            h1 { +episode.title }
-
-                            when (val description = episode.description) {
-                                null -> {}
-                                else -> {
-                                    p { +description }
-                                }
+                body {
+                    main {
+                        section({ htmlClass = "header" }) {
+                            +component(::ImageComponent) {
+                                className = "still"
+                                sizes = "(max-width: 768px) 100vw, 30vw"
+                                src = episode.still
+                                noFallback = true
                             }
 
-                            p {
-                                button({ type = HtmlButtonElementType.BUTTON }) {
-                                    +"Play"
+                            div {
+                                h1 { +episode.title }
 
-                                    on("click") {
-                                        val response = window.fetch(
-                                            "/resource/episode/${episode.id}/playback",
-                                            JsObject(
-                                                "method" to JsString("post"),
-                                            ),
-                                        )
+                                when (val description = episode.description) {
+                                    null -> {}
+                                    else -> {
+                                        p { +description }
+                                    }
+                                }
 
-                                        val responseToText = function("response") { (response) ->
-                                            emitReturn(response["text"]())
+                                p {
+                                    button({ type = HtmlButtonElementType.BUTTON }) {
+                                        +"Play"
+
+                                        on("click") {
+                                            val response = window.fetch(
+                                                "/resource/episode/${episode.id}/playback",
+                                                jsObject {
+                                                    this["method"] = JsString("post")
+                                                },
+                                            )
+
+                                            val responseToText = jsFunction("response") { (response) ->
+                                                emit(jsReturn(response["text"]()))
+                                            }
+
+                                            val text = response["then"](responseToText)
+
+                                            val textToUrl = jsFunction("text") { (text) ->
+                                                val origin = window.location.origin
+                                                val url = origin +
+                                                        JsString("/resource/playback/") +
+                                                        text +
+                                                        JsString("/0/master.m3u8")
+
+                                                emit(jsReturn(url))
+                                            }
+
+                                            val url = text["then"](textToUrl)
+
+                                            val callback = jsFunction("url") { (url) ->
+                                                emitShareUrl(JsString(episode.title), url)
+                                            }
+
+                                            emit(url["then"](callback))
                                         }
-
-                                        val text = response["then"](responseToText)
-
-                                        val textToUrl = function("text") { (text) ->
-                                            val origin = window.location.origin
-                                            val url = origin +
-                                                    JsString("/resource/playback/") +
-                                                    text +
-                                                    JsString("/0/master.m3u8")
-
-                                            emitReturn(url)
-                                        }
-
-                                        val url = text["then"](textToUrl)
-
-                                        val callback = function("url") { (url) ->
-                                            emitShareUrl(JsString(episode.title), url)
-                                        }
-
-                                        url["then"](callback).emit()
                                     }
                                 }
                             }
                         }
                     }
                 }
+            }
 
-                style {
-                    globalStyle()
+            style {
+                globalStyle()
 
+                define(".header") {
+                    display = CssDisplay.FLEX
+                    flexDirection = CssFlexDirection.ROW
+                    flexWrap = CssFlexWrap.NOWRAP
+                    this["gap"] = "var(--space-l)"
+
+                    this["margin-bottom"] = "var(--space-l)"
+
+                    define(".still") {
+                        this["width"] = "30vw"
+                        this["height"] = "auto"
+                        this["max-height"] = "400px"
+
+                        this["object-fit"] = "contain"
+                    }
+                }
+
+                define("@media(max-width:768px)") {
                     define(".header") {
-                        display = CssDisplay.FLEX
-                        flexDirection = CssFlexDirection.ROW
+                        flexDirection = CssFlexDirection.COLUMN
                         flexWrap = CssFlexWrap.NOWRAP
-                        this["gap"] = "var(--space-l)"
-
-                        this["margin-bottom"] = "var(--space-l)"
 
                         define(".still") {
-                            this["width"] = "30vw"
-                            this["height"] = "auto"
-                            this["max-height"] = "400px"
-
-                            this["object-fit"] = "contain"
-                        }
-                    }
-
-                    define("@media(max-width:768px)") {
-                        define(".header") {
-                            flexDirection = CssFlexDirection.COLUMN
-                            flexWrap = CssFlexWrap.NOWRAP
-
-                            define(".still") {
-                                this["width"] = "100%"
-                            }
+                            this["width"] = "100%"
                         }
                     }
                 }
             }
-        }.toXmlString().cache()
+        }.cache()
     }
 
     @Handle(UnauthorizedSignal::class)

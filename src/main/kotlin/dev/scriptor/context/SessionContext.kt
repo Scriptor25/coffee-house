@@ -13,16 +13,16 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.Duration.ofMinutes
 import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlin.time.toKotlinDuration
 import kotlin.uuid.Uuid
 
 @Context
 class SessionContext {
 
-    private fun generateToken(id: Uuid): Jwt {
+    private fun generateToken(id: Uuid, instant: Instant): Jwt {
 
-        val createdAt = Clock.System.now()
-        val expiresAt = createdAt + ofMinutes(60).toKotlinDuration()
+        val expires = instant + ofMinutes(60).toKotlinDuration()
 
         return Jwt.encode(
             JwtHeader(
@@ -30,8 +30,8 @@ class SessionContext {
             ),
             JwtPayload(
                 sub = id.toHexDashString(),
-                iat = createdAt,
-                exp = expiresAt,
+                iat = instant,
+                exp = expires,
                 aud = "coffee-house",
                 iss = "dev.scriptor.coffee-house", // TODO: change to application domain
             ),
@@ -43,7 +43,7 @@ class SessionContext {
         provider: Provider,
         database: Database,
     )
-    fun createSession(username: String, password: String): Jwt? {
+    fun createSession(username: String, password: String, instant: Instant = Clock.System.now()): Jwt? {
         val defaultUsername: String? = provider.getT("username")
         val defaultPassword: String? = provider.getT("password")
 
@@ -69,10 +69,10 @@ class SessionContext {
             }
         }
 
-        return generateToken(id)
+        return generateToken(id, instant)
     }
 
-    fun renewSession(principal: Principal): Jwt {
-        return generateToken(principal.id)
+    fun renewSession(principal: Principal, instant: Instant = Clock.System.now()): Jwt {
+        return generateToken(principal.id, instant)
     }
 }
