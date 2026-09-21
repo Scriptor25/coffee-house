@@ -1,5 +1,6 @@
 package dev.scriptor.context
 
+import dev.scriptor.db
 import dev.scriptor.model.user.User
 import dev.scriptor.model.user.UserTable
 import dev.scriptor.security.Jwt
@@ -9,8 +10,6 @@ import dev.scriptor.server.Provider
 import dev.scriptor.server.jvm.annotation.Context
 import dev.scriptor.server.security.Principal
 import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.Duration.ofMinutes
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -39,10 +38,7 @@ class SessionContext {
         )
     }
 
-    context(
-        provider: Provider,
-        database: Database,
-    )
+    context(provider: Provider)
     fun createSession(username: String, password: String, instant: Instant = Clock.System.now()): Jwt? {
         val defaultUsername: String? = provider.getT("username")
         val defaultPassword: String? = provider.getT("password")
@@ -55,7 +51,7 @@ class SessionContext {
                 return null
             }
         } else {
-            val user = transaction(database) {
+            val user = db {
                 User
                     .find { UserTable.name eq username }
                     .firstOrNull()

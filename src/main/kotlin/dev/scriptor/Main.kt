@@ -23,11 +23,12 @@ import dev.scriptor.server.request.Request
 import dev.scriptor.server.security.Authenticator
 import dev.scriptor.server.security.Principal
 import dev.scriptor.server.server
-import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.notInList
-import org.jetbrains.exposed.v1.jdbc.*
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.batchInsert
+import org.jetbrains.exposed.v1.jdbc.select
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.Path
@@ -151,7 +152,6 @@ data class MetadataNode(
 context(
     _: Provider,
     log: Logger,
-    database: Database,
 )
 fun getFileMetadata(
     ffprobe: String,
@@ -181,7 +181,7 @@ fun getFileMetadata(
     val duration = node.format.duration.toDouble()
     val title = node.format.tags.title ?: path.nameWithoutExtension
 
-    val media = transaction(database) {
+    val media = db {
         Media.new {
             this.path = path
             this.size = size
@@ -211,7 +211,7 @@ fun getFileMetadata(
 
                 val default = stream.disposition.default?.toInt() == 1
 
-                transaction(database) {
+                db {
                     VideoTrack.new {
                         this.media = media
                         this.index = index
@@ -244,7 +244,7 @@ fun getFileMetadata(
                 val default = stream.disposition.default?.toInt() == 1
                 val forced = stream.disposition.forced?.toInt() == 1
 
-                transaction(database) {
+                db {
                     AudioTrack.new {
                         this.media = media
                         this.index = index
@@ -270,7 +270,7 @@ fun getFileMetadata(
                 val default = stream.disposition.default?.toInt() == 1
                 val forced = stream.disposition.forced?.toInt() == 1
 
-                transaction(database) {
+                db {
                     SubtitleTrack.new {
                         this.media = media
                         this.index = index
@@ -305,7 +305,7 @@ fun getFileMetadata(
         val language = chapter.tags.language
         val title = chapter.tags.title
 
-        transaction(database) {
+        db {
             Chapter.new {
                 this.media = media
                 this.index = index
@@ -321,13 +321,12 @@ fun getFileMetadata(
 context(
     _: Provider,
     log: Logger,
-    database: Database,
 )
 fun getFileMetadata(
     ffprobe: String,
     paths: List<Path>,
 ) {
-    val existing = transaction(database) {
+    val existing = db {
         MediaTable
             .select(MediaTable.path)
             .map { it[MediaTable.path] }
@@ -365,6 +364,8 @@ fun getFileMetadata(
 
     val results = executor.invokeAll(tasks)
 
+    executor.shutdown()
+
     for (result in results) {
         result.get()
     }
@@ -400,224 +401,319 @@ fun buildTmdbImages(configuration: TmdbContext.Configuration, type: TmdbImageTyp
     }
 }
 
+val TMDB_ID_REGEX = """^[^\[]*\[tmdbid-(\d+)].*$""".toRegex()
+val SEASON_NUMBER_REGEX = """^.*(\d{1,2}).*$""".toRegex()
+val EPISODE_NUMBER_REGEX = """^.*S(\d{1,2})E(\d{1,2}).*$""".toRegex()
+
+context(
+    _: Logger,
+    _: Provider,
+)
+fun getMovieMetadata(
+    context: TmdbContext,
+    configuration: TmdbContext.Configuration,
+    node: MovieNode,
+): Movie {
+    when (val movie = db {
+        Movie
+            .find(MovieTable.path eq node.path)
+            .firstOrNull()
+    }) {
+        null -> Unit
+        else -> return movie
+    }
+
+    val match = TMDB_ID_REGEX.matchEntire(node.path.name)
+    val movieId = match?.let { it.groupValues[1].toInt() }
+
+    val details = if (movieId != null)
+        context.getMovieDetails(movieId)
+    else null
+
+    val movie = db {
+        Movie.new {
+            this.path = node.path
+            this.tmdbId = movieId
+
+            if (details != null) {
+                this.title = details.title
+                this.description = details.overview
+                this.poster = when (val path = details.posterPath) {
+                    null -> listOf()
+                    else -> buildTmdbImages(configuration, TmdbImageType.POSTER, path)
+                }
+                this.backdrop = when (val path = details.backdropPath) {
+                    null -> listOf()
+                    else -> buildTmdbImages(configuration, TmdbImageType.BACKDROP, path)
+                }
+            } else {
+                this.title = node.path.name
+                this.description = null
+                this.poster = emptyList()
+                this.backdrop = emptyList()
+            }
+        }
+    }
+
+    db {
+        val items = node.items
+            .flatMap { Media.find(MediaTable.path eq it).toList() }
+            .filter { it !in movie.items }
+        val extra = node.extra
+            .flatMap { Media.find(MediaTable.path eq it).toList() }
+            .filter { it !in movie.items }
+
+        MovieMediaTable.batchInsert(items) { media ->
+            this[MovieMediaTable.movie] = movie.id
+            this[MovieMediaTable.media] = media.id
+            this[MovieMediaTable.extra] = false
+        }
+        MovieMediaTable.batchInsert(extra) { media ->
+            this[MovieMediaTable.movie] = movie.id
+            this[MovieMediaTable.media] = media.id
+            this[MovieMediaTable.extra] = true
+        }
+    }
+
+    return movie
+}
+
+context(
+    _: Logger,
+    _: Provider,
+)
+fun getEpisodeMetadata(
+    context: TmdbContext,
+    configuration: TmdbContext.Configuration,
+    show: Show,
+    season: Season,
+    index: Int,
+    path: Path,
+): Episode {
+    when (val episode = db {
+        Episode
+            .find(EpisodeTable.path eq path)
+            .firstOrNull()
+    }) {
+        null -> Unit
+        else -> return episode
+    }
+
+    val match = EPISODE_NUMBER_REGEX.matchEntire(path.name)
+    val seasonNumber = match?.let { it.groupValues[1].toInt() }
+    val episodeNumber = match?.let { it.groupValues[2].toInt() }
+
+    val details = if (seasonNumber != null && episodeNumber != null) {
+        context.getEpisodeDetails(show.tmdbId ?: 0, seasonNumber, episodeNumber)
+    } else null
+
+    return db {
+        Episode.new {
+            this.path = path
+            this.season = season
+            this.media = Media.find(MediaTable.path eq path).first()
+
+            if (details != null) {
+                this.index = details.episodeNumber
+                this.title = details.name
+                this.description = details.overview
+                this.still = when (val path = details.stillPath) {
+                    null -> listOf()
+                    else -> buildTmdbImages(configuration, TmdbImageType.STILL, path)
+                }
+            } else {
+                this.index = episodeNumber ?: index
+                this.title = media.title
+                this.description = null
+                this.still = emptyList()
+            }
+        }
+    }
+}
+
+context(
+    _: Logger,
+    _: Provider,
+)
+fun getSeasonMetadata(
+    context: TmdbContext,
+    configuration: TmdbContext.Configuration,
+    show: Show,
+    index: Int,
+    node: SeasonNode,
+): Season {
+    when (val season = db {
+        Season
+            .find(SeasonTable.path eq node.path)
+            .firstOrNull()
+    }) {
+        null -> Unit
+        else -> return season
+    }
+
+    val match = SEASON_NUMBER_REGEX.matchEntire(node.path.name)
+    val seasonNumber = match?.let { it.groupValues[1].toInt() }
+
+    val details = if (seasonNumber != null) {
+        context.getSeasonDetails(show.tmdbId ?: 0, seasonNumber)
+    } else null
+
+    val season = db {
+        Season.new {
+            this.path = node.path
+            this.show = show
+
+            if (details != null) {
+                this.index = details.seasonNumber
+                this.title = details.name
+                this.description = details.overview
+                this.poster = when (val path = details.posterPath) {
+                    null -> listOf()
+                    else -> buildTmdbImages(configuration, TmdbImageType.POSTER, path)
+                }
+            } else {
+                this.index = seasonNumber ?: index
+                this.title = node.path.name
+                this.description = null
+                this.poster = emptyList()
+            }
+        }
+    }
+
+    for ((index, path) in node.episodes.withIndex()) {
+        getEpisodeMetadata(
+            context,
+            configuration,
+            show,
+            season,
+            index,
+            path,
+        )
+    }
+
+    return season
+}
+
+context(
+    _: Logger,
+    _: Provider,
+)
+fun getShowMetadata(
+    context: TmdbContext,
+    configuration: TmdbContext.Configuration,
+    node: ShowNode,
+): Show {
+    when (val show = db {
+        Show
+            .find(ShowTable.path eq node.path)
+            .firstOrNull()
+    }) {
+        null -> Unit
+        else -> return show
+    }
+
+    val match = TMDB_ID_REGEX.matchEntire(node.path.name)
+    val showId = match?.let { it.groupValues[1].toInt() }
+
+    val details = if (showId != null)
+        context.getShowDetails(showId)
+    else null
+
+    val show = db {
+        Show.new {
+            this.path = node.path
+            this.tmdbId = showId
+
+            if (details != null) {
+                this.title = details.name
+                this.description = details.overview
+                this.poster = when (val path = details.posterPath) {
+                    null -> listOf()
+                    else -> buildTmdbImages(configuration, TmdbImageType.POSTER, path)
+                }
+                this.backdrop = when (val path = details.backdropPath) {
+                    null -> listOf()
+                    else -> buildTmdbImages(configuration, TmdbImageType.BACKDROP, path)
+                }
+            } else {
+                this.title = node.path.name
+                this.description = null
+                this.poster = emptyList()
+                this.backdrop = emptyList()
+            }
+        }
+    }
+
+    for ((index, node) in node.seasons.withIndex()) {
+        getSeasonMetadata(
+            context,
+            configuration,
+            show,
+            index,
+            node,
+        )
+    }
+
+    return show
+}
+
+fun getOtherMetadata(path: Path): Other {
+    val media = db {
+        Media
+            .find(MediaTable.path eq path)
+            .first()
+    }
+
+    when (val other = db {
+        Other
+            .find(OtherTable.media eq media.id)
+            .firstOrNull()
+    }) {
+        null -> Unit
+        else -> return other
+    }
+
+    return db {
+        Other.new {
+            this.media = media
+            this.title = media.title
+        }
+    }
+}
+
 context(
     _: Provider,
     _: Logger,
-    database: Database,
 )
 fun getTmdbMetadata(nodes: Nodes) {
     val context = TmdbContext()
-    val tmdbIdRegex = """^[^\[]*\[tmdbid-(\d+)].*$""".toRegex()
-    val seasonNumberRegex = """^.*(\d{1,2}).*$""".toRegex()
-    val episodeNumberRegex = """^.*S(\d{1,2})E(\d{1,2}).*$""".toRegex()
-
     val configuration = context.getConfiguration()
         ?: error("failed to get tmdb configuration")
 
-    transaction(database) {
-        MovieTable
-            .selectAll()
-            .forEach {
-                val movieId = it[MovieTable.id]
-
-                val hasMedia = MovieMediaTable
-                    .selectAll()
-                    .where { MovieMediaTable.movie eq movieId }
-                    .any()
-
-                if (!hasMedia) {
-                    MovieTable.deleteWhere { MovieTable.id eq movieId }
-                }
-            }
-
-        SeasonTable
-            .selectAll()
-            .forEach {
-                val seasonId = it[SeasonTable.id]
-
-                val hasEpisodes = EpisodeTable
-                    .select(EpisodeTable.id)
-                    .where { EpisodeTable.season eq seasonId }
-                    .any()
-
-                if (!hasEpisodes) {
-                    SeasonTable.deleteWhere { SeasonTable.id eq seasonId }
-                }
-            }
-
-        ShowTable
-            .selectAll()
-            .forEach {
-                val showId = it[ShowTable.id]
-
-                val hasSeasons = SeasonTable
-                    .select(SeasonTable.id)
-                    .where { SeasonTable.show eq showId }
-                    .any()
-
-                if (!hasSeasons) {
-                    ShowTable.deleteWhere { ShowTable.id eq showId }
-                }
-            }
+    db {
+        Movie.all().filter { it.items.empty() }.forEach { it.delete() }
+        Season.all().filter { it.episodes.empty() }.forEach { it.delete() }
+        Show.all().filter { it.seasons.empty() }.forEach { it.delete() }
     }
 
-    for (movieNode in nodes.movies) {
-        val match = tmdbIdRegex.matchEntire(movieNode.path.name) ?: continue
-        val movieId = match.groupValues[1].toInt()
-
-        var movie = transaction(database) {
-            Movie
-                .find(MovieTable.tmdbId eq movieId)
-                .firstOrNull()
-        }
-
-        if (movie == null) {
-            val details = context.getMovieDetails(movieId) ?: continue
-
-            movie = transaction(database) {
-                Movie.new {
-                    this.tmdbId = movieId
-                    this.title = details.title
-                    this.description = details.overview
-                    this.poster = when (val path = details.posterPath) {
-                        null -> listOf()
-                        else -> buildTmdbImages(configuration, TmdbImageType.POSTER, path)
-                    }
-                    this.backdrop = when (val path = details.backdropPath) {
-                        null -> listOf()
-                        else -> buildTmdbImages(configuration, TmdbImageType.BACKDROP, path)
-                    }
-                }
-            }
-        }
-
-        transaction(database) {
-            val items = movieNode.items
-                .flatMap { Media.find(MediaTable.path eq it).toList() }
-                .filter { it !in movie.items }
-            val extra = movieNode.extra
-                .flatMap { Media.find(MediaTable.path eq it).toList() }
-                .filter { it !in movie.items }
-
-            MovieMediaTable.batchInsert(items) { media ->
-                this[MovieMediaTable.movie] = movie.id
-                this[MovieMediaTable.media] = media.id
-                this[MovieMediaTable.extra] = false
-            }
-            MovieMediaTable.batchInsert(extra) { media ->
-                this[MovieMediaTable.movie] = movie.id
-                this[MovieMediaTable.media] = media.id
-                this[MovieMediaTable.extra] = true
-            }
-        }
+    for (node in nodes.movies) {
+        getMovieMetadata(
+            context,
+            configuration,
+            node,
+        )
     }
 
-    for (showNode in nodes.shows) {
-        val match = tmdbIdRegex.matchEntire(showNode.path.name) ?: continue
-        val showId = match.groupValues[1].toInt()
-
-        var show = transaction(database) {
-            Show
-                .find(ShowTable.tmdbId eq showId)
-                .firstOrNull()
-        }
-
-        if (show == null) {
-            val details = context.getShowDetails(showId) ?: continue
-
-            show = transaction(database) {
-                Show.new {
-                    this.tmdbId = showId
-                    this.title = details.name
-                    this.description = details.overview
-                    this.poster = when (val path = details.posterPath) {
-                        null -> listOf()
-                        else -> buildTmdbImages(configuration, TmdbImageType.POSTER, path)
-                    }
-                    this.backdrop = when (val path = details.backdropPath) {
-                        null -> listOf()
-                        else -> buildTmdbImages(configuration, TmdbImageType.BACKDROP, path)
-                    }
-                }
-            }
-        }
-
-        for (seasonNode in showNode.seasons) {
-            val match = seasonNumberRegex.matchEntire(seasonNode.path.name) ?: continue
-            val seasonNumber = match.groupValues[1].toInt()
-
-            var season = transaction(database) {
-                Season
-                    .find((SeasonTable.show eq show.id) and (SeasonTable.index eq seasonNumber))
-                    .firstOrNull()
-            }
-
-            if (season == null) {
-                val details = context.getSeasonDetails(showId, seasonNumber) ?: continue
-
-                season = transaction(database) {
-                    Season.new {
-                        this.show = show
-                        this.index = seasonNumber
-                        this.title = details.name
-                        this.description = details.overview
-                        this.poster = when (val path = details.posterPath) {
-                            null -> listOf()
-                            else -> buildTmdbImages(configuration, TmdbImageType.POSTER, path)
-                        }
-                    }
-                }
-            }
-
-            for (episodePath in seasonNode.episodes) {
-                val match = episodeNumberRegex.matchEntire(episodePath.name) ?: continue
-                val seasonNumber = match.groupValues[1].toInt()
-                val episodeNumber = match.groupValues[2].toInt()
-
-                var episode = transaction(database) {
-                    Episode
-                        .find((EpisodeTable.season eq season.id) and (EpisodeTable.index eq episodeNumber))
-                        .firstOrNull()
-                }
-
-                if (episode == null) {
-                    val details = context.getEpisodeDetails(showId, seasonNumber, episodeNumber) ?: continue
-
-                    episode = transaction(database) {
-                        Episode.new {
-                            this.season = season
-                            this.media = Media.find(MediaTable.path eq episodePath).first()
-                            this.index = episodeNumber
-                            this.title = details.name
-                            this.description = details.overview
-                            this.still = when (val path = details.stillPath) {
-                                null -> listOf()
-                                else -> buildTmdbImages(configuration, TmdbImageType.STILL, path)
-                            }
-                        }
-                    }
-                }
-            }
-        }
+    for (node in nodes.shows) {
+        getShowMetadata(
+            context,
+            configuration,
+            node,
+        )
     }
 
-    for (otherPath in nodes.others) {
-        val media = transaction(database) { Media.find(MediaTable.path eq otherPath).first() }
-
-        var other = transaction(database) {
-            Other
-                .find(OtherTable.media eq media.id)
-                .firstOrNull()
-        }
-
-        if (other == null) {
-            other = transaction(database) {
-                Other.new {
-                    this.media = media
-                    this.title = media.title
-                }
-            }
-        }
+    for (path in nodes.others) {
+        getOtherMetadata(path)
     }
 }
 
@@ -694,7 +790,10 @@ fun walkFileTree(log: Logger, root: Path): Nodes {
                     showPath == null -> {
                         showPath = directory
                         showSeasons = mutableListOf()
-                        showNode = ShowNode(directory, showSeasons)
+                        showNode = ShowNode(
+                            directory,
+                            showSeasons,
+                        )
                         FileVisitResult.CONTINUE
                     }
 
@@ -843,7 +942,14 @@ fun main() {
     })
     provider.setT(database)
 
-    transaction(database) {
+    val databaseThread = Thread { DatabaseController.run(database) }
+    databaseThread.name = "database"
+    databaseThread.isDaemon = true
+    databaseThread.start()
+
+    // TODO: drain database controller queue on shutdown
+
+    db {
         SchemaUtils.create(
             DeviceTable,
             DeviceToDeviceTable,
@@ -873,7 +979,7 @@ fun main() {
         )
     }
 
-    Probe(log, ffmpeg, transcodingDevice)(database)
+    Probe(log, ffmpeg, transcodingDevice)()
 
     val transcoding = TranscodingCache(
         log,
@@ -896,7 +1002,7 @@ fun main() {
 
     log.info("found ${paths.size} files (${nodes.movies.size} movies, ${nodes.shows.size} shows, ${nodes.others.size} others)")
 
-    transaction(database) {
+    db {
         Media
             .find { MediaTable.path notInList paths }
             .forEach { it.delete() }
@@ -916,7 +1022,6 @@ fun main() {
 
         authenticator = HeaderAuthenticator(
             log,
-            database,
             defaultUsername,
             defaultPassword,
         )
@@ -950,7 +1055,6 @@ fun main() {
 
 data class HeaderAuthenticator(
     val log: Logger,
-    val database: Database,
     val defaultUsername: String?,
     val defaultPassword: String?,
 ) : Authenticator {
@@ -1010,7 +1114,7 @@ data class HeaderAuthenticator(
         val role = if (id == Uuid.NIL) {
             UserRole.ADMIN
         } else {
-            val user = transaction(database) { User.findById(id) }
+            val user = db { User.findById(id) }
                 ?: return null
 
             user.role

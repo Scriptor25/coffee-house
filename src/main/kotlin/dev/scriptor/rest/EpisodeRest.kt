@@ -1,12 +1,11 @@
 package dev.scriptor.rest
 
 import dev.scriptor.context.PlaybackContext
+import dev.scriptor.db
 import dev.scriptor.model.show.Episode
 import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.jvm.annotation.*
 import dev.scriptor.server.security.Principal
-import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.uuid.Uuid
 
 @RequireAuth
@@ -14,19 +13,18 @@ import kotlin.uuid.Uuid
 class EpisodeRest {
 
     @Get("/[id]", "application/json")
-    context(database: Database)
     fun getEpisode(@PathParameter id: Uuid): Episode {
-        return transaction(database) { Episode.findById(id) }
+        return db { Episode.findById(id) }
             ?: throw NotFoundSignal()
     }
 
     @Post("/[id]/playback", "*/*", "text/plain")
-    context(principal: Principal, database: Database, context: PlaybackContext)
+    context(principal: Principal, context: PlaybackContext)
     fun createEpisodePlayback(@PathParameter id: Uuid): String {
-        val episode = transaction(database) { Episode.findById(id) }
+        val episode = db { Episode.findById(id) }
             ?: throw NotFoundSignal()
 
-        val item = transaction(database) { episode.media.id.value }
+        val item = db { episode.media.id.value }
 
         return context.createPlayback(
             principal.id,

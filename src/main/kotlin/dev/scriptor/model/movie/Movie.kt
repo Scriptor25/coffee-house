@@ -2,6 +2,7 @@ package dev.scriptor.model.movie
 
 import dev.scriptor.*
 import dev.scriptor.model.media.Media
+import dev.scriptor.model.media.path
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.UuidTable
 import org.jetbrains.exposed.v1.dao.UuidEntity
@@ -17,6 +18,7 @@ data class ImageData(
 )
 
 object MovieTable : UuidTable("movie") {
+    val path = path("path").uniqueIndex()
     val tmdbId = integer("tmdb_id").nullable()
     val title = text("title")
     val description = text("description").nullable()
@@ -30,10 +32,6 @@ object MovieTable : UuidTable("movie") {
         from = { it.fromJsonNoContext() },
         to = { it.toJsonNoContext() },
     )
-
-    init {
-        uniqueIndex(tmdbId)
-    }
 }
 
 @JsonSerializable
@@ -43,6 +41,9 @@ class Movie(id: EntityID<Uuid>) : UuidEntity(id) {
     @all:JsonProperty("id")
     val jsonId
         get() = id.value
+
+    @JsonProperty
+    var path by MovieTable.path
 
     @JsonProperty
     var tmdbId by MovieTable.tmdbId
@@ -66,6 +67,6 @@ class Movie(id: EntityID<Uuid>) : UuidEntity(id) {
         get() = items.map { it.id.value }
 
     override fun toString(): String {
-        return "Movie(id=$id, tmdbId=$tmdbId, title=$title, description=$description, poster=$poster, backdrop=$backdrop)"
+        return "Movie(id=$id, path=$path, tmdbId=$tmdbId, title=$title, description=$description, poster=$poster, backdrop=$backdrop)"
     }
 }

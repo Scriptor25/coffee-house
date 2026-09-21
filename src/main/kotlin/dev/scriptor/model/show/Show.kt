@@ -1,6 +1,7 @@
 package dev.scriptor.model.show
 
 import dev.scriptor.*
+import dev.scriptor.model.media.path
 import dev.scriptor.model.movie.ImageData
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
@@ -10,6 +11,7 @@ import org.jetbrains.exposed.v1.dao.UuidEntityClass
 import kotlin.uuid.Uuid
 
 object ShowTable : UuidTable("show") {
+    val path = path("path").uniqueIndex()
     val tmdbId = integer("tmdb_id").nullable()
     val title = text("title")
     val description = text("description").nullable()
@@ -23,10 +25,6 @@ object ShowTable : UuidTable("show") {
         from = { it.fromJsonNoContext() },
         to = { it.toJsonNoContext() },
     )
-
-    init {
-        uniqueIndex(tmdbId)
-    }
 }
 
 @JsonSerializable
@@ -36,6 +34,9 @@ class Show(id: EntityID<Uuid>) : UuidEntity(id) {
     @all:JsonProperty("id")
     val jsonId
         get() = id.value
+
+    @JsonProperty
+    var path by ShowTable.path
 
     @JsonProperty
     var tmdbId by ShowTable.tmdbId

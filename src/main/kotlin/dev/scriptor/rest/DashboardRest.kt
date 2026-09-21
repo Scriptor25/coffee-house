@@ -1,14 +1,11 @@
 package dev.scriptor.rest
 
-import dev.scriptor.JsonNode
+import dev.scriptor.*
 import dev.scriptor.component.ImageComponent
 import dev.scriptor.component.MediaListComponent
 import dev.scriptor.component.MediaListItem
 import dev.scriptor.component.MediaListMode
 import dev.scriptor.context.SessionContext
-import dev.scriptor.jsonArray
-import dev.scriptor.jsonObject
-import dev.scriptor.jsonOf
 import dev.scriptor.model.movie.Movie
 import dev.scriptor.model.movie.MovieTable
 import dev.scriptor.model.other.Other
@@ -33,8 +30,6 @@ import dev.scriptor.ui.js.JsExpression
 import dev.scriptor.ui.js.JsString
 import dev.scriptor.ui.js.builder.JsNodeBuilder
 import org.jetbrains.exposed.v1.core.SortOrder
-import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.net.URLDecoder
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
@@ -313,9 +308,9 @@ class DashboardRest {
     }
 
     @Get("/", "text/html")
-    context(principal: Principal, database: Database)
+    context(principal: Principal)
     fun getDashboardPage(): Result {
-        val movies = transaction(database) {
+        val movies = db {
             Movie
                 .all()
                 .orderBy(MovieTable.title to SortOrder.ASC)
@@ -323,7 +318,7 @@ class DashboardRest {
                 .toList()
         }
 
-        val shows = transaction(database) {
+        val shows = db {
             Show
                 .all()
                 .orderBy(ShowTable.title to SortOrder.ASC)
@@ -331,7 +326,7 @@ class DashboardRest {
                 .toList()
         }
 
-        val others = transaction(database) {
+        val others = db {
             Other
                 .all()
                 .orderBy(OtherTable.title to SortOrder.ASC)
@@ -339,7 +334,7 @@ class DashboardRest {
                 .toList()
         }
 
-        val user = transaction(database) { User.findById(principal.id) }
+        val user = db { User.findById(principal.id) }
 
         return bundle {
             html {
@@ -445,7 +440,6 @@ class DashboardRest {
     @Post("/login", "application/x-www-form-urlencoded")
     context(
         _: Provider,
-        _: Database,
         sessions: SessionContext,
     )
     fun login(@QueryParameter next: String = "/", @Body body: String): Result {
@@ -579,9 +573,8 @@ class DashboardRest {
     }
 
     @Get("/movie", "text/html")
-    context(database: Database)
     fun getMovieListPage(): Result {
-        val movies = transaction(database) {
+        val movies = db {
             Movie
                 .all()
                 .orderBy(MovieTable.title to SortOrder.ASC)
@@ -628,9 +621,8 @@ class DashboardRest {
     }
 
     @Get("/movie/[id]", "text/html")
-    context(database: Database)
     fun getMovieDetailPage(@PathParameter id: Uuid): Result {
-        val movie = transaction(database) { Movie.findById(id) }
+        val movie = db { Movie.findById(id) }
             ?: throw NotFoundSignal()
 
         return bundle {
@@ -738,9 +730,8 @@ class DashboardRest {
     }
 
     @Get("/show", "text/html")
-    context(database: Database)
     fun getShowListPage(): Result {
-        val shows = transaction(database) {
+        val shows = db {
             Show
                 .all()
                 .orderBy(ShowTable.title to SortOrder.ASC)
@@ -787,12 +778,11 @@ class DashboardRest {
     }
 
     @Get("/show/[id]", "text/html")
-    context(database: Database)
     fun getShowDetailPage(@PathParameter id: Uuid): Result {
-        val show = transaction(database) { Show.findById(id) }
+        val show = db { Show.findById(id) }
             ?: throw NotFoundSignal()
 
-        val seasons = transaction(database) {
+        val seasons = db {
             show.seasons
                 .orderBy(SeasonTable.index to SortOrder.ASC)
                 .toList()
@@ -908,13 +898,16 @@ class DashboardRest {
     }
 
     @Get("/season/[id]", "text/html")
-    context(database: Database)
     fun getSeasonDetailPage(@PathParameter id: Uuid): Result {
-        val season = transaction(database) { Season.findById(id) }
+        val season = db { Season.findById(id) }
             ?: throw NotFoundSignal()
 
-        val show = transaction(database) { season.show }
-        val episodes = transaction(database) { season.episodes.toList() }
+        val show = db { season.show }
+        val episodes = db {
+            season.episodes
+                .orderBy(EpisodeTable.index to SortOrder.ASC)
+                .toList()
+        }
 
         return bundle {
             html {
@@ -1018,13 +1011,12 @@ class DashboardRest {
     }
 
     @Get("/episode/[id]", "text/html")
-    context(database: Database)
     fun getEpisodeDetailPage(@PathParameter id: Uuid): Result {
-        val episode = transaction(database) { Episode.findById(id) }
+        val episode = db { Episode.findById(id) }
             ?: throw NotFoundSignal()
 
-        val season = transaction(database) { episode.season }
-        val show = transaction(database) { season.show }
+        val season = db { episode.season }
+        val show = db { season.show }
 
         return bundle {
             html {
@@ -1110,9 +1102,8 @@ class DashboardRest {
     }
 
     @Get("/other", "text/html")
-    context(database: Database)
     fun getOtherListPage(): Result {
-        val others = transaction(database) {
+        val others = db {
             Other
                 .all()
                 .orderBy(OtherTable.title to SortOrder.ASC)
@@ -1152,9 +1143,8 @@ class DashboardRest {
     }
 
     @Get("/other/[id]", "text/html")
-    context(database: Database)
     fun getOtherDetailPage(@PathParameter id: Uuid): Result {
-        val other = transaction(database) { Other.findById(id) }
+        val other = db { Other.findById(id) }
             ?: throw NotFoundSignal()
 
         return bundle {

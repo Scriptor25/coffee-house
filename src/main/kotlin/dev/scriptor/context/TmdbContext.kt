@@ -735,6 +735,32 @@ class TmdbContext {
     )
 
     @JsonSerializable
+    data class ShowEpisodeGroup(
+        @all:JsonProperty
+        val description: String,
+        @all:JsonProperty("episode_count")
+        val episodeCount: Int,
+        @all:JsonProperty("group_count")
+        val groupCount: Int,
+        @all:JsonProperty
+        val id: String,
+        @all:JsonProperty
+        val name: String,
+        @all:JsonProperty
+        val network: CompanyReference,
+        @all:JsonProperty
+        val type: Int,
+    )
+
+    @JsonSerializable
+    data class ShowEpisodeGroups(
+        @all:JsonProperty
+        val id: Int,
+        @all:JsonProperty
+        val results: List<ShowEpisodeGroup>,
+    )
+
+    @JsonSerializable
     data class ShowExternalIds(
         @all:JsonProperty
         val id: Int,
@@ -989,6 +1015,70 @@ class TmdbContext {
     )
 
     typealias EpisodeTranslations = Translations<EpisodeTranslationData>
+
+    @JsonSerializable
+    data class EpisodeGroupEpisode(
+        @all:JsonProperty("air_date")
+        val airDate: String,
+        @all:JsonProperty("episode_number")
+        val episodeNumber: Int,
+        @all:JsonProperty
+        val id: Int,
+        @all:JsonProperty
+        val name: String,
+        @all:JsonProperty
+        val order: Int,
+        @all:JsonProperty
+        val overview: String,
+        @all:JsonProperty("production_code")
+        val productionCode: String,
+        @all:JsonProperty
+        val runtime: String,
+        @all:JsonProperty("season_number")
+        val seasonNumber: Int,
+        @all:JsonProperty("show_id")
+        val showId: Int,
+        @all:JsonProperty("still_path")
+        val stillPath: String,
+        @all:JsonProperty("vote_average")
+        val voteAverage: Double,
+        @all:JsonProperty("vote_count")
+        val voteCount: Int,
+    )
+
+    @JsonSerializable
+    data class EpisodeGroup(
+        @all:JsonProperty
+        val episodes: List<EpisodeGroupEpisode>,
+        @all:JsonProperty
+        val id: String,
+        @all:JsonProperty
+        val locked: Boolean,
+        @all:JsonProperty
+        val name: String,
+        @all:JsonProperty
+        val order: Int,
+    )
+
+    @JsonSerializable
+    data class EpisodeGroupDetails(
+        @all:JsonProperty
+        val description: String,
+        @all:JsonProperty("episode_count")
+        val episodeCount: Int,
+        @all:JsonProperty("group_count")
+        val groupCount: Int,
+        @all:JsonProperty
+        val groups: List<EpisodeGroup>,
+        @all:JsonProperty
+        val id: String,
+        @all:JsonProperty
+        val name: String,
+        @all:JsonProperty
+        val network: CompanyReference,
+        @all:JsonProperty
+        val type: Int,
+    )
 
     private val cache = mutableMapOf<String, Any?>()
 
@@ -1265,6 +1355,11 @@ class TmdbContext {
     }
 
     context(_: Provider, _: Logger)
+    fun getShowEpisodeGroups(showId: Int): ShowEpisodeGroups? {
+        return getShowData("episode_groups", showId)
+    }
+
+    context(_: Provider, _: Logger)
     fun getShowExternalIds(showId: Int): ShowExternalIds? {
         return getShowData("external_ids", showId)
     }
@@ -1525,5 +1620,10 @@ class TmdbContext {
                 "language" to language,
             ),
         )
+    }
+
+    context(_: Provider, _: Logger)
+    fun getEpisodeGroupDetails(groupId: String): EpisodeGroupDetails? {
+        return getData("episode_group/$groupId")
     }
 }

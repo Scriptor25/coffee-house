@@ -1,6 +1,7 @@
 package dev.scriptor.model.show
 
 import dev.scriptor.*
+import dev.scriptor.model.media.path
 import dev.scriptor.model.movie.ImageData
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.SortOrder
@@ -11,6 +12,7 @@ import org.jetbrains.exposed.v1.dao.UuidEntityClass
 import kotlin.uuid.Uuid
 
 object SeasonTable : UuidTable("season") {
+    val path = path("path").uniqueIndex()
     val show = reference("show_id", ShowTable, ReferenceOption.CASCADE)
     val index = integer("index")
     val title = text("title")
@@ -20,10 +22,6 @@ object SeasonTable : UuidTable("season") {
         from = { it.fromJsonNoContext() },
         to = { it.toJsonNoContext() },
     )
-
-    init {
-        uniqueIndex(show, index)
-    }
 }
 
 @JsonSerializable
@@ -33,6 +31,9 @@ class Season(id: EntityID<Uuid>) : UuidEntity(id) {
     @all:JsonProperty("id")
     val jsonId
         get() = id.value
+
+    @JsonProperty
+    var path by SeasonTable.path
 
     var show by Show referencedOn SeasonTable.show
 

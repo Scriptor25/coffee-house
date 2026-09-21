@@ -11,8 +11,6 @@ import dev.scriptor.model.media.Media
 import dev.scriptor.model.media.VideoTrack
 import dev.scriptor.model.media.VideoTrackTable
 import org.jetbrains.exposed.v1.core.SortOrder
-import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 import java.util.logging.Logger
@@ -148,10 +146,8 @@ class TranscodingCache(
         }
     }
 
-    context(database: Database)
     fun job(item: Media): TranscodingJob = jobs.computeIfAbsent(item.id.value) {
-        transaction(database) {
-
+        db {
             val video = item.video.orderBy(VideoTrackTable.index to SortOrder.ASC).first()
 
             val input = video.codec

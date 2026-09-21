@@ -3,6 +3,7 @@ package dev.scriptor.rest
 import dev.scriptor.JsonArrayNode
 import dev.scriptor.TranscodingCache
 import dev.scriptor.context.PlaybackContext
+import dev.scriptor.db
 import dev.scriptor.jsonOf
 import dev.scriptor.model.AuthorizationHeader
 import dev.scriptor.model.CookieHeader
@@ -18,8 +19,6 @@ import dev.scriptor.server.jvm.annotation.*
 import dev.scriptor.server.result.ChannelResult
 import dev.scriptor.server.result.Result
 import dev.scriptor.server.security.Principal
-import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.nio.channels.FileChannel
 import java.nio.file.Path
 import java.util.logging.Logger
@@ -29,10 +28,7 @@ import kotlin.io.path.useLines
 @Controller("/resource/playback")
 class PlaybackRest {
 
-    context(
-        database: Database,
-        context: PlaybackContext,
-    )
+    context(context: PlaybackContext)
     private fun item(token: String, index: Int): Media {
         val playback = context.getPlayback(token)
             ?: throw NotFoundSignal()
@@ -41,7 +37,7 @@ class PlaybackRest {
             throw NotFoundSignal()
         }
 
-        return transaction(database) {
+        return db {
             Media.findById(playback.items[index])
         } ?: throw NotFoundSignal()
     }
@@ -94,10 +90,7 @@ class PlaybackRest {
     }
 
     @Get("/[token]/playlist.m3u8", "application/x-mpegurl")
-    context(
-        database: Database,
-        context: PlaybackContext,
-    )
+    context(context: PlaybackContext)
     fun getPlaylist(
         @PathParameter token: String,
         @QueryParameter direct: Boolean = false,
@@ -105,7 +98,7 @@ class PlaybackRest {
         val playback = context.getPlayback(token)
             ?: throw NotFoundSignal()
 
-        val items = transaction(database) {
+        val items = db {
             playback.items.map { Media.findById(it) }
         }
 
@@ -124,10 +117,7 @@ class PlaybackRest {
     }
 
     @Get("/[token]/[index]", "video/*")
-    context(
-        _: Database,
-        _: PlaybackContext,
-    )
+    context(_: PlaybackContext)
     fun getStream(
         @PathParameter token: String,
         @PathParameter index: Int,
@@ -141,7 +131,6 @@ class PlaybackRest {
     @Get("/[token]/[index]/master.m3u8", "application/vnd.apple.mpegurl")
     context(
         _: Logger,
-        database: Database,
         _: PlaybackContext,
         transcoding: TranscodingCache,
     )
@@ -165,7 +154,6 @@ class PlaybackRest {
     @Get("/[token]/[index]/[name]/index.m3u8", "application/vnd.apple.mpegurl")
     context(
         _: Logger,
-        database: Database,
         _: PlaybackContext,
         transcoding: TranscodingCache,
     )
@@ -185,7 +173,6 @@ class PlaybackRest {
     @Get("/[token]/[index]/[name]/[segment].mp4", "video/mp4")
     context(
         _: Logger,
-        database: Database,
         _: PlaybackContext,
         transcoding: TranscodingCache,
     )
@@ -205,17 +192,14 @@ class PlaybackRest {
     }
 
     @Get("/[token]/[index]/chapters.json", "application/json")
-    context(
-        database: Database,
-        _: PlaybackContext,
-    )
+    context(_: PlaybackContext)
     fun getChapters(
         @PathParameter token: String,
         @PathParameter index: Int,
     ): JsonArrayNode {
         val item = item(token, index)
 
-        val chapters = transaction(database) { item.chapters.toList() }
+        val chapters = db { item.chapters.toList() }
 
         return jsonOf(
             *chapters
