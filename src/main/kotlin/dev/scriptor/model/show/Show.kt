@@ -59,7 +59,9 @@ class Show(id: EntityID<Uuid>) : UuidEntity(id) {
     val jsonSeasons
         get() = seasons.orderBy(SeasonTable.index to SortOrder.ASC).map { it.id.value }
 
+    val groups by ParentGroup referrersOn ParentGroupTable.show
+
     override fun toString(): String {
-        return "Show(id=$id, title=$title)"
+        return "Show(id=$id, path=$path, tmdbId=$tmdbId, title=$title, description=$description, poster=$poster, backdrop=$backdrop)"
     }
 }

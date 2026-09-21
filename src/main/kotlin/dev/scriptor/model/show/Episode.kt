@@ -57,7 +57,9 @@ class Episode(id: EntityID<Uuid>) : UuidEntity(id) {
     @JsonProperty
     var still by EpisodeTable.still
 
+    val groups by Group via EpisodeGroupTable
+
     override fun toString(): String {
-        return "Episode(id=$id, season=${season.id}, media=${media.id}, index=$index)"
+        return "Episode(id=$id, path=$path, season=${season.id}, media=${media.id}, index=$index, title=$title, description=$description, still=$still)"
     }
 }

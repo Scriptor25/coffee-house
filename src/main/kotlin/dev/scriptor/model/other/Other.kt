@@ -4,6 +4,7 @@ import dev.scriptor.JsonProperty
 import dev.scriptor.JsonSerializable
 import dev.scriptor.model.media.Media
 import dev.scriptor.model.media.MediaTable
+import dev.scriptor.model.media.path
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.UuidTable
@@ -13,6 +14,7 @@ import kotlin.uuid.Uuid
 
 object OtherTable : UuidTable("other") {
     val media = reference("media_id", MediaTable, ReferenceOption.CASCADE)
+    val path = path("path")
     val title = text("title")
 }
 
@@ -25,6 +27,8 @@ class Other(id: EntityID<Uuid>) : UuidEntity(id) {
         get() = id.value
 
     var media by Media referencedOn OtherTable.media
+
+    var path by OtherTable.path
 
     @JsonProperty
     var title by OtherTable.title

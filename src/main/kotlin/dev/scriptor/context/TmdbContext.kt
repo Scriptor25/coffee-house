@@ -747,7 +747,7 @@ class TmdbContext {
         @all:JsonProperty
         val name: String,
         @all:JsonProperty
-        val network: CompanyReference,
+        val network: CompanyReference? = null,
         @all:JsonProperty
         val type: Int,
     )
@@ -1019,7 +1019,7 @@ class TmdbContext {
     @JsonSerializable
     data class EpisodeGroupEpisode(
         @all:JsonProperty("air_date")
-        val airDate: String,
+        val airDate: String? = null,
         @all:JsonProperty("episode_number")
         val episodeNumber: Int,
         @all:JsonProperty
@@ -1033,7 +1033,7 @@ class TmdbContext {
         @all:JsonProperty("production_code")
         val productionCode: String,
         @all:JsonProperty
-        val runtime: String,
+        val runtime: Int,
         @all:JsonProperty("season_number")
         val seasonNumber: Int,
         @all:JsonProperty("show_id")
@@ -1075,7 +1075,7 @@ class TmdbContext {
         @all:JsonProperty
         val name: String,
         @all:JsonProperty
-        val network: CompanyReference,
+        val network: CompanyReference? = null,
         @all:JsonProperty
         val type: Int,
     )
@@ -1624,6 +1624,6 @@ class TmdbContext {
 
     context(_: Provider, _: Logger)
     fun getEpisodeGroupDetails(groupId: String): EpisodeGroupDetails? {
-        return getData("episode_group/$groupId")
+        return getData("tv/episode_group/$groupId")
     }
 }
