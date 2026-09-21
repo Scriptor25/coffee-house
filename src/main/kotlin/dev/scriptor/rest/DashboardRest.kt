@@ -57,13 +57,25 @@ class DashboardRest {
         )
     }
 
-    private fun Bundle.cache(): Result {
+    private fun Bundle.cache(statusCode: Int = 200, statusText: String = "OK"): Result {
         val headers = ParameterList(
             "cache-control" to "public, max-age=120, immutable",
         )
 
         return StringResult(
+            statusCode = statusCode,
+            statusText = statusText,
+            contentType = "text/html",
             headers = headers,
+            value = toString(),
+        )
+    }
+
+    private fun Bundle.nocache(statusCode: Int = 200, statusText: String = "OK"): Result {
+        return StringResult(
+            statusCode = statusCode,
+            statusText = statusText,
+            contentType = "text/html",
             value = toString(),
         )
     }
@@ -1192,5 +1204,38 @@ class DashboardRest {
         val location = if (next == null) "/login" else "/login?next=$next"
 
         return FoundSignal(ParameterList("location" to location)).generate()
+    }
+
+    @Handle(NotFoundSignal::class)
+    fun handleNotFoundSignal(request: Request, signal: NotFoundSignal): Result {
+
+        return bundle {
+            html {
+                head {
+                    meta(charset = "utf-8")
+                    meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
+                    link(rel = "manifest", href = "/manifest.json")
+                    title("Not Found")
+                }
+
+                body {
+                    main {
+                        h1 { +"404" }
+                        h2 { +"Not Found" }
+
+                        p { +"The requested resource does not exist." }
+                        p {
+                            a({ href = "/" }) {
+                                +"Dashboard"
+                            }
+                        }
+                    }
+                }
+            }
+
+            style {
+                globalStyle()
+            }
+        }.nocache(signal.code, signal.text)
     }
 }

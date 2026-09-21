@@ -26,10 +26,7 @@ import dev.scriptor.server.server
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.notInList
-import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.batchInsert
-import org.jetbrains.exposed.v1.jdbc.select
+import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
@@ -416,6 +413,53 @@ fun getTmdbMetadata(nodes: Nodes) {
 
     val configuration = context.getConfiguration()
         ?: error("failed to get tmdb configuration")
+
+    transaction(database) {
+        MovieTable
+            .selectAll()
+            .forEach {
+                val movieId = it[MovieTable.id]
+
+                val hasMedia = MovieMediaTable
+                    .selectAll()
+                    .where { MovieMediaTable.movie eq movieId }
+                    .any()
+
+                if (!hasMedia) {
+                    MovieTable.deleteWhere { MovieTable.id eq movieId }
+                }
+            }
+
+        SeasonTable
+            .selectAll()
+            .forEach {
+                val seasonId = it[SeasonTable.id]
+
+                val hasEpisodes = EpisodeTable
+                    .select(EpisodeTable.id)
+                    .where { EpisodeTable.season eq seasonId }
+                    .any()
+
+                if (!hasEpisodes) {
+                    SeasonTable.deleteWhere { SeasonTable.id eq seasonId }
+                }
+            }
+
+        ShowTable
+            .selectAll()
+            .forEach {
+                val showId = it[ShowTable.id]
+
+                val hasSeasons = SeasonTable
+                    .select(SeasonTable.id)
+                    .where { SeasonTable.show eq showId }
+                    .any()
+
+                if (!hasSeasons) {
+                    ShowTable.deleteWhere { ShowTable.id eq showId }
+                }
+            }
+    }
 
     for (movieNode in nodes.movies) {
         val match = tmdbIdRegex.matchEntire(movieNode.path.name) ?: continue
