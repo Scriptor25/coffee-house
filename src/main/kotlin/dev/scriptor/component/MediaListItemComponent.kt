@@ -131,10 +131,12 @@ class MediaListItemComponent : Component {
                         height = "100%"
 
                         aspectRatio = "2 / 1"
+
+                        flexShrink = "0"
                     }
                 }
 
-                define("&:has(.title:is(:hover,:focus-visible))") {
+                define("&:has(.title:is(:hover, :focus-visible))") {
                     backgroundColor = "var(--color-panel-active)"
                     boxShadow = "5px 5px 10px #111"
 

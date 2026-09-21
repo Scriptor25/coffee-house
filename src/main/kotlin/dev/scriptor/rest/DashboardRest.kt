@@ -244,6 +244,41 @@ class DashboardRest {
         )
     }
 
+    fun <T> JsNodeBuilder<T>.emitPlayback(
+        resource: String,
+        id: Uuid,
+        title: String,
+        playlist: String = "playlist.m3u8",
+    ) {
+        val response = window.fetch(
+            "/resource/$resource/${id}/playback",
+            jsObject {
+                this["method"] = jsString("post")
+            },
+        )
+
+        val responseToText = jsFunction("response") { (response) ->
+            emit(jsReturn(response["text"]()))
+        }
+
+        val text = response["then"](responseToText)
+
+        val textToUrl = jsFunction("text") { (text) ->
+            val origin = window.location.origin
+            val url = jsFormat("", "/resource/playback/", "/$playlist", values = listOf(origin, text))
+
+            emit(jsReturn(url))
+        }
+
+        val url = text["then"](textToUrl)
+
+        val callback = jsFunction("url") { (url) ->
+            emitShareUrl(JsString(title), url)
+        }
+
+        emit(url["then"](callback))
+    }
+
     @Public
     @Get("/manifest.json", "application/json")
     fun getManifest(): JsonNode {
@@ -626,36 +661,11 @@ class DashboardRest {
                                 +"Play"
 
                                 on("click") {
-                                    val response = window.fetch(
-                                        "/resource/movie/${movie.id}/playback",
-                                        jsObject {
-                                            this["method"] = jsString("post")
-                                        },
+                                    emitPlayback(
+                                        "movie",
+                                        movie.id.value,
+                                        movie.title,
                                     )
-
-                                    val responseToText = jsFunction("response") { (response) ->
-                                        emit(jsReturn(response["text"]()))
-                                    }
-
-                                    val text = response["then"](responseToText)
-
-                                    val textToUrl = jsFunction("text") { (text) ->
-                                        val origin = window.location.origin
-                                        val url = origin +
-                                                JsString("/resource/playback/") +
-                                                text +
-                                                JsString("/playlist.m3u8")
-
-                                        emit(jsReturn(url))
-                                    }
-
-                                    val url = text["then"](textToUrl)
-
-                                    val callback = jsFunction("url") { (url) ->
-                                        emitShareUrl(JsString(movie.title), url)
-                                    }
-
-                                    emit(url["then"](callback))
                                 }
                             }
                         }
@@ -928,36 +938,11 @@ class DashboardRest {
                                         +"Play all"
 
                                         on("click") {
-                                            val response = window.fetch(
-                                                "/resource/season/${season.id}/playback",
-                                                jsObject {
-                                                    this["method"] = jsString("post")
-                                                },
+                                            emitPlayback(
+                                                "season",
+                                                season.id.value,
+                                                season.title,
                                             )
-
-                                            val responseToText = jsFunction("response") { (response) ->
-                                                emit(jsReturn(response["text"]()))
-                                            }
-
-                                            val text = response["then"](responseToText)
-
-                                            val textToUrl = jsFunction("text") { (text) ->
-                                                val origin = window.location.origin
-                                                val url = origin +
-                                                        JsString("/resource/playback/") +
-                                                        text +
-                                                        JsString("/playlist.m3u8")
-
-                                                emit(jsReturn(url))
-                                            }
-
-                                            val url = text["then"](textToUrl)
-
-                                            val callback = jsFunction("url") { (url) ->
-                                                emitShareUrl(JsString(season.title), url)
-                                            }
-
-                                            emit(url["then"](callback))
                                         }
                                     }
                                 }
@@ -1063,36 +1048,12 @@ class DashboardRest {
                                         +"Play"
 
                                         on("click") {
-                                            val response = window.fetch(
-                                                "/resource/episode/${episode.id}/playback",
-                                                jsObject {
-                                                    this["method"] = JsString("post")
-                                                },
+                                            emitPlayback(
+                                                "episode",
+                                                episode.id.value,
+                                                episode.title,
+                                                "0/master.m3u8",
                                             )
-
-                                            val responseToText = jsFunction("response") { (response) ->
-                                                emit(jsReturn(response["text"]()))
-                                            }
-
-                                            val text = response["then"](responseToText)
-
-                                            val textToUrl = jsFunction("text") { (text) ->
-                                                val origin = window.location.origin
-                                                val url = origin +
-                                                        JsString("/resource/playback/") +
-                                                        text +
-                                                        JsString("/0/master.m3u8")
-
-                                                emit(jsReturn(url))
-                                            }
-
-                                            val url = text["then"](textToUrl)
-
-                                            val callback = jsFunction("url") { (url) ->
-                                                emitShareUrl(JsString(episode.title), url)
-                                            }
-
-                                            emit(url["then"](callback))
                                         }
                                     }
                                 }
@@ -1186,6 +1147,13 @@ class DashboardRest {
 
         return bundle {
             html {
+                head {
+                    meta(charset = "utf-8")
+                    meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
+                    link(rel = "manifest", href = "/manifest.json")
+                    title("Others")
+                }
+
                 body {
                     main {
                         h1 { +other.title }
@@ -1196,36 +1164,12 @@ class DashboardRest {
                                 +"Play"
 
                                 on("click") {
-                                    val response = window.fetch(
-                                        "/resource/other/${other.id}/playback",
-                                        jsObject {
-                                            this["method"] = JsString("post")
-                                        },
+                                    emitPlayback(
+                                        "other",
+                                        other.id.value,
+                                        other.title,
+                                        "0/master.m3u8",
                                     )
-
-                                    val responseToText = jsFunction("response") { (response) ->
-                                        emit(jsReturn(response["text"]()))
-                                    }
-
-                                    val text = response["then"](responseToText)
-
-                                    val textToUrl = jsFunction("text") { (text) ->
-                                        val origin = window.location.origin
-                                        val url = origin +
-                                                JsString("/resource/playback/") +
-                                                text +
-                                                JsString("/0/master.m3u8")
-
-                                        emit(jsReturn(url))
-                                    }
-
-                                    val url = text["then"](textToUrl)
-
-                                    val callback = jsFunction("url") { (url) ->
-                                        emitShareUrl(JsString(other.title), url)
-                                    }
-
-                                    emit(url["then"](callback))
                                 }
                             }
                         }
