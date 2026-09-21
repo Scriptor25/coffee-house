@@ -1158,7 +1158,6 @@ class DashboardRest {
                     main {
                         h1 { +other.title }
 
-
                         p {
                             button({ type = HtmlButtonElementType.BUTTON }) {
                                 +"Play"
