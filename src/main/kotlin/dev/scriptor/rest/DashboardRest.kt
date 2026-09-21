@@ -11,6 +11,8 @@ import dev.scriptor.jsonObject
 import dev.scriptor.jsonOf
 import dev.scriptor.model.movie.Movie
 import dev.scriptor.model.movie.MovieTable
+import dev.scriptor.model.other.Other
+import dev.scriptor.model.other.OtherTable
 import dev.scriptor.model.show.*
 import dev.scriptor.model.user.User
 import dev.scriptor.server.*
@@ -130,7 +132,7 @@ class DashboardRest {
             textDecoration = "underline"
             cursor = "pointer"
 
-            define("&:hover,&:focus-visible") {
+            define("&:hover, &:focus-visible") {
                 color = "var(--color-accent)"
                 backgroundColor = "var(--color-foreground)"
             }
@@ -143,7 +145,7 @@ class DashboardRest {
             padding = "var(--space-s) var(--space-m)"
             cursor = "pointer"
 
-            define("&:hover,&:focus-visible") {
+            define("&:hover, &:focus-visible") {
                 color = "var(--color-panel)"
                 backgroundColor = "var(--color-foreground)"
             }
@@ -282,6 +284,14 @@ class DashboardRest {
                 .toList()
         }
 
+        val others = transaction(database) {
+            Other
+                .all()
+                .orderBy(OtherTable.title to SortOrder.ASC)
+                .limit(4)
+                .toList()
+        }
+
         val user = transaction(database) { User.findById(principal.id) }
 
         return bundle {
@@ -297,53 +307,77 @@ class DashboardRest {
                         h1 { +"Dashboard" }
                         h2 { +"Welcome back${if (user != null) ", ${user.name}" else ""}" }
 
-                        section({ htmlClass = "section" }) {
-                            h3 { +"Movies" }
+                        if (movies.isNotEmpty()) {
+                            section({ htmlClass = "section" }) {
+                                h3 { +"Movies" }
 
-                            +component(::MediaListComponent) {
-                                items = movies.map {
-                                    MediaListItem(
-                                        href = "/movie/${it.id}",
-                                        title = it.title,
-                                        thumbnail = { className, sizes ->
-                                            component(::ImageComponent) {
-                                                this.className = className
-                                                this.sizes = sizes
-                                                this.src = it.poster
-                                            }
-                                        },
+                                +component(::MediaListComponent) {
+                                    items = movies.map {
+                                        MediaListItem(
+                                            href = "/movie/${it.id}",
+                                            title = it.title,
+                                            thumbnail = { className, sizes ->
+                                                component(::ImageComponent) {
+                                                    this.className = className
+                                                    this.sizes = sizes
+                                                    this.src = it.poster
+                                                }
+                                            },
+                                        )
+                                    }
+                                    end = MediaListItem(
+                                        href = "/movie",
+                                        title = "All movies",
                                     )
+                                    mode = MediaListMode.GRID
                                 }
-                                end = MediaListItem(
-                                    href = "/movie",
-                                    title = "All movies",
-                                )
-                                mode = MediaListMode.GRID
                             }
                         }
 
-                        section({ htmlClass = "section" }) {
-                            h3 { +"Shows" }
+                        if (shows.isNotEmpty()) {
+                            section({ htmlClass = "section" }) {
+                                h3 { +"Shows" }
 
-                            +component(::MediaListComponent) {
-                                items = shows.map {
-                                    MediaListItem(
-                                        href = "/show/${it.id}",
-                                        title = it.title,
-                                        thumbnail = { className, sizes ->
-                                            component(::ImageComponent) {
-                                                this.className = className
-                                                this.sizes = sizes
-                                                this.src = it.poster
-                                            }
-                                        },
+                                +component(::MediaListComponent) {
+                                    items = shows.map {
+                                        MediaListItem(
+                                            href = "/show/${it.id}",
+                                            title = it.title,
+                                            thumbnail = { className, sizes ->
+                                                component(::ImageComponent) {
+                                                    this.className = className
+                                                    this.sizes = sizes
+                                                    this.src = it.poster
+                                                }
+                                            },
+                                        )
+                                    }
+                                    end = MediaListItem(
+                                        href = "/show",
+                                        title = "All shows",
                                     )
+                                    mode = MediaListMode.GRID
                                 }
-                                end = MediaListItem(
-                                    href = "/show",
-                                    title = "All shows",
-                                )
-                                mode = MediaListMode.GRID
+                            }
+                        }
+
+                        if (others.isNotEmpty()) {
+                            section({ htmlClass = "section" }) {
+                                h3 { +"Others" }
+
+                                +component(::MediaListComponent) {
+                                    items = others.map {
+                                        MediaListItem(
+                                            href = "/other/${it.id}",
+                                            title = it.title,
+                                        )
+                                    }
+                                    end = MediaListItem(
+                                        href = "/other",
+                                        title = "All others",
+                                    )
+                                    mode = MediaListMode.GRID
+                                }
                             }
                         }
                     }
@@ -1098,6 +1132,109 @@ class DashboardRest {
                         }
                     }
                 }
+            }
+        }.cache()
+    }
+
+    @Get("/other", "text/html")
+    context(database: Database)
+    fun getOtherListPage(): Result {
+        val others = transaction(database) {
+            Other
+                .all()
+                .orderBy(OtherTable.title to SortOrder.ASC)
+                .toList()
+        }
+
+        return bundle {
+            html {
+                head {
+                    meta(charset = "utf-8")
+                    meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
+                    link(rel = "manifest", href = "/manifest.json")
+                    title("Others")
+                }
+
+                body {
+                    main {
+                        h1 { +"Others" }
+
+                        +component(::MediaListComponent) {
+                            items = others.map {
+                                MediaListItem(
+                                    href = "/other/${it.id}",
+                                    title = it.title,
+                                )
+                            }
+                            mode = MediaListMode.LIST
+                        }
+                    }
+                }
+            }
+
+            style {
+                globalStyle()
+            }
+        }.cache()
+    }
+
+    @Get("/other/[id]", "text/html")
+    context(database: Database)
+    fun getOtherDetailPage(@PathParameter id: Uuid): Result {
+        val other = transaction(database) { Other.findById(id) }
+            ?: throw NotFoundSignal()
+
+        return bundle {
+            html {
+                body {
+                    main {
+                        h1 { +other.title }
+
+
+                        p {
+                            button({ type = HtmlButtonElementType.BUTTON }) {
+                                +"Play"
+
+                                on("click") {
+                                    val response = window.fetch(
+                                        "/resource/other/${other.id}/playback",
+                                        jsObject {
+                                            this["method"] = JsString("post")
+                                        },
+                                    )
+
+                                    val responseToText = jsFunction("response") { (response) ->
+                                        emit(jsReturn(response["text"]()))
+                                    }
+
+                                    val text = response["then"](responseToText)
+
+                                    val textToUrl = jsFunction("text") { (text) ->
+                                        val origin = window.location.origin
+                                        val url = origin +
+                                                JsString("/resource/playback/") +
+                                                text +
+                                                JsString("/0/master.m3u8")
+
+                                        emit(jsReturn(url))
+                                    }
+
+                                    val url = text["then"](textToUrl)
+
+                                    val callback = jsFunction("url") { (url) ->
+                                        emitShareUrl(JsString(other.title), url)
+                                    }
+
+                                    emit(url["then"](callback))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            style {
+                globalStyle()
             }
         }.cache()
     }

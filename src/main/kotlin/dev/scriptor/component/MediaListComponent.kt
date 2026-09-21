@@ -57,7 +57,7 @@ class MediaListComponent : Component {
 
                 listStyle = "none"
 
-                define("&[data-mode='grid'],&[data-mode='grid-poster']") {
+                define("&[data-mode='grid'], &[data-mode='grid-poster']") {
                     gridTemplateColumns = "repeat(auto-fill, minmax(300px, 1fr))"
                 }
 

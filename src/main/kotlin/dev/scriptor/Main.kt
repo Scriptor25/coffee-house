@@ -10,6 +10,8 @@ import dev.scriptor.model.movie.ImageData
 import dev.scriptor.model.movie.Movie
 import dev.scriptor.model.movie.MovieMediaTable
 import dev.scriptor.model.movie.MovieTable
+import dev.scriptor.model.other.Other
+import dev.scriptor.model.other.OtherTable
 import dev.scriptor.model.show.*
 import dev.scriptor.model.user.User
 import dev.scriptor.model.user.UserRole
@@ -554,6 +556,25 @@ fun getTmdbMetadata(nodes: Nodes) {
             }
         }
     }
+
+    for (otherPath in nodes.others) {
+        val media = transaction(database) { Media.find(MediaTable.path eq otherPath).first() }
+
+        var other = transaction(database) {
+            Other
+                .find(OtherTable.media eq media.id)
+                .firstOrNull()
+        }
+
+        if (other == null) {
+            other = transaction(database) {
+                Other.new {
+                    this.media = media
+                    this.title = media.title
+                }
+            }
+        }
+    }
 }
 
 data class MovieNode(
@@ -803,6 +824,8 @@ fun main() {
             ShowTable,
             SeasonTable,
             EpisodeTable,
+
+            OtherTable,
         )
     }
 
