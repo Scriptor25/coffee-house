@@ -105,108 +105,108 @@ class DashboardRest {
         }
 
         define("*") {
-            this["appearance"] = "none"
-            this["margin"] = "0"
-            this["padding"] = "0"
-            this["font"] = "inherit"
-            this["color"] = "inherit"
-            this["outline"] = "none"
+            appearance = "none"
+            margin = "0"
+            padding = "0"
+            font = "inherit"
+            color = "inherit"
+            outline = "none"
         }
 
 
         define("body") {
-            this["color"] = "var(--color-foreground)"
-            this["background-color"] = "var(--color-background)"
-            this["font-family"] = "Arial, Helvetica, sans-serif"
-            this["font-size"] = "var(--font-size-p)"
+            color = "var(--color-foreground)"
+            backgroundColor = "var(--color-background)"
+            fontFamily = "Arial, Helvetica, sans-serif"
+            fontSize = "var(--font-size-p)"
         }
 
         define("main") {
-            this["padding"] = "var(--space-l)"
+            padding = "var(--space-l)"
         }
 
         define("a") {
-            this["color"] = "var(--color-foreground)"
-            this["text-decoration"] = "underline"
-            this["cursor"] = "pointer"
+            color = "var(--color-foreground)"
+            textDecoration = "underline"
+            cursor = "pointer"
 
             define("&:hover,&:focus-visible") {
-                this["color"] = "var(--color-accent)"
-                this["background-color"] = "var(--color-foreground)"
+                color = "var(--color-accent)"
+                backgroundColor = "var(--color-foreground)"
             }
         }
 
         define("button") {
-            this["color"] = "var(--color-foreground)"
-            this["background-color"] = "var(--color-panel)"
-            this["border"] = "1px solid var(--color-panel)"
-            this["padding"] = "var(--space-s) var(--space-m)"
-            this["cursor"] = "pointer"
+            color = "var(--color-foreground)"
+            backgroundColor = "var(--color-panel)"
+            border = "1px solid var(--color-panel)"
+            padding = "var(--space-s) var(--space-m)"
+            cursor = "pointer"
 
             define("&:hover,&:focus-visible") {
-                this["color"] = "var(--color-panel)"
-                this["background-color"] = "var(--color-foreground)"
+                color = "var(--color-panel)"
+                backgroundColor = "var(--color-foreground)"
             }
         }
 
         define("ol,ul") {
-            this["padding-left"] = "var(--space-l)"
-            this["margin"] = "0 0 var(--space-xs) 0"
+            paddingLeft = "var(--space-l)"
+            margin = "0 0 var(--space-xs) 0"
         }
 
         define("ol") {
-            this["list-style-type"] = "decimal"
+            listStyleType = "decimal"
         }
 
         define("ul") {
-            this["list-style-type"] = "disc"
+            listStyleType = "disc"
         }
 
         define("h1") {
-            this["font-size"] = "var(--font-size-h1)"
-            this["margin"] = "0 0 var(--space-l) 0"
+            fontSize = "var(--font-size-h1)"
+            margin = "0 0 var(--space-l) 0"
         }
 
         define("h2") {
-            this["font-size"] = "var(--font-size-h2)"
-            this["margin"] = "0 0 var(--space-l) 0"
+            fontSize = "var(--font-size-h2)"
+            margin = "0 0 var(--space-l) 0"
         }
 
         define("h3") {
-            this["font-size"] = "var(--font-size-h3)"
-            this["margin"] = "0 0 var(--space-m) 0"
+            fontSize = "var(--font-size-h3)"
+            margin = "0 0 var(--space-m) 0"
         }
 
         define("h4") {
-            this["font-size"] = "var(--font-size-h4)"
-            this["margin"] = "0 0 var(--space-m) 0"
+            fontSize = "var(--font-size-h4)"
+            margin = "0 0 var(--space-m) 0"
         }
 
         define("p") {
-            this["font-size"] = "var(--font-size-p)"
-            this["margin"] = "0 0 var(--space-m) 0"
+            fontSize = "var(--font-size-p)"
+            margin = "0 0 var(--space-m) 0"
         }
 
         define(".container") {
-            this["width"] = "100%"
-            this["margin-left"] = "auto"
-            this["margin-right"] = "auto"
+            width = "100%"
+            marginLeft = "auto"
+            marginRight = "auto"
 
             define("@media(max-width:719px)") {
-                this["padding-left"] = "var(--space-s)"
-                this["padding-right"] = "var(--space-s)"
+                paddingLeft = "var(--space-s)"
+                paddingRight = "var(--space-s)"
             }
 
             define("@media(min-width:720px)") {
-                this["width"] = "700px"
+                width = "700px"
             }
 
             define("@media(min-width:960px)") {
-                this["width"] = "900px"
+                width = "900px"
             }
 
             define("@media(min-width:1200px)") {
-                this["width"] = "1000px"
+                width = "1000px"
             }
         }
     }
@@ -354,7 +354,7 @@ class DashboardRest {
                 globalStyle()
 
                 define(".section") {
-                    this["margin-bottom"] = "var(--space-xl)"
+                    marginBottom = "var(--space-xl)"
                 }
             }
         }.cache()
@@ -465,9 +465,9 @@ class DashboardRest {
 
                 define("form") {
                     define("input") {
-                        this["border"] = "none"
-                        this["padding"] = "var(--space-xs)"
-                        this["background-color"] = "var(--color-panel)"
+                        border = "none"
+                        padding = "var(--space-xs)"
+                        backgroundColor = "var(--color-panel)"
                     }
                 }
 
@@ -481,12 +481,12 @@ class DashboardRest {
 
                 define(".set") {
                     display = CssDisplay.GRID
-                    this["grid-template"] = """
+                    gridTemplate = """
                             "a b"
                             "a b"
                             "c c"
                         """.trimIndent()
-                    this["gap"] = "10px"
+                    gap = "10px"
                     alignItems = CssAlignItems.CENTER
 
                     define("label") {
@@ -634,36 +634,36 @@ class DashboardRest {
 
                 define(".banner") {
                     display = CssDisplay.BLOCK
-                    this["position"] = "relative"
-                    this["width"] = "100%"
+                    position = "relative"
+                    width = "100%"
 
                     define(".backdrop") {
                         display = CssDisplay.BLOCK
 
-                        this["width"] = "100%"
-                        this["height"] = "400px"
+                        width = "100%"
+                        height = "400px"
 
-                        this["object-fit"] = "cover"
+                        objectFit = "cover"
                     }
 
                     define(".poster") {
                         display = CssDisplay.BLOCK
 
-                        this["position"] = "absolute"
-                        this["bottom"] = "0"
-                        this["left"] = "100px"
+                        position = "absolute"
+                        bottom = "0"
+                        left = "100px"
 
-                        this["transform"] = "translateY(50%)"
+                        transform = "translateY(50%)"
 
-                        this["width"] = "200px"
-                        this["height"] = "300px"
+                        width = "200px"
+                        height = "300px"
 
-                        this["object-fit"] = "cover"
+                        objectFit = "cover"
                     }
                 }
 
                 define(".content") {
-                    this["margin-left"] = "300px"
+                    marginLeft = "300px"
                 }
 
                 define("@media(max-width:768px)") {
@@ -674,7 +674,7 @@ class DashboardRest {
                     }
 
                     define(".content") {
-                        this["margin-left"] = "0"
+                        marginLeft = "0"
                     }
                 }
             }
@@ -804,36 +804,36 @@ class DashboardRest {
 
                 define(".banner") {
                     display = CssDisplay.BLOCK
-                    this["position"] = "relative"
-                    this["width"] = "100%"
+                    position = "relative"
+                    width = "100%"
 
                     define(".backdrop") {
                         display = CssDisplay.BLOCK
 
-                        this["width"] = "100%"
-                        this["height"] = "400px"
+                        width = "100%"
+                        height = "400px"
 
-                        this["object-fit"] = "cover"
+                        objectFit = "cover"
                     }
 
                     define(".poster") {
                         display = CssDisplay.BLOCK
 
-                        this["position"] = "absolute"
-                        this["bottom"] = "0"
-                        this["left"] = "100px"
+                        position = "absolute"
+                        bottom = "0"
+                        left = "100px"
 
-                        this["transform"] = "translateY(50%)"
+                        transform = "translateY(50%)"
 
-                        this["width"] = "200px"
-                        this["height"] = "300px"
+                        width = "200px"
+                        height = "300px"
 
-                        this["object-fit"] = "cover"
+                        objectFit = "cover"
                     }
                 }
 
                 define(".content") {
-                    this["margin-left"] = "300px"
+                    marginLeft = "300px"
                 }
 
                 define("@media(max-width:768px)") {
@@ -844,7 +844,7 @@ class DashboardRest {
                     }
 
                     define(".content") {
-                        this["margin-left"] = "0"
+                        marginLeft = "0"
                     }
                 }
             }
@@ -959,16 +959,16 @@ class DashboardRest {
                     display = CssDisplay.FLEX
                     flexDirection = CssFlexDirection.ROW
                     flexWrap = CssFlexWrap.NOWRAP
-                    this["gap"] = "var(--space-l)"
+                    gap = "var(--space-l)"
 
-                    this["margin-bottom"] = "var(--space-l)"
+                    marginBottom = "var(--space-l)"
 
                     define(".poster") {
-                        this["width"] = "30vw"
-                        this["height"] = "auto"
-                        this["max-height"] = "400px"
+                        width = "30vw"
+                        height = "auto"
+                        maxHeight = "400px"
 
-                        this["object-fit"] = "contain"
+                        objectFit = "contain"
                     }
                 }
 
@@ -978,7 +978,7 @@ class DashboardRest {
                         flexWrap = CssFlexWrap.NOWRAP
 
                         define(".poster") {
-                            this["width"] = "100%"
+                            width = "100%"
                         }
                     }
                 }
@@ -1075,16 +1075,16 @@ class DashboardRest {
                     display = CssDisplay.FLEX
                     flexDirection = CssFlexDirection.ROW
                     flexWrap = CssFlexWrap.NOWRAP
-                    this["gap"] = "var(--space-l)"
+                    gap = "var(--space-l)"
 
-                    this["margin-bottom"] = "var(--space-l)"
+                    marginBottom = "var(--space-l)"
 
                     define(".still") {
-                        this["width"] = "30vw"
-                        this["height"] = "auto"
-                        this["max-height"] = "400px"
+                        width = "30vw"
+                        height = "auto"
+                        maxHeight = "400px"
 
-                        this["object-fit"] = "contain"
+                        objectFit = "contain"
                     }
                 }
 
@@ -1094,7 +1094,7 @@ class DashboardRest {
                         flexWrap = CssFlexWrap.NOWRAP
 
                         define(".still") {
-                            this["width"] = "100%"
+                            width = "100%"
                         }
                     }
                 }

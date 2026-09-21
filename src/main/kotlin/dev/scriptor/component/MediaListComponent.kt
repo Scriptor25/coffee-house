@@ -50,19 +50,19 @@ class MediaListComponent : Component {
         return CssNodesBuilder().apply {
             define(".list") {
                 display = CssDisplay.GRID
-                this["gap"] = "var(--space-m)"
+                gap = "var(--space-m)"
 
-                this["padding"] = "0"
-                this["margin"] = "0"
+                padding = "0"
+                margin = "0"
 
-                this["list-style"] = "none"
+                listStyle = "none"
 
                 define("&[data-mode='grid'],&[data-mode='grid-poster']") {
-                    this["grid-template-columns"] = "repeat(auto-fill, minmax(300px, 1fr))"
+                    gridTemplateColumns = "repeat(auto-fill, minmax(300px, 1fr))"
                 }
 
                 define("&[data-mode='list']") {
-                    this["grid-template-columns"] = "1fr"
+                    gridTemplateColumns = "1fr"
                 }
             }
         }.build()

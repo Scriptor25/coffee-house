@@ -3,10 +3,7 @@ package dev.scriptor.component
 import dev.scriptor.ui.Bundle
 import dev.scriptor.ui.Component
 import dev.scriptor.ui.css.CssNode
-import dev.scriptor.ui.css.builder.CssDisplay
-import dev.scriptor.ui.css.builder.CssFlexDirection
-import dev.scriptor.ui.css.builder.CssFlexWrap
-import dev.scriptor.ui.css.builder.CssNodesBuilder
+import dev.scriptor.ui.css.builder.*
 import dev.scriptor.ui.dom.Attribute
 import dev.scriptor.ui.dom.AttributeValue
 import dev.scriptor.ui.dom.Node
@@ -45,48 +42,48 @@ class MediaListItemComponent : Component {
     override fun style(): List<CssNode> {
         return CssNodesBuilder().apply {
             define(".item") {
-                this["position"] = "relative"
+                position = "relative"
 
                 display = CssDisplay.FLEX
                 flexWrap = CssFlexWrap.NOWRAP
 
-                this["background-color"] = "var(--color-panel)"
+                backgroundColor = "var(--color-panel)"
 
-                this["border-radius"] = "var(--border-radius)"
-                this["overflow"] = "hidden"
+                borderRadius = "var(--border-radius)"
+                overflow = "hidden"
 
                 define(".thumbnail") {
                     display = CssDisplay.BLOCK
-                    this["position"] = "relative"
+                    position = "relative"
 
-                    this["background-color"] = "#111"
+                    backgroundColor = "#111"
 
-                    this["object-fit"] = "cover"
+                    objectFit = "cover"
                 }
 
                 define(".title") {
-                    this["margin"] = "var(--space-m)"
+                    margin = "var(--space-m)"
 
-                    this["overflow"] = "hidden"
+                    overflow = "hidden"
 
-                    this["text-overflow"] = "ellipsis"
+                    textOverflow = "ellipsis"
 
                     this["display"] = "-webkit-box"
                     this["-webkit-box-orient"] = "vertical"
                     this["-webkit-line-clamp"] = "1"
 
-                    this["line-clamp"] = "1"
+                    lineClamp = "1"
 
-                    this["font-size"] = "var(--font-size-small)"
+                    fontSize = "var(--font-size-small)"
 
-                    this["text-decoration"] = "none"
-                    this["color"] = "var(--color-foreground)"
-                    this["background-color"] = "transparent"
+                    textDecoration = "none"
+                    color = "var(--color-foreground)"
+                    backgroundColor = "transparent"
 
                     define("&::after") {
-                        this["content"] = "''"
-                        this["position"] = "absolute"
-                        this["inset"] = "0"
+                        content = "''"
+                        position = "absolute"
+                        inset = "0"
                     }
                 }
 
@@ -94,16 +91,16 @@ class MediaListItemComponent : Component {
                     flexDirection = CssFlexDirection.COLUMN
 
                     define(".thumbnail") {
-                        this["max-width"] = "100%"
+                        maxWidth = "100%"
 
-                        this["width"] = "100%"
-                        this["height"] = "auto"
+                        width = "100%"
+                        height = "auto"
 
-                        this["aspect-ratio"] = "5 / 3"
+                        aspectRatio = "5 / 3"
                     }
 
                     define(".title") {
-                        this["text-align"] = "center"
+                        textAlign = "center"
                     }
                 }
 
@@ -111,38 +108,38 @@ class MediaListItemComponent : Component {
                     flexDirection = CssFlexDirection.COLUMN
 
                     define(".thumbnail") {
-                        this["max-width"] = "100%"
+                        maxWidth = "100%"
 
-                        this["width"] = "100%"
-                        this["height"] = "auto"
+                        width = "100%"
+                        height = "auto"
 
-                        this["aspect-ratio"] = "3 / 4"
+                        aspectRatio = "3 / 4"
                     }
 
                     define(".title") {
-                        this["text-align"] = "center"
+                        textAlign = "center"
                     }
                 }
 
                 define("&[data-mode='list']") {
                     flexDirection = CssFlexDirection.ROW
 
-                    this["align-items"] = "center"
+                    alignItems = CssAlignItems.CENTER
 
                     define(".thumbnail") {
-                        this["width"] = "30vw"
-                        this["height"] = "100%"
+                        width = "30vw"
+                        height = "100%"
 
-                        this["aspect-ratio"] = "2 / 1"
+                        aspectRatio = "2 / 1"
                     }
                 }
 
                 define("&:has(.title:is(:hover,:focus-visible))") {
-                    this["background-color"] = "var(--color-panel-active)"
-                    this["box-shadow"] = "5px 5px 10px #111"
+                    backgroundColor = "var(--color-panel-active)"
+                    boxShadow = "5px 5px 10px #111"
 
                     define(".title") {
-                        this["text-decoration"] = "underline"
+                        textDecoration = "underline"
                     }
                 }
             }
