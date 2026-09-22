@@ -11,6 +11,8 @@ import dev.scriptor.ui.html.builder.HtmlGenericBuilder
 
 class HeaderComponent : Component {
 
+    var links: List<Pair<String, String>> = emptyList()
+
     context(bundle: Bundle)
     override fun build(): Node {
         return HtmlGenericBuilder(
@@ -21,6 +23,9 @@ class HeaderComponent : Component {
             ),
         ).apply {
             a({ href = "/" }) { +"Dashboard" }
+            for (link in links) {
+                a({ href = link.first }) { +link.second }
+            }
         }.build()
     }
 
@@ -38,7 +43,9 @@ class HeaderComponent : Component {
                 flexDirection = CssFlexDirection.ROW
                 flexWrap = CssFlexWrap.NOWRAP
                 alignItems = CssAlignItems.CENTER
-                justifyContent = CssJustifyContent.SPACE_BETWEEN
+                justifyContent = CssJustifyContent.FLEX_START
+
+                gap = "var(--space-s)"
 
                 backgroundColor = "var(--color-panel)"
 

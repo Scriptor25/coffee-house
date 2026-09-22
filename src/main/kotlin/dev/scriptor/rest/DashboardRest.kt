@@ -223,6 +223,14 @@ class DashboardRest {
             border = "none"
             padding = "var(--space-xs)"
             backgroundColor = "var(--color-panel)"
+
+            define("&:hover, &:focus-visible") {
+                backgroundColor = "var(--color-panel-active)"
+            }
+        }
+
+        define("select") {
+            cursor = "pointer"
         }
     }
 
@@ -643,7 +651,11 @@ class DashboardRest {
                 }
 
                 body {
-                    +component(::HeaderComponent) {}
+                    +component(::HeaderComponent) {
+                        links = listOf(
+                            "/movie" to "Movies",
+                        )
+                    }
 
                     div({ htmlClass = "banner" }) {
                         +component(::ImageComponent) {
@@ -860,7 +872,11 @@ class DashboardRest {
                 }
 
                 body {
-                    +component(::HeaderComponent) {}
+                    +component(::HeaderComponent) {
+                        links = listOf(
+                            "/show" to "Shows",
+                        )
+                    }
 
                     div({ htmlClass = "banner" }) {
                         +component(::ImageComponent) {
@@ -1036,7 +1052,12 @@ class DashboardRest {
                 }
 
                 body {
-                    +component(::HeaderComponent) {}
+                    +component(::HeaderComponent) {
+                        links = listOf(
+                            "/show" to "Shows",
+                            "/show/${show.id}" to show.title,
+                        )
+                    }
 
                     main {
                         section({ htmlClass = "header" }) {
@@ -1147,7 +1168,13 @@ class DashboardRest {
                 }
 
                 body {
-                    +component(::HeaderComponent) {}
+                    +component(::HeaderComponent) {
+                        links = listOf(
+                            "/show" to "Shows",
+                            "/show/${show.id}" to show.title,
+                            "/season/${season.id}" to season.title,
+                        )
+                    }
 
                     main {
                         section({ htmlClass = "header" }) {
@@ -1280,7 +1307,11 @@ class DashboardRest {
                 }
 
                 body {
-                    +component(::HeaderComponent) {}
+                    +component(::HeaderComponent) {
+                        links = listOf(
+                            "/other" to "Others",
+                        )
+                    }
 
                     main {
                         h1 { +other.title }
