@@ -141,6 +141,11 @@ class MediaListItemComponent : Component {
 
                         aspectRatio = "3 / 4"
                     }
+
+                    define("div.content") {
+                        alignItems = CssAlignItems.CENTER
+                        justifyContent = CssJustifyContent.CENTER
+                    }
                 }
 
                 define("&[data-mode='list']") {
