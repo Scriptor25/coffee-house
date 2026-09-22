@@ -989,6 +989,15 @@ class DashboardRest {
                     justifyContent = CssJustifyContent.FLEX_START
 
                     gap = "var(--space-m)"
+
+                    define("> span") {
+                        flexShrink = "0"
+                    }
+
+                    define("> select") {
+                        flexGrow = "0"
+                        width = "100%"
+                    }
                 }
 
                 define("main.content") {
@@ -1000,6 +1009,11 @@ class DashboardRest {
                         define(".poster") {
                             display = CssDisplay.NONE
                         }
+                    }
+
+                    define("label.view") {
+                        flexDirection = CssFlexDirection.COLUMN
+                        alignItems = CssAlignItems.FLEX_START
                     }
 
                     define("main.content") {

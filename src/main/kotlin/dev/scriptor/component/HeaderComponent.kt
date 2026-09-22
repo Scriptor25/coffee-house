@@ -41,7 +41,7 @@ class HeaderComponent : Component {
 
                 display = CssDisplay.FLEX
                 flexDirection = CssFlexDirection.ROW
-                flexWrap = CssFlexWrap.NOWRAP
+                flexWrap = CssFlexWrap.WRAP
                 alignItems = CssAlignItems.CENTER
                 justifyContent = CssJustifyContent.FLEX_START
 
