@@ -3,6 +3,7 @@ package dev.scriptor.rest
 import dev.scriptor.context.PlaybackContext
 import dev.scriptor.db
 import dev.scriptor.model.OffsetLimitBody
+import dev.scriptor.model.PlaybackItem
 import dev.scriptor.model.other.Other
 import dev.scriptor.model.other.OtherTable
 import dev.scriptor.server.NotFoundSignal
@@ -39,7 +40,7 @@ class OtherRest {
         val other = db { Other.findById(id) }
             ?: throw NotFoundSignal()
 
-        val item = db { other.media.id.value }
+        val item = db { PlaybackItem(other.media.id.value, other.title) }
 
         return context.createPlayback(
             principal.id,

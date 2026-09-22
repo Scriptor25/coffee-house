@@ -2,6 +2,7 @@ package dev.scriptor.rest
 
 import dev.scriptor.context.PlaybackContext
 import dev.scriptor.db
+import dev.scriptor.model.PlaybackItem
 import dev.scriptor.model.show.Episode
 import dev.scriptor.server.NotFoundSignal
 import dev.scriptor.server.jvm.annotation.*
@@ -24,7 +25,7 @@ class EpisodeRest {
         val episode = db { Episode.findById(id) }
             ?: throw NotFoundSignal()
 
-        val item = db { episode.media.id.value }
+        val item = db { PlaybackItem(episode.media.id.value, episode.title) }
 
         return context.createPlayback(
             principal.id,

@@ -3,6 +3,7 @@ package dev.scriptor.rest
 import dev.scriptor.context.PlaybackContext
 import dev.scriptor.db
 import dev.scriptor.model.OffsetLimitBody
+import dev.scriptor.model.PlaybackItem
 import dev.scriptor.model.show.Episode
 import dev.scriptor.model.show.Season
 import dev.scriptor.server.NotFoundSignal
@@ -42,7 +43,11 @@ class SeasonRest {
         val season = db { Season.findById(id) }
             ?: throw NotFoundSignal()
 
-        val items = db { season.episodes.map { it.media.id.value } }
+        val items = db {
+            season.episodes.map {
+                PlaybackItem(it.media.id.value, it.title)
+            }
+        }
 
         return context.createPlayback(
             principal.id,

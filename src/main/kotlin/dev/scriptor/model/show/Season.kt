@@ -4,7 +4,6 @@ import dev.scriptor.*
 import dev.scriptor.model.media.path
 import dev.scriptor.model.movie.ImageData
 import org.jetbrains.exposed.v1.core.ReferenceOption
-import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.UuidTable
 import org.jetbrains.exposed.v1.dao.UuidEntity
@@ -49,11 +48,11 @@ class Season(id: EntityID<Uuid>) : UuidEntity(id) {
     @JsonProperty
     var poster by SeasonTable.poster
 
-    val episodes by Episode referrersOn EpisodeTable.season
+    val episodes by Episode referrersOn EpisodeTable.season orderBy EpisodeTable.index
 
     @all:JsonProperty("episodes")
     val jsonEpisodes
-        get() = episodes.orderBy(EpisodeTable.index to SortOrder.ASC).map { it.id.value }
+        get() = episodes.map { it.id.value }
 
     override fun toString(): String {
         return "Season(id=$id, show=${show.id}, index=$index)"

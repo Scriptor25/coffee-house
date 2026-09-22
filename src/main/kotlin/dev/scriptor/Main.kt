@@ -173,7 +173,21 @@ fun getFileMetadata(
     val json = process.inputStream.reader().readText()
 
     val value = process.waitFor()
-    if (value != 0) error("failed to get metadata for $path")
+    if (value != 0) {
+        db {
+            Media.new {
+                this.path = path
+                this.size = 0
+                this.title = path.name
+                this.createdAt = createdAt
+                this.modifiedAt = modifiedAt
+                this.duration = 0.0
+            }
+        }
+
+        log.warning("failed to get metadata for $path")
+        return
+    }
 
     val node: MetadataNode = parseJson(json).fromJson()
 
@@ -403,7 +417,7 @@ fun buildTmdbImages(configuration: TmdbContext.Configuration, type: TmdbImageTyp
 
 val TMDB_ID_REGEX = """^[^\[]*\[tmdbid-(\d+)].*$""".toRegex()
 val SEASON_NUMBER_REGEX = """^.*(\d{1,2}).*$""".toRegex()
-val EPISODE_NUMBER_REGEX = """^.*S(\d{1,2})E(\d{1,2}).*$""".toRegex()
+val EPISODE_NUMBER_REGEX = """^.*[Ss](\d{1,2})[Ee](\d{1,2}).*$""".toRegex()
 
 context(
     _: Logger,
@@ -678,7 +692,7 @@ fun getShowMetadata(
             }) {
                 null -> db {
                     ParentGroup.new {
-                        this.show = show.id
+                        this.show = show
                         this.tmdbId = details.id
                         this.title = details.name
                         this.description = details.description
@@ -1189,7 +1203,7 @@ data class HeaderAuthenticator(
         val id =
             when (val sub = jwt.payload.sub) {
                 null -> Uuid.NIL
-                else -> Uuid.parseHexDash(sub)
+                else -> Uuid.parse(sub)
             }
 
         val role = if (id == Uuid.NIL) {

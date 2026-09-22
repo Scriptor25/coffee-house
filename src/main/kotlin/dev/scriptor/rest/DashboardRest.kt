@@ -1,11 +1,9 @@
 package dev.scriptor.rest
 
 import dev.scriptor.*
-import dev.scriptor.component.ImageComponent
-import dev.scriptor.component.MediaListComponent
-import dev.scriptor.component.MediaListItem
-import dev.scriptor.component.MediaListMode
+import dev.scriptor.component.*
 import dev.scriptor.context.SessionContext
+import dev.scriptor.model.movie.ImageData
 import dev.scriptor.model.movie.Movie
 import dev.scriptor.model.movie.MovieTable
 import dev.scriptor.model.other.Other
@@ -122,7 +120,6 @@ class DashboardRest {
             outline = "none"
         }
 
-
         define("body") {
             color = "var(--color-foreground)"
             backgroundColor = "var(--color-background)"
@@ -158,7 +155,7 @@ class DashboardRest {
             }
         }
 
-        define("ol,ul") {
+        define("ol, ul") {
             paddingLeft = "var(--space-l)"
             margin = "0 0 var(--space-xs) 0"
         }
@@ -217,6 +214,12 @@ class DashboardRest {
             define("@media(min-width:1200px)") {
                 width = "1000px"
             }
+        }
+
+        define("input, select") {
+            border = "none"
+            padding = "var(--space-xs)"
+            backgroundColor = "var(--color-panel)"
         }
     }
 
@@ -538,14 +541,6 @@ class DashboardRest {
             style {
                 globalStyle()
 
-                define("form") {
-                    define("input") {
-                        border = "none"
-                        padding = "var(--space-xs)"
-                        backgroundColor = "var(--color-panel)"
-                    }
-                }
-
                 define(".form") {
                     display = CssDisplay.FLEX
                     flexDirection = CssFlexDirection.COLUMN
@@ -591,6 +586,8 @@ class DashboardRest {
                 }
 
                 body {
+                    +component(::HeaderComponent) {}
+
                     main {
                         h1 { +"Movies" }
 
@@ -635,6 +632,8 @@ class DashboardRest {
                 }
 
                 body {
+                    +component(::HeaderComponent) {}
+
                     div({ htmlClass = "banner" }) {
                         +component(::ImageComponent) {
                             className = "backdrop"
@@ -748,6 +747,8 @@ class DashboardRest {
                 }
 
                 body {
+                    +component(::HeaderComponent) {}
+
                     main {
                         h1 { +"Shows" }
 
@@ -778,14 +779,64 @@ class DashboardRest {
     }
 
     @Get("/show/[id]", "text/html")
-    fun getShowDetailPage(@PathParameter id: Uuid): Result {
+    fun getShowDetailPage(
+        @PathParameter id: Uuid,
+        @QueryParameter view: String? = null,
+    ): Result {
         val show = db { Show.findById(id) }
             ?: throw NotFoundSignal()
 
-        val seasons = db {
-            show.seasons
-                .orderBy(SeasonTable.index to SortOrder.ASC)
-                .toList()
+        val viewGroup = view?.let { Uuid.parseOrNull(it) }?.let { db { ParentGroup.findById(it) } }
+        if (viewGroup == null && view != null) {
+            throw FoundSignal(
+                ParameterList(
+                    "location" to "/show/$id",
+                ),
+            )
+        }
+
+        val groups = db {
+            show.groups.toList()
+        }
+
+        val items = when (viewGroup) {
+            null -> db {
+                val seasons = show.seasons
+
+                seasons.map {
+                    MediaListItem(
+                        href = "/season/${it.id}",
+                        title = it.title,
+                        thumbnail = { className, sizes ->
+                            component(::ImageComponent) {
+                                this.className = className
+                                this.sizes = sizes
+                                this.src = it.poster
+                            }
+                        },
+                    )
+                }
+            }
+
+            else -> db {
+                val seasons = viewGroup.groups
+
+                seasons.map {
+                    val season = show.seasons.firstOrNull { season -> season.index == it.index }
+
+                    MediaListItem(
+                        href = "/season/${it.id}",
+                        title = it.title,
+                        thumbnail = { className, sizes ->
+                            component(::ImageComponent) {
+                                this.className = className
+                                this.sizes = sizes
+                                this.src = season?.poster ?: emptyList()
+                            }
+                        }
+                    )
+                }
+            }
         }
 
         return bundle {
@@ -798,6 +849,8 @@ class DashboardRest {
                 }
 
                 body {
+                    +component(::HeaderComponent) {}
+
                     div({ htmlClass = "banner" }) {
                         +component(::ImageComponent) {
                             className = "backdrop"
@@ -816,6 +869,40 @@ class DashboardRest {
                     main({ htmlClass = "content" }) {
                         h1 { +show.title }
 
+                        p {
+                            select {
+                                option({
+                                    value = ""
+                                    selected = viewGroup == null
+                                }) {
+                                    +"Default"
+                                }
+
+                                for (group in groups) {
+                                    option({
+                                        value = group.id.toString()
+                                        selected = group.id == viewGroup?.id
+                                    }) {
+                                        +group.title
+                                    }
+                                }
+
+                                on("change") { (event) ->
+                                    val id = event["target"]["value"]
+                                    val url = jsFormat("?view=", "", values = listOf(id))
+
+                                    emit(
+                                        window.navigation.navigate(
+                                            url,
+                                            jsObject {
+
+                                            },
+                                        ),
+                                    )
+                                }
+                            }
+                        }
+
                         when (val description = show.description) {
                             null -> {}
                             else -> {
@@ -826,20 +913,8 @@ class DashboardRest {
                         h2 { +"Seasons" }
 
                         +component(::MediaListComponent) {
-                            items = seasons.map {
-                                MediaListItem(
-                                    href = "/season/${it.id}",
-                                    title = it.title,
-                                    thumbnail = { className, sizes ->
-                                        component(::ImageComponent) {
-                                            this.className = className
-                                            this.sizes = sizes
-                                            this.src = it.poster
-                                        }
-                                    },
-                                )
-                            }
-                            mode = MediaListMode.GRID_POSTER
+                            this.items = items
+                            this.mode = MediaListMode.GRID_POSTER
                         }
                     }
                 }
@@ -899,14 +974,45 @@ class DashboardRest {
 
     @Get("/season/[id]", "text/html")
     fun getSeasonDetailPage(@PathParameter id: Uuid): Result {
-        val season = db { Season.findById(id) }
-            ?: throw NotFoundSignal()
+        val show: Show
+        val season: Season?
+        val episodes: List<Episode>
 
-        val show = db { season.show }
-        val episodes = db {
-            season.episodes
-                .orderBy(EpisodeTable.index to SortOrder.ASC)
-                .toList()
+        val title: String
+        val description: String?
+        val poster: List<ImageData>
+
+        val playbackResource: String
+        val playbackId: Uuid
+
+        when (val group = db { Group.findById(id) }) {
+            null -> {
+                season = db { Season.findById(id) }
+                    ?: throw NotFoundSignal()
+
+                show = db { season.show }
+                episodes = db { season.episodes.toList() }
+
+                title = season.title
+                description = season.description
+                poster = season.poster
+
+                playbackResource = "season"
+                playbackId = season.id.value
+            }
+
+            else -> {
+                show = db { group.parent.show }
+                season = db { show.seasons.firstOrNull { it.index == group.index } }
+                episodes = db { group.episodes.toList() }
+
+                title = group.title
+                description = season?.description
+                poster = season?.poster ?: emptyList()
+
+                playbackResource = "group"
+                playbackId = group.id.value
+            }
         }
 
         return bundle {
@@ -915,23 +1021,25 @@ class DashboardRest {
                     meta(charset = "utf-8")
                     meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
                     link(rel = "manifest", href = "/manifest.json")
-                    title("${show.title} - ${season.title} | Shows")
+                    title("${show.title} - $title | Shows")
                 }
 
                 body {
+                    +component(::HeaderComponent) {}
+
                     main {
                         section({ htmlClass = "header" }) {
                             +component(::ImageComponent) {
                                 className = "poster"
                                 sizes = "(max-width: 768px) 100vw, 30vw"
-                                src = season.poster
+                                src = poster
                                 noFallback = true
                             }
 
                             div {
-                                h1 { +season.title }
+                                h1 { +title }
 
-                                when (val description = season.description) {
+                                when (val description = description) {
                                     null -> {}
                                     else -> {
                                         p { +description }
@@ -944,9 +1052,9 @@ class DashboardRest {
 
                                         on("click") {
                                             emitPlayback(
-                                                "season",
-                                                season.id.value,
-                                                season.title,
+                                                playbackResource,
+                                                playbackId,
+                                                title,
                                             )
                                         }
                                     }
@@ -957,10 +1065,10 @@ class DashboardRest {
                         h2 { +"Episodes" }
 
                         +component(::MediaListComponent) {
-                            items = episodes.map {
+                            items = episodes.mapIndexed { index, it ->
                                 MediaListItem(
                                     href = "/episode/${it.id}",
-                                    title = it.title,
+                                    title = "Ep. ${index + 1}: ${it.title}",
                                     thumbnail = { className, sizes ->
                                         component(::ImageComponent) {
                                             this.className = className
@@ -1028,6 +1136,8 @@ class DashboardRest {
                 }
 
                 body {
+                    +component(::HeaderComponent) {}
+
                     main {
                         section({ htmlClass = "header" }) {
                             +component(::ImageComponent) {
@@ -1120,6 +1230,8 @@ class DashboardRest {
                 }
 
                 body {
+                    +component(::HeaderComponent) {}
+
                     main {
                         h1 { +"Others" }
 
@@ -1157,6 +1269,8 @@ class DashboardRest {
                 }
 
                 body {
+                    +component(::HeaderComponent) {}
+
                     main {
                         h1 { +other.title }
 

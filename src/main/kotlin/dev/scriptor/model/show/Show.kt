@@ -3,7 +3,6 @@ package dev.scriptor.model.show
 import dev.scriptor.*
 import dev.scriptor.model.media.path
 import dev.scriptor.model.movie.ImageData
-import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.UuidTable
 import org.jetbrains.exposed.v1.dao.UuidEntity
@@ -53,13 +52,13 @@ class Show(id: EntityID<Uuid>) : UuidEntity(id) {
     @JsonProperty
     var backdrop by ShowTable.backdrop
 
-    val seasons by Season referrersOn SeasonTable.show
+    val seasons by Season referrersOn SeasonTable.show orderBy SeasonTable.index
 
     @all:JsonProperty("seasons")
     val jsonSeasons
-        get() = seasons.orderBy(SeasonTable.index to SortOrder.ASC).map { it.id.value }
+        get() = seasons.map { it.id.value }
 
-    val groups by ParentGroup referrersOn ParentGroupTable.show
+    val groups by ParentGroup referrersOn ParentGroupTable.show orderBy ParentGroupTable.title
 
     override fun toString(): String {
         return "Show(id=$id, path=$path, tmdbId=$tmdbId, title=$title, description=$description, poster=$poster, backdrop=$backdrop)"

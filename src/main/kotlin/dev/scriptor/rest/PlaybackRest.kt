@@ -5,8 +5,6 @@ import dev.scriptor.TranscodingCache
 import dev.scriptor.context.PlaybackContext
 import dev.scriptor.db
 import dev.scriptor.jsonOf
-import dev.scriptor.model.AuthorizationHeader
-import dev.scriptor.model.CookieHeader
 import dev.scriptor.model.CreatePlaybackBody
 import dev.scriptor.model.RangeHeader
 import dev.scriptor.model.media.Chapter
@@ -38,7 +36,7 @@ class PlaybackRest {
         }
 
         return db {
-            Media.findById(playback.items[index])
+            Media.findById(playback.items[index].id)
         } ?: throw NotFoundSignal()
     }
 
@@ -79,11 +77,7 @@ class PlaybackRest {
         principal: Principal,
         context: PlaybackContext,
     )
-    fun createPlayback(
-        @Header authorization: AuthorizationHeader? = null,
-        @Header cookie: CookieHeader = CookieHeader(),
-        @Body body: CreatePlaybackBody,
-    ): String {
+    fun createPlayback(@Body body: CreatePlaybackBody): String {
         val id = principal.id
 
         return context.createPlayback(id, body.name, body.items)
@@ -99,19 +93,21 @@ class PlaybackRest {
             ?: throw NotFoundSignal()
 
         val items = db {
-            playback.items.map { Media.findById(it) }
+            playback.items.mapNotNull {
+                when (val value = Media.findById(it.id)) {
+                    null -> null
+                    else -> value to it.title
+                }
+            }
         }
 
-        val lines = items
-            .mapIndexedNotNull { index, item ->
-                if (item == null) null
-                else listOf(
-                    "#EXTINF:${item.duration},${item.title}",
-                    if (direct) "$index"
-                    else "$index/master.m3u8",
-                )
-            }
-            .flatten()
+        val lines = items.flatMapIndexed { index, item ->
+            listOf(
+                "#EXTINF:${item.first.duration},${item.second}",
+                if (direct) "$index"
+                else "$index/master.m3u8",
+            )
+        }
 
         return "#EXTM3U\r\n#PLAYLIST:${playback.name}\r\n${lines.joinToString("\r\n")}"
     }

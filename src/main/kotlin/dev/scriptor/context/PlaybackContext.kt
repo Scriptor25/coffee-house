@@ -1,6 +1,7 @@
 package dev.scriptor.context
 
 import dev.scriptor.model.Playback
+import dev.scriptor.model.PlaybackItem
 import dev.scriptor.server.jvm.annotation.Context
 import java.security.SecureRandom
 import java.time.Duration.ofHours
@@ -20,7 +21,7 @@ class PlaybackContext {
     fun createPlayback(
         userId: Uuid,
         name: String,
-        items: List<Uuid>,
+        items: List<PlaybackItem>,
     ): String {
         val createdAt = Clock.System.now()
         val expiresAt = createdAt + ofHours(24).toKotlinDuration()

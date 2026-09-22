@@ -9,8 +9,6 @@ import dev.scriptor.model.ffmpeg.Device
 import dev.scriptor.model.ffmpeg.DeviceBackend
 import dev.scriptor.model.media.Media
 import dev.scriptor.model.media.VideoTrack
-import dev.scriptor.model.media.VideoTrackTable
-import org.jetbrains.exposed.v1.core.SortOrder
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 import java.util.logging.Logger
@@ -49,7 +47,7 @@ class TranscodingCache(
                     Profile.ARCHIVAL,
                 )
             else
-                OriginalVariant()
+                OriginalVariant
         )
 
         if (requirements.enable) {
@@ -148,50 +146,69 @@ class TranscodingCache(
 
     fun job(item: Media): TranscodingJob = jobs.computeIfAbsent(item.id.value) {
         db {
-            val video = item.video.orderBy(VideoTrackTable.index to SortOrder.ASC).first()
+            val variants: List<Variant>
+            val pipeline: Pipeline
 
-            val input = video.codec
-            val output = Codec[requirements.video]
+            when (val video = item.video.firstOrNull()) {
+                null -> {
+                    variants = listOf(OriginalVariant)
+                    pipeline = Pipeline(object : VideoBackend {
+                        override val device = null
+                        override val decoder = VideoDecoder.Null
+                        override val encoder = VideoEncoder.Null
 
-            val decodeDevices = Capabilities.getDevicesForDecoding(input)
-            val encodeDevices = Capabilities.getDevicesForEncoding(output)
+                        override fun upload(): List<String> = emptyList()
+                        override fun download(): List<String> = emptyList()
+                        override fun scale(width: Int, height: Int): List<String> = listOf("scale=w=$width:h=$height")
+                    })
+                }
 
-            val transcodeDevice = decodeDevices
-                .filter(encodeDevices::contains)
-                .toSortedSet(Capabilities::compare)
-                .firstOrNull()
+                else -> {
+                    variants = variants(video)
 
-            val pipeline = if (transcodeDevice == null) {
+                    val input = video.codec
+                    val output = Codec[requirements.video]
 
-                val decodeDevice = decodeDevices
-                    .toSortedSet(Capabilities::compare)
-                    .firstOrNull()
-                val encodeDevice = encodeDevices
-                    .toSortedSet(Capabilities::compare)
-                    .firstOrNull()
+                    val decodeDevices = Capabilities.getDevicesForDecoding(input)
+                    val encodeDevices = Capabilities.getDevicesForEncoding(output)
 
-                val decodeBackend = createBackend(decodeDevice, input, output)
-                val encodeBackend =
-                    if (decodeDevice == encodeDevice) decodeBackend
-                    else createBackend(encodeDevice, input, output)
+                    val transcodeDevice = decodeDevices
+                        .filter(encodeDevices::contains)
+                        .toSortedSet(Capabilities::compare)
+                        .firstOrNull()
 
-                Pipeline(
-                    decodeBackend,
-                    encodeBackend,
-                    encodeBackend,
-                    encodeBackend,
-                )
-            } else {
-                val backend = createBackend(transcodeDevice, input, output)
+                    pipeline = if (transcodeDevice == null) {
+                        val decodeDevice = decodeDevices
+                            .toSortedSet(Capabilities::compare)
+                            .firstOrNull()
+                        val encodeDevice = encodeDevices
+                            .toSortedSet(Capabilities::compare)
+                            .firstOrNull()
 
-                Pipeline(backend)
+                        val decodeBackend = createBackend(decodeDevice, input, output)
+                        val encodeBackend =
+                            if (decodeDevice == encodeDevice) decodeBackend
+                            else createBackend(encodeDevice, input, output)
+
+                        Pipeline(
+                            decodeBackend,
+                            encodeBackend,
+                            encodeBackend,
+                            encodeBackend,
+                        )
+                    } else {
+                        val backend = createBackend(transcodeDevice, input, output)
+
+                        Pipeline(backend)
+                    }
+                }
             }
 
             TranscodingJob(
                 ffmpeg,
                 item,
-                base.resolve(item.id.value.toHexDashString()),
-                variants(video),
+                base.resolve(item.id.toString()),
+                variants,
                 requirements.enable,
                 requirements.device,
                 pipeline,

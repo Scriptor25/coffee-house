@@ -17,10 +17,10 @@ data object ParentGroupTable : UuidTable("parent_group") {
 class ParentGroup(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<ParentGroup>(ParentGroupTable)
 
-    var show by ParentGroupTable.show
+    var show by Show referencedOn ParentGroupTable.show
     var tmdbId by ParentGroupTable.tmdbId
     var title by ParentGroupTable.title
     var description by ParentGroupTable.description
 
-    val groups by Group referrersOn GroupTable.parent
+    val groups by Group referrersOn GroupTable.parent orderBy GroupTable.index
 }

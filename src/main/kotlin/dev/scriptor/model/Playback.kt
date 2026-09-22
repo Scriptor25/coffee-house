@@ -6,13 +6,19 @@ import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 @JsonSerializable
+data class PlaybackItem(
+    val id: Uuid,
+    val title: String?,
+)
+
+@JsonSerializable
 data class Playback(
     @all:JsonProperty
     val userId: Uuid,
     @all:JsonProperty
     val name: String,
     @all:JsonProperty
-    val items: List<Uuid>,
+    val items: List<PlaybackItem>,
     @all:JsonProperty
     val createdAt: Instant,
     @all:JsonProperty

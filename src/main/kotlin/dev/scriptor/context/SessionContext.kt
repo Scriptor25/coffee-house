@@ -28,7 +28,7 @@ class SessionContext {
                 alg = "HS256",
             ),
             JwtPayload(
-                sub = id.toHexDashString(),
+                sub = id.toString(),
                 iat = instant,
                 exp = expires,
                 aud = "coffee-house",
