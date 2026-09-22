@@ -6,7 +6,6 @@ import dev.scriptor.db
 import dev.scriptor.jsonArray
 import dev.scriptor.jsonObject
 import dev.scriptor.jsonOf
-import dev.scriptor.model.movie.ImageData
 import dev.scriptor.model.movie.Movie
 import dev.scriptor.model.movie.MovieTable
 import dev.scriptor.model.other.Other
@@ -192,7 +191,6 @@ class DashboardRest {
         }
 
         define("p") {
-            fontSize = "var(--font-size-p)"
             margin = "0 0 var(--space-m) 0"
         }
 
@@ -201,20 +199,20 @@ class DashboardRest {
             marginLeft = "auto"
             marginRight = "auto"
 
-            define("@media(max-width:719px)") {
+            define("@media (max-width:719px)") {
                 paddingLeft = "var(--space-s)"
                 paddingRight = "var(--space-s)"
             }
 
-            define("@media(min-width:720px)") {
+            define("@media (min-width:720px)") {
                 width = "700px"
             }
 
-            define("@media(min-width:960px)") {
+            define("@media (min-width:960px)") {
                 width = "900px"
             }
 
-            define("@media(min-width:1200px)") {
+            define("@media (min-width:1200px)") {
                 width = "1000px"
             }
         }
@@ -732,18 +730,18 @@ class DashboardRest {
                     }
                 }
 
-                define(".content") {
+                define("main.content") {
                     marginLeft = "300px"
                 }
 
-                define("@media(max-width:768px)") {
+                define("@media (max-width:768px)") {
                     define(".banner") {
                         define(".poster") {
                             display = CssDisplay.NONE
                         }
                     }
 
-                    define(".content") {
+                    define("main.content") {
                         marginLeft = "0"
                     }
                 }
@@ -842,19 +840,16 @@ class DashboardRest {
             }
 
             else -> db {
-                val seasons = viewGroup.groups
+                val groups = viewGroup.groups.filter { !it.episodes.empty() }
 
-                seasons.map {
-                    val season = show.seasons.firstOrNull { season -> season.index == it.index }
-
+                groups.map {
                     MediaListItem(
-                        href = "/season/${it.id}",
+                        href = "/group/${it.id}",
                         title = it.title,
                         thumbnail = { className, sizes ->
                             component(::ImageComponent) {
                                 this.className = className
                                 this.sizes = sizes
-                                this.src = season?.poster ?: emptyList()
                             }
                         }
                     )
@@ -897,36 +892,38 @@ class DashboardRest {
                         h1 { +show.title }
 
                         p {
-                            select {
-                                option({
-                                    value = ""
-                                    selected = viewGroup == null
-                                }) {
-                                    +"Default"
-                                }
-
-                                for (group in groups) {
+                            label({ htmlClass = "view" }) {
+                                span { +"Select Episode Order" }
+                                select({ name = "view" }) {
                                     option({
-                                        value = group.id.toString()
-                                        selected = group.id == viewGroup?.id
+                                        value = ""
+                                        selected = viewGroup == null
                                     }) {
-                                        +group.title
+                                        +"Default"
+                                    }
+
+                                    for (group in groups) {
+                                        option({
+                                            value = group.id.toString()
+                                            selected = group.id == viewGroup?.id
+                                        }) {
+                                            +group.title
+                                        }
+                                    }
+
+                                    on("change") { (event) ->
+                                        val id = event["target"]["value"]
+                                        val url = jsFormat("?view=", "", values = listOf(id))
+
+                                        emit(window.navigation.navigate(url))
                                     }
                                 }
+                            }
+                        }
 
-                                on("change") { (event) ->
-                                    val id = event["target"]["value"]
-                                    val url = jsFormat("?view=", "", values = listOf(id))
-
-                                    emit(
-                                        window.navigation.navigate(
-                                            url,
-                                            jsObject {
-
-                                            },
-                                        ),
-                                    )
-                                }
+                        p {
+                            if (viewGroup != null) {
+                                span { +viewGroup.description }
                             }
                         }
 
@@ -941,7 +938,11 @@ class DashboardRest {
 
                         +component(::MediaListComponent) {
                             this.items = items
-                            this.mode = MediaListMode.GRID_POSTER
+                            this.mode =
+                                if (viewGroup != null)
+                                    MediaListMode.LIST_COMPACT
+                                else
+                                    MediaListMode.GRID_POSTER
                         }
                     }
                 }
@@ -980,18 +981,28 @@ class DashboardRest {
                     }
                 }
 
-                define(".content") {
+                define("label.view") {
+                    display = CssDisplay.INLINE_FLEX
+                    flexDirection = CssFlexDirection.ROW
+                    flexWrap = CssFlexWrap.NOWRAP
+                    alignItems = CssAlignItems.CENTER
+                    justifyContent = CssJustifyContent.FLEX_START
+
+                    gap = "var(--space-m)"
+                }
+
+                define("main.content") {
                     marginLeft = "300px"
                 }
 
-                define("@media(max-width:768px)") {
+                define("@media (max-width:768px)") {
                     define(".banner") {
                         define(".poster") {
                             display = CssDisplay.NONE
                         }
                     }
 
-                    define(".content") {
+                    define("main.content") {
                         marginLeft = "0"
                     }
                 }
@@ -1001,46 +1012,11 @@ class DashboardRest {
 
     @Get("/season/[id]", "text/html")
     fun getSeasonDetailPage(@PathParameter id: Uuid): Result {
-        val show: Show
-        val season: Season?
-        val episodes: List<Episode>
+        val season = db { Season.findById(id) }
+            ?: throw NotFoundSignal()
 
-        val title: String
-        val description: String?
-        val poster: List<ImageData>
-
-        val playbackResource: String
-        val playbackId: Uuid
-
-        when (val group = db { Group.findById(id) }) {
-            null -> {
-                season = db { Season.findById(id) }
-                    ?: throw NotFoundSignal()
-
-                show = db { season.show }
-                episodes = db { season.episodes.toList() }
-
-                title = season.title
-                description = season.description
-                poster = season.poster
-
-                playbackResource = "season"
-                playbackId = season.id.value
-            }
-
-            else -> {
-                show = db { group.parent.show }
-                season = db { show.seasons.firstOrNull { it.index == group.index } }
-                episodes = db { group.episodes.toList() }
-
-                title = group.title
-                description = season?.description
-                poster = season?.poster ?: emptyList()
-
-                playbackResource = "group"
-                playbackId = group.id.value
-            }
-        }
+        val show = db { season.show }
+        val episodes = db { season.episodes.toList() }
 
         return bundle {
             html {
@@ -1048,7 +1024,7 @@ class DashboardRest {
                     meta(charset = "utf-8")
                     meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
                     link(rel = "manifest", href = "/manifest.json")
-                    title("${show.title} - $title | Shows")
+                    title("${show.title} - ${season.title} | Shows")
                 }
 
                 body {
@@ -1064,14 +1040,14 @@ class DashboardRest {
                             +component(::ImageComponent) {
                                 className = "poster"
                                 sizes = "(max-width: 768px) 100vw, 30vw"
-                                src = poster
+                                src = season.poster
                                 noFallback = true
                             }
 
                             div {
-                                h1 { +title }
+                                h1 { +season.title }
 
-                                when (val description = description) {
+                                when (val description = season.description) {
                                     null -> {}
                                     else -> {
                                         p { +description }
@@ -1084,9 +1060,9 @@ class DashboardRest {
 
                                         on("click") {
                                             emitPlayback(
-                                                playbackResource,
-                                                playbackId,
-                                                title,
+                                                "season",
+                                                season.id.value,
+                                                season.title,
                                             )
                                         }
                                     }
@@ -1097,10 +1073,11 @@ class DashboardRest {
                         h2 { +"Episodes" }
 
                         +component(::MediaListComponent) {
-                            items = episodes.mapIndexed { index, it ->
+                            items = episodes.map {
                                 MediaListItem(
                                     href = "/episode/${it.id}",
-                                    title = "Ep. ${index + 1}: ${it.title}",
+                                    title = "Ep. ${it.index}: ${it.title}",
+                                    description = it.description,
                                     thumbnail = { className, sizes ->
                                         component(::ImageComponent) {
                                             this.className = className
@@ -1119,7 +1096,7 @@ class DashboardRest {
             style {
                 globalStyle()
 
-                define(".header") {
+                define("section.header") {
                     display = CssDisplay.FLEX
                     flexDirection = CssFlexDirection.ROW
                     flexWrap = CssFlexWrap.NOWRAP
@@ -1136,14 +1113,106 @@ class DashboardRest {
                     }
                 }
 
-                define("@media(max-width:768px)") {
-                    define(".header") {
+                define("@media (max-width:768px)") {
+                    define("section.header") {
                         flexDirection = CssFlexDirection.COLUMN
                         flexWrap = CssFlexWrap.NOWRAP
 
                         define(".poster") {
                             width = "100%"
                         }
+                    }
+                }
+            }
+        }.cache()
+    }
+
+    @Get("/group/[id]", "text/html")
+    fun getGroupDetailPage(@PathParameter id: Uuid): Result {
+        val group = db { Group.findById(id) }
+            ?: throw NotFoundSignal()
+
+        val show = db { group.parent.show }
+        val parent = db { group.parent }
+        val episodes = db { group.episodes.toList() }
+
+        return bundle {
+            html {
+                head {
+                    meta(charset = "utf-8")
+                    meta(name = "viewport", content = "width=device-width, initial-scale=1.0")
+                    link(rel = "manifest", href = "/manifest.json")
+                    title("${show.title} - ${group.title} | Shows")
+                }
+
+                body {
+                    +component(::HeaderComponent) {
+                        links = listOf(
+                            "/show" to "Shows",
+                            "/show/${show.id}?view=${parent.id}" to show.title,
+                        )
+                    }
+
+                    main {
+                        section({ htmlClass = "header" }) {
+                            div {
+                                h1 { +group.title }
+
+                                p {
+                                    button({ type = HtmlButtonElementType.BUTTON }) {
+                                        +"Play all"
+
+                                        on("click") {
+                                            emitPlayback(
+                                                "group",
+                                                group.id.value,
+                                                group.title,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        h2 { +"Episodes" }
+
+                        +component(::MediaListComponent) {
+                            items = episodes.mapIndexed { index, it ->
+                                MediaListItem(
+                                    href = "/episode/${it.id}",
+                                    title = "Ep. ${index + 1}: ${it.title}",
+                                    description = it.description,
+                                    thumbnail = { className, sizes ->
+                                        component(::ImageComponent) {
+                                            this.className = className
+                                            this.sizes = sizes
+                                            this.src = it.still
+                                        }
+                                    },
+                                )
+                            }
+                            mode = MediaListMode.LIST
+                        }
+                    }
+                }
+            }
+
+            style {
+                globalStyle()
+
+                define("section.header") {
+                    display = CssDisplay.FLEX
+                    flexDirection = CssFlexDirection.ROW
+                    flexWrap = CssFlexWrap.NOWRAP
+                    gap = "var(--space-l)"
+
+                    marginBottom = "var(--space-l)"
+                }
+
+                define("@media (max-width:768px)") {
+                    define("section.header") {
+                        flexDirection = CssFlexDirection.COLUMN
+                        flexWrap = CssFlexWrap.NOWRAP
                     }
                 }
             }
@@ -1218,7 +1287,7 @@ class DashboardRest {
             style {
                 globalStyle()
 
-                define(".header") {
+                define("section.header") {
                     display = CssDisplay.FLEX
                     flexDirection = CssFlexDirection.ROW
                     flexWrap = CssFlexWrap.NOWRAP
@@ -1235,8 +1304,8 @@ class DashboardRest {
                     }
                 }
 
-                define("@media(max-width:768px)") {
-                    define(".header") {
+                define("@media (max-width:768px)") {
+                    define("section.header") {
                         flexDirection = CssFlexDirection.COLUMN
                         flexWrap = CssFlexWrap.NOWRAP
 
@@ -1280,7 +1349,7 @@ class DashboardRest {
                                     title = it.title,
                                 )
                             }
-                            mode = MediaListMode.LIST
+                            mode = MediaListMode.LIST_COMPACT
                         }
                     }
                 }

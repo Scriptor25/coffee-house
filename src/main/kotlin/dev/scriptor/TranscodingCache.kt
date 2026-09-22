@@ -146,12 +146,14 @@ class TranscodingCache(
 
     fun job(item: Media): TranscodingJob = jobs.computeIfAbsent(item.id.value) {
         db {
+            val video = item.video.firstOrNull { it.index == 0 }
+
             val variants: List<Variant>
             val pipeline: Pipeline
 
-            when (val video = item.video.firstOrNull()) {
+            when (video) {
                 null -> {
-                    variants = listOf(OriginalVariant)
+                    variants = emptyList()
                     pipeline = Pipeline(object : VideoBackend {
                         override val device = null
                         override val decoder = VideoDecoder.Null
@@ -207,6 +209,7 @@ class TranscodingCache(
             TranscodingJob(
                 ffmpeg,
                 item,
+                video,
                 base.resolve(item.id.toString()),
                 variants,
                 requirements.enable,

@@ -27,21 +27,31 @@ class MediaListItemComponent : Component {
             +listItem.thumbnail(
                 "thumbnail",
                 when (listMode) {
-                    MediaListMode.LIST -> "30vw"
+                    MediaListMode.LIST -> "(max-width: 768px) 100vw, 30vw"
                     else -> "(max-width: 600px) 50vw, 300px"
                 },
             )
 
-            a({
-                htmlClass = "title"
-                href = listItem.href
-            }) { +listItem.title }
+            div({ htmlClass = "content" }) {
+                a({
+                    htmlClass = "title"
+                    href = listItem.href
+                }) { +listItem.title }
+
+                when (val description = listItem.description) {
+                    null -> Unit
+                    else ->
+                        p({
+                            htmlClass = "description"
+                        }) { +description }
+                }
+            }
         }.build()
     }
 
     override fun style(): List<CssNode> {
         return CssNodesBuilder().apply {
-            define(".item") {
+            define("li.item") {
                 position = "relative"
 
                 display = CssDisplay.FLEX
@@ -61,12 +71,28 @@ class MediaListItemComponent : Component {
                     objectFit = "cover"
                 }
 
-                define(".title") {
-                    margin = "var(--space-m)"
+                define("div.content") {
+                    display = CssDisplay.FLEX
+                    flexDirection = CssFlexDirection.COLUMN
+                    flexWrap = CssFlexWrap.NOWRAP
 
+                    gap = "var(--space-m)"
+
+                    padding = "var(--space-m)"
+
+                    overflow = "hidden"
+                    textOverflow = "ellipsis"
+
+                    fontSize = "var(--font-size-small)"
+
+                    color = "var(--color-foreground)"
+                }
+
+                define("a.title") {
                     overflow = "hidden"
 
                     textOverflow = "ellipsis"
+                    textDecoration = "none"
 
                     this["display"] = "-webkit-box"
                     this["-webkit-box-orient"] = "vertical"
@@ -74,11 +100,10 @@ class MediaListItemComponent : Component {
 
                     lineClamp = "1"
 
-                    fontSize = "var(--font-size-small)"
-
-                    textDecoration = "none"
                     color = "var(--color-foreground)"
                     backgroundColor = "transparent"
+
+                    fontWeight = "bold"
 
                     define("&::after") {
                         content = "''"
@@ -99,8 +124,9 @@ class MediaListItemComponent : Component {
                         aspectRatio = "5 / 3"
                     }
 
-                    define(".title") {
-                        textAlign = "center"
+                    define("div.content") {
+                        alignItems = CssAlignItems.CENTER
+                        justifyContent = CssJustifyContent.CENTER
                     }
                 }
 
@@ -115,16 +141,12 @@ class MediaListItemComponent : Component {
 
                         aspectRatio = "3 / 4"
                     }
-
-                    define(".title") {
-                        textAlign = "center"
-                    }
                 }
 
                 define("&[data-mode='list']") {
                     flexDirection = CssFlexDirection.ROW
 
-                    alignItems = CssAlignItems.CENTER
+                    alignItems = CssAlignItems.STRETCH
 
                     define(".thumbnail") {
                         width = "30vw"
@@ -134,13 +156,49 @@ class MediaListItemComponent : Component {
 
                         flexShrink = "0"
                     }
+
+                    define("div.content") {
+                        height = "auto"
+
+                        alignItems = CssAlignItems.FLEX_START
+                        justifyContent = CssJustifyContent.STRETCH
+                    }
+
+                    define("@media (max-width: 768px)") {
+                        flexDirection = CssFlexDirection.COLUMN
+
+                        alignItems = CssAlignItems.STRETCH
+                        justifyContent = CssJustifyContent.STRETCH
+
+                        define(".thumbnail") {
+                            width = "100%"
+                            height = "auto"
+                        }
+                    }
+                }
+
+                define("&[data-mode='list-compact']") {
+                    flexDirection = CssFlexDirection.ROW
+
+                    alignItems = CssAlignItems.STRETCH
+
+                    define(".thumbnail") {
+                        display = CssDisplay.NONE
+                    }
+
+                    define("div.content") {
+                        height = "auto"
+
+                        alignItems = CssAlignItems.FLEX_START
+                        justifyContent = CssJustifyContent.STRETCH
+                    }
                 }
 
                 define("&:has(.title:is(:hover, :focus-visible))") {
                     backgroundColor = "var(--color-panel-active)"
                     boxShadow = "5px 5px 10px #111"
 
-                    define(".title") {
+                    define("a.title") {
                         textDecoration = "underline"
                     }
                 }

@@ -9,6 +9,7 @@ import dev.scriptor.ui.html.HtmlElement
 data class MediaListItem(
     val href: String,
     val title: String,
+    val description: String? = null,
     val thumbnail: (context(Bundle) (className: String?, sizes: String?) -> List<Node>) = { className, _ ->
         listOf(
             HtmlElement(

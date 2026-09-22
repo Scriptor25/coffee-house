@@ -2,6 +2,7 @@ package dev.scriptor
 
 import dev.scriptor.model.ffmpeg.CodecId
 import dev.scriptor.model.media.Media
+import dev.scriptor.model.media.VideoTrack
 import java.nio.file.Path
 import java.util.logging.Logger
 import kotlin.io.path.createDirectories
@@ -10,6 +11,7 @@ import kotlin.io.path.notExists
 data class TranscodingJob(
     val ffmpeg: String,
     val metadata: Media,
+    val video: VideoTrack?,
     val cache: Path,
     val variants: List<Variant>,
     val enable: Boolean,
@@ -87,8 +89,8 @@ data class TranscodingJob(
 
     private fun buildCommand(): List<String> {
         val outputs = outputs(metadata) {
-            if (variants.isNotEmpty()) {
-                video(0) {
+            if (video != null) {
+                video(video) {
                     variants.forEach {
                         when (it) {
                             is OriginalVariant -> {
