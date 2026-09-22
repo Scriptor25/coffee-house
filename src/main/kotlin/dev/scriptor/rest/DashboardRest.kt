@@ -1,8 +1,11 @@
 package dev.scriptor.rest
 
-import dev.scriptor.*
 import dev.scriptor.component.*
 import dev.scriptor.context.SessionContext
+import dev.scriptor.db
+import dev.scriptor.jsonArray
+import dev.scriptor.jsonObject
+import dev.scriptor.jsonOf
 import dev.scriptor.model.movie.ImageData
 import dev.scriptor.model.movie.Movie
 import dev.scriptor.model.movie.MovieTable
@@ -291,8 +294,8 @@ class DashboardRest {
 
     @Public
     @Get("/manifest.json", "application/json")
-    fun getManifest(): JsonNode {
-        return jsonObject {
+    fun getManifest(): Result {
+        val node = jsonObject {
             this["name"] = jsonOf("Coffee House")
             this["icons"] = jsonArray {
                 this.add(jsonObject {
@@ -308,6 +311,14 @@ class DashboardRest {
                 add(jsonOf("minimal-ui"))
             }
         }
+
+        return StringResult(
+            contentType = "application/json",
+            headers = ParameterList(
+                "cache-control" to "public, max-age=604800, immutable",
+            ),
+            value = node.toJson(),
+        )
     }
 
     @Get("/", "text/html")
