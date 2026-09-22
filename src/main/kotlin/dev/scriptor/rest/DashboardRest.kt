@@ -55,7 +55,7 @@ class DashboardRest {
 
     private fun Bundle.cache(statusCode: Int = 200, statusText: String = "OK"): Result {
         val headers = ParameterList(
-            "cache-control" to "public, max-age=120, immutable",
+            "cache-control" to "public, max-age=86400, immutable",
         )
 
         return StringResult(
@@ -315,7 +315,7 @@ class DashboardRest {
         return StringResult(
             contentType = "application/json",
             headers = ParameterList(
-                "cache-control" to "public, max-age=604800, immutable",
+                "cache-control" to "public, max-age=86400, immutable",
             ),
             value = node.toJson(),
         )
