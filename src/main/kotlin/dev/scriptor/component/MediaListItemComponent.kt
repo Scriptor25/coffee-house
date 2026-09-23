@@ -27,8 +27,8 @@ class MediaListItemComponent : Component {
             +listItem.thumbnail(
                 "thumbnail",
                 when (listMode) {
-                    MediaListMode.LIST -> "(max-width: 768px) 100vw, 30vw"
-                    else -> "(max-width: 600px) 50vw, 300px"
+                    MediaListMode.LIST -> "(max-width: 768px) 100vw, (max-width: 1600px) 30vw, 480px"
+                    else -> "(max-width: 600px) 100vw, 300px"
                 },
             )
 
@@ -157,6 +157,8 @@ class MediaListItemComponent : Component {
                         width = "30vw"
                         height = "100%"
 
+                        maxWidth = "480px"
+
                         aspectRatio = "2 / 1"
 
                         flexShrink = "0"
@@ -178,6 +180,8 @@ class MediaListItemComponent : Component {
                         define(".thumbnail") {
                             width = "100%"
                             height = "auto"
+
+                            maxWidth = "none"
                         }
                     }
                 }
