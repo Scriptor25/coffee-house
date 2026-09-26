@@ -34,6 +34,7 @@ class MediaListItemComponent : Component {
 
             div({ htmlClass = "content" }) {
                 a({
+                    booleanData("gamepad", true)
                     htmlClass = "title"
                     href = listItem.href
                 }) { +listItem.title }
@@ -206,6 +207,8 @@ class MediaListItemComponent : Component {
                 define("&:has(.title:is(:hover, :focus-visible))") {
                     backgroundColor = "var(--color-panel-active)"
                     boxShadow = "5px 5px 10px #111"
+                    transform = "scale(102%)"
+                    zIndex = "1"
 
                     define("a.title") {
                         textDecoration = "underline"

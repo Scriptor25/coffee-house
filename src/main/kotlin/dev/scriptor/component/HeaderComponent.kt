@@ -22,9 +22,15 @@ class HeaderComponent : Component {
                 Attribute("class", AttributeValue.StringValue("header")),
             ),
         ).apply {
-            a({ href = "/" }) { +"Dashboard" }
+            a({
+                booleanData("gamepad", true)
+                href = "/"
+            }) { +"Dashboard" }
             for (link in links) {
-                a({ href = link.first }) { +link.second }
+                a({
+                    booleanData("gamepad", true)
+                    href = link.first
+                }) { +link.second }
             }
         }.build()
     }
@@ -37,7 +43,7 @@ class HeaderComponent : Component {
                 left = "0"
                 right = "0"
 
-                zIndex = "1"
+                zIndex = "20"
 
                 display = CssDisplay.FLEX
                 flexDirection = CssFlexDirection.ROW

@@ -26,11 +26,13 @@ import dev.scriptor.ui.component
 import dev.scriptor.ui.css.builder.*
 import dev.scriptor.ui.html.builder.HtmlButtonElementType
 import dev.scriptor.ui.html.builder.HtmlInputElementType
-import dev.scriptor.ui.js.JsExpression
-import dev.scriptor.ui.js.JsString
+import dev.scriptor.ui.js.JsNull
+import dev.scriptor.ui.js.JsNull.minus
+import dev.scriptor.ui.js.JsSymbol
 import dev.scriptor.ui.js.builder.JsNodeBuilder
 import org.jetbrains.exposed.v1.core.SortOrder
 import java.net.URLDecoder
+import kotlin.math.cos
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
@@ -120,6 +122,27 @@ class DashboardRest {
             font = "inherit"
             color = "inherit"
             outline = "none"
+        }
+
+        define("#gamepad-overlay") {
+            display = CssDisplay.NONE
+            position = "fixed"
+            inset = "0"
+            zIndex = "2147483647"
+            cursor = "none"
+            pointerEvents = "auto"
+        }
+
+        define("html.gamepad-active") {
+            cursor = "none !important"
+
+            define("*") {
+                cursor = "none !important"
+            }
+
+            define("#gamepad-overlay") {
+                display = CssDisplay.BLOCK
+            }
         }
 
         define("body") {
@@ -229,38 +252,614 @@ class DashboardRest {
 
         define("select") {
             cursor = "pointer"
+
+            define("&.active") {
+                outline = "2px solid var(--color-foreground)"
+            }
         }
     }
 
-    fun <T> JsNodeBuilder<T>.emitShareUrl(title: JsExpression, url: JsExpression) {
-        emit(
+    fun <T> JsNodeBuilder<T>.emitGamepadNavigation() {
+        val selector = jsConst("selector", "[data-gamepad]")
+        val initialRepeatDelay = jsConst("initialRepeatDelay", 400)
+        val repeatInterval = jsConst("repeatInterval", 120)
+
+        val activeGamepad = jsLet("activeGamepad", JsNull)
+
+        val direction = jsLet("direction", JsNull)
+        val directionStarted = jsLet("directionStarted", 0)
+        val lastRepeat = jsLet("lastRepeat", 0)
+
+        val previousButtons = jsLet("previousButtons", jsArray())
+
+        val stickStart = jsConst("stickStart", 0.45)
+        val stickRelease = jsConst("stickRelease", 0.20)
+
+        val stickDirection = jsLet("stickDirection", JsNull)
+
+        val inputLocked = jsLet("inputLocked", true)
+
+        val selectEditing = jsLet("selectEditing", false)
+        val selectOriginalIndex = jsLet("selectOriginalIndex", -1)
+
+        val scrollDeadzone = jsConst("scrollDeadzone", 0.15)
+        val scrollSpeed = jsConst("scrollSpeed", 20)
+
+        val hideCursor = jsFunction(name = "hideCursor") {
+            emit(window.sessionStorage.setItem("gamepad-active", jsString("1")))
+            emit(document.documentElement.classList["add"](jsString("gamepad-active")))
+        }
+
+        val showCursor = jsFunction(name = "showCursor") {
+            emit(window.sessionStorage.removeItem("gamepad-active"))
+            emit(document.documentElement.classList["remove"](jsString("gamepad-active")))
+        }
+
+        jsIf(window.sessionStorage.getItem("gamepad-active") seq "1") {
+            emit(document.documentElement.classList["add"](jsString("gamepad-active")))
+        }
+
+        val getElements = jsFunction(name = "getElements") {
+            val elements = jsConst("elements", jsArray(document.querySelectorAll(selector).spread()))
+
+            jsReturn(
+                elements["filter"](
+                    jsFunction("element") { (element) ->
+                        jsIf(element["disabled"]) {
+                            jsReturn(false)
+                        }
+
+                        val style = jsConst("style", window["getComputedStyle"](element))
+
+                        jsIf(style["display"] seq "none") {
+                            jsReturn(false)
+                        }
+
+                        jsIf(style["visibility"] seq "hidden") {
+                            jsReturn(false)
+                        }
+
+                        jsIf(element["offsetParent"] seq JsNull) {
+                            jsReturn(false)
+                        }
+
+                        jsReturn(true)
+                    }
+                )
+            )
+        }
+
+        val center = jsFunction("rect", name = "center") { (rect) ->
+            jsReturn(
+                jsObject {
+                    this["x"] = rect["left"] + (rect["width"] / 2)
+                    this["y"] = rect["top"] + (rect["height"] / 2)
+                },
+            )
+        }
+
+        val changeSelect = jsFunction("select", "direction", name = "changeSelect") { (select, direction) ->
+            val options = jsConst("options", jsArray(select["options"].spread()))
+            val index = jsLet("index", select["selectedIndex"])
+
+            jsIf(index lt 0) {
+                emit(
+                    index assign jsTernary(
+                        direction gt 0,
+                        jsNumber(-1),
+                        options["length"],
+                    ),
+                )
+            }
+
+            jsWhile(jsBoolean(true)) {
+                emit(index assign index + direction)
+
+                jsIf((index lt 0) or (index gte options["length"])) {
+                    jsReturn()
+                }
+
+                jsIf(!options[index]["disabled"]) {
+                    jsBreak()
+                }
+            }
+
+            emit(select["selectedIndex"] assign index)
+        }
+
+        val enterSelect = jsFunction("select", name = "enterSelect") { (select) ->
+            emit(selectEditing assign true)
+            emit(selectOriginalIndex assign select["selectedIndex"])
+
+            emit(select["classList"]["add"](jsString("active")))
+        }
+
+        val submitSelect = jsFunction("select", name = "submitSelect") { (select) ->
+            emit(
+                select["dispatchEvent"](
+                    JsSymbol("Event").new(
+                        jsString("change"),
+                        jsObject {
+                            this["bubbles"] = jsBoolean(true)
+                        },
+                    ),
+                ),
+            )
+            emit(selectEditing assign false)
+            emit(selectOriginalIndex assign -1)
+
+            emit(select["classList"]["remove"](jsString("active")))
+        }
+
+        val cancelSelect = jsFunction("select", name = "cancelSelect") { (select) ->
+            emit(select["selectedIndex"] assign selectOriginalIndex)
+            emit(selectEditing assign false)
+            emit(selectOriginalIndex assign -1)
+
+            emit(select["classList"]["remove"](jsString("active")))
+        }
+
+        val focus = jsFunction("element", name = "focus") { (element) ->
+            emit(
+                element["focus"](
+                    jsObject {
+                        this["preventScroll"] = jsBoolean(false)
+                    },
+                ),
+            )
+        }
+
+        val navigate = jsFunction("dir", name = "navigate") { (dir) ->
+            emit(hideCursor())
+
+            val current = jsConst("current", document["activeElement"])
+
+            jsIf(selectEditing and (current instanceof JsSymbol("HTMLSelectElement"))) {
+                jsIf((dir seq "up") or (dir seq "left")) {
+                    emit(changeSelect(current, jsNumber(-1)))
+                    jsReturn()
+                }
+
+                jsIf((dir seq "down") or (dir seq "right")) {
+                    emit(changeSelect(current, jsNumber(1)))
+                    jsReturn()
+                }
+
+                jsReturn()
+            }
+
+            val elements = jsConst("elements", getElements())
+            val vertical = jsConst("vertical", (dir seq "up") or (dir seq "down"))
+
+            jsIf(!elements["length"]) {
+                jsReturn()
+            }
+
+            jsIf(!elements["includes"](current)) {
+                emit(focus(elements[0]))
+                jsReturn()
+            }
+
+            val rect = jsConst("rect", current["getBoundingClientRect"]())
+            val origin = jsConst("origin", center(rect))
+
+            val directionX = jsLet("directionX", 0)
+            val directionY = jsLet("directionY", 0)
+
+            jsSwitch(dir) {
+                case("left") {
+                    emit(directionX assign -1)
+                    jsBreak()
+                }
+
+                case("right") {
+                    emit(directionX assign 1)
+                    jsBreak()
+                }
+
+                case("up") {
+                    emit(directionY assign -1)
+                    jsBreak()
+                }
+
+                case("down") {
+                    emit(directionY assign 1)
+                    jsBreak()
+                }
+            }
+
+            val frustumCos = jsTernary(
+                vertical,
+                jsNumber(cos(Math.PI / 2.1)),
+                jsNumber(cos(Math.PI / 4)),
+            )
+
+            val candidates = jsConst("candidates", jsArray())
+
+            jsForEachConstOf("element", elements) { element ->
+                jsIf(element seq current) {
+                    jsContinue()
+                }
+
+                val candidateRect = jsConst("candidateRect", element["getBoundingClientRect"]())
+                val target = jsConst("target", center(candidateRect))
+
+                val dx = jsConst("dx", target["x"] - origin["x"])
+                val dy = jsConst("dy", target["y"] - origin["y"])
+
+                val length = jsConst("length", math.hypot(dx, dy))
+
+                jsIf(!length) {
+                    jsContinue()
+                }
+
+                val forward = jsConst("forward", ((dx * directionX) + (dy * directionY)) / length)
+
+                jsIf(forward lt frustumCos) {
+                    jsContinue()
+                }
+
+                val forwardDistance = jsLet("forwardDistance")
+                val sidewaysDistance = jsLet("sidewaysDistance")
+
+                jsIfElse(
+                    vertical,
+                    thenBlock = {
+                        emit(
+                            forwardDistance assign jsTernary(
+                                directionY gt 0,
+                                candidateRect["top"] - rect["bottom"],
+                                rect["top"] - candidateRect["bottom"],
+                            ),
+                        )
+                        emit(
+                            sidewaysDistance assign math.max(
+                                candidateRect["left"] - rect["right"],
+                                rect["left"] - candidateRect["right"],
+                                jsNumber(0),
+                            ),
+                        )
+                    },
+                    elseBlock = {
+                        emit(
+                            forwardDistance assign jsTernary(
+                                directionX gt 0,
+                                candidateRect["left"] - rect["right"],
+                                rect["left"] - candidateRect["right"],
+                            ),
+                        )
+                        emit(
+                            sidewaysDistance assign math.max(
+                                candidateRect["top"] - rect["bottom"],
+                                rect["top"] - candidateRect["bottom"],
+                                jsNumber(0),
+                            ),
+                        )
+                    },
+                )
+
+                emit(forwardDistance assign math.max(jsNumber(0), forwardDistance))
+
+                emit(
+                    candidates["push"](
+                        jsObject {
+                            this["element"] = element
+                            this["score"] = forwardDistance + (sidewaysDistance * 2)
+                        }
+                    ),
+                )
+            }
+
+            jsIf(!candidates["length"]) {
+                jsReturn()
+            }
+
+            emit(
+                candidates["sort"](
+                    jsFunction("a", "b") { (a, b) ->
+                        jsReturn(a["score"] - b["score"])
+                    },
+                ),
+            )
+
+            val target = jsConst("target", candidates[0]["element"])
+
+            emit(focus(target))
+        }
+
+        val buttonPressed = jsFunction("index", name = "buttonPressed") { (index) ->
+            jsReturn(!!(activeGamepad and activeGamepad["buttons"][index] and activeGamepad["buttons"][index]["pressed"]))
+        }
+
+        val allButtonsReleased = jsFunction(name = "allButtonsReleased") {
+            jsIf(!activeGamepad) {
+                jsReturn(true)
+            }
+
+            jsReturn(
+                activeGamepad["buttons"]["every"](
+                    jsFunction("button") { (button) ->
+                        jsReturn(!button["pressed"])
+                    },
+                ),
+            )
+        }
+
+        val justPressed = jsFunction("index", name = "justPressed") { (index) ->
+            jsIf(inputLocked) {
+                jsReturn(false)
+            }
+
+            val current = jsConst("current", buttonPressed(index))
+            val notPrevious = jsConst("notPrevious", !previousButtons[index])
+
+            jsReturn(current and notPrevious)
+        }
+
+        val getStickDirection = jsFunction("x", "y", name = "getStickDirection") { (x, y) ->
+            jsIf(stickDirection) {
+                val stillHeld = jsConst(
+                    "stillHeld",
+                    jsTernary(
+                        stickDirection seq "left",
+                        x lt -stickRelease,
+                        jsTernary(
+                            stickDirection seq "right",
+                            x gt stickRelease,
+                            jsTernary(
+                                stickDirection seq "up",
+                                y lt -stickRelease,
+                                jsTernary(
+                                    stickDirection seq "down",
+                                    y gt stickRelease,
+                                    jsBoolean(false),
+                                ),
+                            ),
+                        ),
+                    ),
+                )
+
+                jsIf(stillHeld) {
+                    jsReturn(stickDirection)
+                }
+
+                emit(stickDirection assign JsNull)
+            }
+
+            jsIf((math.abs(x) lt stickStart) and (math.abs(y) lt stickStart)) {
+                jsReturn(JsNull)
+            }
+
             jsIfElse(
-                window.navigator.share,
+                math.abs(x) gt math.abs(y),
                 thenBlock = {
                     emit(
-                        window.navigator.share(
-                            jsObject {
-                                this["title"] = title
-                                this["url"] = url
-                            },
+                        stickDirection assign jsTernary(
+                            x lt 0,
+                            jsString("left"),
+                            jsString("right"),
                         ),
                     )
                 },
                 elseBlock = {
                     emit(
-                        jsIfElse(
-                            window.navigator.clipboard,
-                            thenBlock = {
-                                emit(window.navigator.clipboard.writeText(url))
-                            },
-                            elseBlock = {
-                                emit(window.open(url))
-                            },
+                        stickDirection assign jsTernary(
+                            y lt 0,
+                            jsString("up"),
+                            jsString("down"),
                         ),
                     )
                 },
             )
-        )
+
+            jsReturn(stickDirection)
+        }
+
+        val getDirection = jsFunction(name = "getDirection") {
+            jsIf(!activeGamepad) {
+                jsReturn(JsNull)
+            }
+
+            val buttons = jsConst("buttons", activeGamepad["buttons"])
+
+            jsIf(buttons[12] and buttons[12]["pressed"]) {
+                jsReturn("up")
+            }
+
+            jsIf(buttons[13] and buttons[13]["pressed"]) {
+                jsReturn("down")
+            }
+
+            jsIf(buttons[14] and buttons[14]["pressed"]) {
+                jsReturn("left")
+            }
+
+            jsIf(buttons[15] and buttons[15]["pressed"]) {
+                jsReturn("right")
+            }
+
+            val x = jsConst("x", activeGamepad["axes"][0] or jsNumber(0))
+            val y = jsConst("y", activeGamepad["axes"][1] or jsNumber(0))
+
+            jsReturn(getStickDirection(x, y))
+        }
+
+        val processDirection = jsFunction("now", name = "processDirection") { (now) ->
+            val nextDirection = jsConst("nextDirection", getDirection())
+
+            jsIf(!nextDirection) {
+                emit(direction assign JsNull)
+                jsReturn()
+            }
+
+            jsIf(nextDirection sne direction) {
+                emit(direction assign nextDirection)
+                emit(directionStarted assign now)
+                emit(lastRepeat assign now)
+
+                emit(navigate(direction))
+                jsReturn()
+            }
+
+            jsIf(now - directionStarted lt initialRepeatDelay) {
+                jsReturn()
+            }
+
+            jsIf(now - lastRepeat gte repeatInterval) {
+                emit(lastRepeat assign now)
+                emit(navigate(direction))
+            }
+        }
+
+        val applyDeadzone = jsFunction("value", "deadzone", name = "applyDeadzone") { (value, deadzone) ->
+            jsIf(math.abs(value) lt deadzone) {
+                jsReturn(0)
+            }
+
+            val sign = jsConst("sign", math.sign(value))
+            val magnitude = jsConst("magnitude", (math.abs(value) - deadzone) / (1 - deadzone))
+
+            jsReturn(sign * magnitude)
+        }
+
+        val updateScroll = jsFunction("gamepad", name = "updateScroll") { (gamepad) ->
+            val x = jsLet("x", applyDeadzone(gamepad["axes"][2] or jsNumber(0), scrollDeadzone))
+            val y = jsLet("y", applyDeadzone(gamepad["axes"][3] or jsNumber(0), scrollDeadzone))
+
+            jsIf(!x and !y) {
+                jsReturn()
+            }
+
+            emit(hideCursor())
+
+            emit(x assign (math.sign(x) * x * x))
+            emit(y assign (math.sign(y) * y * y))
+
+            emit(
+                window.scrollBy(
+                    jsObject {
+                        this["left"] = x * scrollSpeed
+                        this["top"] = y * scrollSpeed
+                    }
+                )
+            )
+        }
+
+        val update = jsFunction("now", name = "update") { update, (now) ->
+            val pads = jsConst("pads", window.navigator.getGamepads())
+
+            jsIf(activeGamepad) {
+                val current = jsConst("current", pads[activeGamepad["index"]])
+
+                jsIf(current) {
+                    emit(activeGamepad assign current)
+                }
+            }
+
+            jsIf(activeGamepad) {
+                emit(updateScroll(activeGamepad))
+
+                jsIf(inputLocked) {
+                    jsIf(allButtonsReleased()) {
+                        emit(inputLocked assign false)
+
+                        emit(
+                            previousButtons assign activeGamepad["buttons"]["map"](
+                                jsFunction("button") { (button) ->
+                                    jsReturn(button["pressed"])
+                                },
+                            ),
+                        )
+                    }
+
+                    emit(window.requestAnimationFrame(update))
+                    jsReturn()
+                }
+
+                emit(processDirection(now))
+
+                jsIf(justPressed(jsNumber(0))) {
+                    emit(hideCursor())
+
+                    val current = jsConst("current", document["activeElement"])
+
+                    jsIfElse(
+                        current instanceof JsSymbol("HTMLSelectElement"),
+                        thenBlock = {
+                            jsIfElse(
+                                selectEditing,
+                                thenBlock = {
+                                    emit(submitSelect(current))
+                                },
+                                elseBlock = {
+                                    emit(enterSelect(current))
+                                },
+                            )
+                        },
+                        elseBlock = {
+                            emit(inputLocked assign true)
+                            emit(current["click"]())
+                        },
+                    )
+                }
+
+                jsIf(justPressed(jsNumber(1))) {
+                    emit(hideCursor())
+
+                    val current = jsConst("current", document["activeElement"])
+
+                    jsIfElse(
+                        selectEditing and (current instanceof JsSymbol("HTMLSelectElement")),
+                        thenBlock = {
+                            emit(cancelSelect(current))
+                        },
+                        elseBlock = {
+                            emit(inputLocked assign true)
+                            emit(window.history.back())
+                        },
+                    )
+                }
+
+                emit(
+                    previousButtons assign activeGamepad["buttons"]["map"](
+                        jsFunction("button") { (button) ->
+                            jsReturn(button["pressed"])
+                        },
+                    ),
+                )
+            }
+
+            emit(window.requestAnimationFrame(update))
+        }
+
+        emit(window.addEventListener("gamepadconnected", jsFunction("event") { (event) ->
+            emit(activeGamepad assign event["gamepad"])
+
+            emit(console.log(jsString("gamepad connected:"), activeGamepad["id"]))
+
+            val first = jsConst("first", getElements()[0])
+
+            jsIf(first and !(document["activeElement"] and document["activeElement"]["matches"](selector))) {
+                emit(focus(first))
+            }
+        }))
+
+        emit(window.addEventListener("gamepaddisconnected", jsFunction("event") { (event) ->
+            jsIf(activeGamepad and (activeGamepad["index"] seq event["gamepad"]["index"])) {
+                emit(activeGamepad assign JsNull)
+                emit(direction assign JsNull)
+                emit(stickDirection assign JsNull)
+                emit(previousButtons assign jsArray())
+            }
+        }))
+
+        val overlay = document.getElementById("gamepad-overlay")
+
+        emit(overlay.addEventListener("mousemove", jsFunction {
+            emit(showCursor())
+        }))
+
+        emit(window.requestAnimationFrame(update))
     }
 
     fun <T> JsNodeBuilder<T>.emitPlayback(
@@ -269,33 +868,45 @@ class DashboardRest {
         title: String,
         playlist: String = "playlist.m3u8",
     ) {
-        val response = window.fetch(
-            "/resource/$resource/${id}/playback",
-            jsObject {
-                this["method"] = jsString("post")
-            },
-        )
+        val result = window
+            .fetch(
+                "/resource/$resource/${id}/playback",
+                jsObject {
+                    this["method"] = jsString("post")
+                },
+            )
+            .then { (response) ->
+                jsReturn(response["text"]())
+            }
+            .then { (text) ->
+                val origin = window.location.origin
+                val url = jsFormat("", "/resource/playback/", "/$playlist", values = listOf(origin, text))
 
-        val responseToText = jsFunction("response") { (response) ->
-            emit(jsReturn(response["text"]()))
-        }
+                jsReturn(url)
+            }
+            .then { (url) ->
+                jsIf(window.navigator.share) {
+                    emit(
+                        window.navigator.share(
+                            jsObject {
+                                this["title"] = jsString(title)
+                                this["url"] = url
+                            },
+                        ),
+                    )
+                    jsReturn()
+                }
 
-        val text = response["then"](responseToText)
+                jsIf(window.navigator.clipboard) {
+                    // TODO: display message popup
+                    emit(window.navigator.clipboard.writeText(url))
+                    jsReturn()
+                }
 
-        val textToUrl = jsFunction("text") { (text) ->
-            val origin = window.location.origin
-            val url = jsFormat("", "/resource/playback/", "/$playlist", values = listOf(origin, text))
+                emit(window.open(url))
+            }
 
-            emit(jsReturn(url))
-        }
-
-        val url = text["then"](textToUrl)
-
-        val callback = jsFunction("url") { (url) ->
-            emitShareUrl(JsString(title), url)
-        }
-
-        emit(url["then"](callback))
+        emit(result)
     }
 
     @Public
@@ -365,6 +976,8 @@ class DashboardRest {
                     title("Dashboard")
                 }
                 body {
+                    div({ this.id = "gamepad-overlay" })
+
                     main {
                         h1 { +"Dashboard" }
                         h2 { +"Welcome back${if (user != null) ", ${user.name}" else ""}" }
@@ -446,6 +1059,10 @@ class DashboardRest {
                 }
             }
 
+            script {
+                emitGamepadNavigation()
+            }
+
             style {
                 globalStyle()
 
@@ -519,6 +1136,8 @@ class DashboardRest {
                 }
 
                 body {
+                    div({ this.id = "gamepad-overlay" })
+
                     main {
                         h1 { +"Login" }
 
@@ -531,6 +1150,7 @@ class DashboardRest {
                                 label {
                                     span { +"Username" }
                                     input {
+                                        booleanData("gamepad", true)
                                         type = HtmlInputElementType.TEXT
                                         name = "username"
                                         autoComplete = "username"
@@ -540,6 +1160,7 @@ class DashboardRest {
                                 label {
                                     span { +"Password" }
                                     input {
+                                        booleanData("gamepad", true)
                                         type = HtmlInputElementType.PASSWORD
                                         name = "password"
                                         autoComplete = "current-password"
@@ -547,12 +1168,19 @@ class DashboardRest {
                                     }
                                 }
                             }
-                            button({ type = HtmlButtonElementType.SUBMIT }) {
+                            button({
+                                booleanData("gamepad", true)
+                                type = HtmlButtonElementType.SUBMIT
+                            }) {
                                 +"Login"
                             }
                         }
                     }
                 }
+            }
+
+            script {
+                emitGamepadNavigation()
             }
 
             style {
@@ -603,6 +1231,8 @@ class DashboardRest {
                 }
 
                 body {
+                    div({ this.id = "gamepad-overlay" })
+
                     +component(::HeaderComponent) {}
 
                     main {
@@ -628,6 +1258,10 @@ class DashboardRest {
                 }
             }
 
+            script {
+                emitGamepadNavigation()
+            }
+
             style {
                 globalStyle()
             }
@@ -649,6 +1283,8 @@ class DashboardRest {
                 }
 
                 body {
+                    div({ this.id = "gamepad-overlay" })
+
                     +component(::HeaderComponent) {
                         links = listOf(
                             "/movie" to "Movies",
@@ -681,7 +1317,10 @@ class DashboardRest {
                         }
 
                         p {
-                            button({ type = HtmlButtonElementType.BUTTON }) {
+                            button({
+                                booleanData("gamepad", true)
+                                type = HtmlButtonElementType.BUTTON
+                            }) {
                                 +"Play"
 
                                 on("click") {
@@ -695,6 +1334,10 @@ class DashboardRest {
                         }
                     }
                 }
+            }
+
+            script {
+                emitGamepadNavigation()
             }
 
             style {
@@ -768,6 +1411,8 @@ class DashboardRest {
                 }
 
                 body {
+                    div({ this.id = "gamepad-overlay" })
+
                     +component(::HeaderComponent) {}
 
                     main {
@@ -791,6 +1436,10 @@ class DashboardRest {
                         }
                     }
                 }
+            }
+
+            script {
+                emitGamepadNavigation()
             }
 
             style {
@@ -867,6 +1516,8 @@ class DashboardRest {
                 }
 
                 body {
+                    div({ this.id = "gamepad-overlay" })
+
                     +component(::HeaderComponent) {
                         links = listOf(
                             "/show" to "Shows",
@@ -894,7 +1545,10 @@ class DashboardRest {
                         p {
                             label({ htmlClass = "view" }) {
                                 span { +"Select Episode Order" }
-                                select({ name = "view" }) {
+                                select({
+                                    booleanData("gamepad", true)
+                                    name = "view"
+                                }) {
                                     option({
                                         value = ""
                                         selected = viewGroup == null
@@ -946,6 +1600,10 @@ class DashboardRest {
                         }
                     }
                 }
+            }
+
+            script {
+                emitGamepadNavigation()
             }
 
             style {
@@ -1042,6 +1700,8 @@ class DashboardRest {
                 }
 
                 body {
+                    div({ this.id = "gamepad-overlay" })
+
                     +component(::HeaderComponent) {
                         links = listOf(
                             "/show" to "Shows",
@@ -1069,7 +1729,10 @@ class DashboardRest {
                                 }
 
                                 p {
-                                    button({ type = HtmlButtonElementType.BUTTON }) {
+                                    button({
+                                        booleanData("gamepad", true)
+                                        type = HtmlButtonElementType.BUTTON
+                                    }) {
                                         +"Play all"
 
                                         on("click") {
@@ -1107,6 +1770,10 @@ class DashboardRest {
                 }
             }
 
+            script {
+                emitGamepadNavigation()
+            }
+
             style {
                 globalStyle()
 
@@ -1124,6 +1791,8 @@ class DashboardRest {
                         maxHeight = "400px"
 
                         objectFit = "contain"
+
+                        flexShrink = "0"
                     }
                 }
 
@@ -1160,6 +1829,8 @@ class DashboardRest {
                 }
 
                 body {
+                    div({ this.id = "gamepad-overlay" })
+
                     +component(::HeaderComponent) {
                         links = listOf(
                             "/show" to "Shows",
@@ -1173,7 +1844,10 @@ class DashboardRest {
                                 h1 { +group.title }
 
                                 p {
-                                    button({ type = HtmlButtonElementType.BUTTON }) {
+                                    button({
+                                        booleanData("gamepad", true)
+                                        type = HtmlButtonElementType.BUTTON
+                                    }) {
                                         +"Play all"
 
                                         on("click") {
@@ -1209,6 +1883,10 @@ class DashboardRest {
                         }
                     }
                 }
+            }
+
+            script {
+                emitGamepadNavigation()
             }
 
             style {
@@ -1251,6 +1929,8 @@ class DashboardRest {
                 }
 
                 body {
+                    div({ this.id = "gamepad-overlay" })
+
                     +component(::HeaderComponent) {
                         links = listOf(
                             "/show" to "Shows",
@@ -1279,7 +1959,10 @@ class DashboardRest {
                                 }
 
                                 p {
-                                    button({ type = HtmlButtonElementType.BUTTON }) {
+                                    button({
+                                        booleanData("gamepad", true)
+                                        type = HtmlButtonElementType.BUTTON
+                                    }) {
                                         +"Play"
 
                                         on("click") {
@@ -1296,6 +1979,10 @@ class DashboardRest {
                         }
                     }
                 }
+            }
+
+            script {
+                emitGamepadNavigation()
             }
 
             style {
@@ -1351,6 +2038,8 @@ class DashboardRest {
                 }
 
                 body {
+                    div({ this.id = "gamepad-overlay" })
+
                     +component(::HeaderComponent) {}
 
                     main {
@@ -1367,6 +2056,10 @@ class DashboardRest {
                         }
                     }
                 }
+            }
+
+            script {
+                emitGamepadNavigation()
             }
 
             style {
@@ -1390,6 +2083,8 @@ class DashboardRest {
                 }
 
                 body {
+                    div({ this.id = "gamepad-overlay" })
+
                     +component(::HeaderComponent) {
                         links = listOf(
                             "/other" to "Others",
@@ -1400,7 +2095,10 @@ class DashboardRest {
                         h1 { +other.title }
 
                         p {
-                            button({ type = HtmlButtonElementType.BUTTON }) {
+                            button({
+                                booleanData("gamepad", true)
+                                type = HtmlButtonElementType.BUTTON
+                            }) {
                                 +"Play"
 
                                 on("click") {
@@ -1415,6 +2113,10 @@ class DashboardRest {
                         }
                     }
                 }
+            }
+
+            script {
+                emitGamepadNavigation()
             }
 
             style {
@@ -1448,18 +2150,27 @@ class DashboardRest {
                 }
 
                 body {
+                    div({ this.id = "gamepad-overlay" })
+
                     main {
                         h1 { +"404" }
                         h2 { +"Not Found" }
 
                         p { +"The requested resource does not exist." }
                         p {
-                            a({ href = "/" }) {
+                            a({
+                                booleanData("gamepad", true)
+                                href = "/"
+                            }) {
                                 +"Dashboard"
                             }
                         }
                     }
                 }
+            }
+
+            script {
+                emitGamepadNavigation()
             }
 
             style {
