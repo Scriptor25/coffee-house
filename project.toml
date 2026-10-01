@@ -1,0 +1,12 @@
+name = "coffee-house"
+
+[artifact]
+group = "dev.scriptor"
+name = "coffee-house"
+version = "1.0.0"
+
+[modules]
+include = ["."]
+
+[repositories]
+maven = ["https://repo1.maven.org/maven2/"]
