@@ -306,6 +306,8 @@ fun getFileMetadata(
 
                 // TODO: Attachment.new { ... }
             }
+
+            else -> Unit
         }
     }
 
@@ -938,6 +940,8 @@ fun walkFileTree(log: Logger, root: Path): Nodes {
                     showSeasons.add(seasonNode)
                     seasonPath = null
                 }
+
+                else -> Unit
             }
 
             FileVisitResult.CONTINUE
@@ -1113,6 +1117,7 @@ fun main() {
             host == null && port != null -> bind(port)
             host != null && port == null -> bind(host, 0)
             host != null && port != null -> bind(host, port)
+            else -> Unit
         }
 
         authenticator = HeaderAuthenticator(
