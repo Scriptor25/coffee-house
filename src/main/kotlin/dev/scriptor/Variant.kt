@@ -12,7 +12,7 @@ sealed interface Variant {
     val name: String
 }
 
-class OriginalVariant : Variant {
+data object OriginalVariant : Variant {
     override val name: String = "original"
 }
 

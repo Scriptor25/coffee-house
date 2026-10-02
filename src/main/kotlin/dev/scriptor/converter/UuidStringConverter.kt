@@ -7,5 +7,5 @@ import kotlin.uuid.Uuid
 class UuidStringConverter : Converter<Uuid, String> {
 
     context(provider: Provider?)
-    override fun convert(value: Uuid): String = value.toHexDashString()
+    override fun convert(value: Uuid): String = value.toString()
 }

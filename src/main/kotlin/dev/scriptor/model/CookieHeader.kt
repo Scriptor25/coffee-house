@@ -2,6 +2,16 @@ package dev.scriptor.model
 
 class CookieHeader {
 
+    companion object {
+        fun parse(value: String): CookieHeader {
+            val values = value
+                .split(";")
+                .map { it.trim().split("=", limit = 2) }
+                .associate { it[0] to it[1] }
+            return CookieHeader(values)
+        }
+    }
+
     private val values: MutableMap<String, String>
 
     constructor() {

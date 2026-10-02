@@ -1,58 +1,35 @@
 package dev.scriptor.rest
 
-import dev.scriptor.context.AuthContext
 import dev.scriptor.context.PlaybackContext
-import dev.scriptor.model.AuthorizationHeader
+import dev.scriptor.db
 import dev.scriptor.model.OffsetLimitBody
+import dev.scriptor.model.PlaybackItem
 import dev.scriptor.model.show.Episode
 import dev.scriptor.model.show.Season
 import dev.scriptor.server.NotFoundSignal
-import dev.scriptor.server.UnauthorizedSignal
 import dev.scriptor.server.jvm.annotation.*
-import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import java.util.logging.Logger
+import dev.scriptor.server.security.Principal
 import kotlin.uuid.Uuid
 
-@Suppress("unused")
+@RequireAuth
 @Controller("/resource/season")
 class SeasonRest {
 
     @Get("/[id]", "application/json")
-    context(
-        _: Logger,
-        database: Database,
-        auth: AuthContext,
-    )
-    fun getSeason(
-        @PathParameter id: Uuid,
-        @Header authorization: AuthorizationHeader? = null,
-    ): Season {
-        auth.auth(authorization)
-            ?: throw UnauthorizedSignal()
-
-        return transaction(database) { Season.findById(id) }
+    fun getSeason(@PathParameter id: Uuid): Season {
+        return db { Season.findById(id) }
             ?: throw NotFoundSignal()
     }
 
     @Post("/[id]/episodes", "application/json", "application/json")
-    context(
-        _: Logger,
-        database: Database,
-        auth: AuthContext,
-    )
     fun getSeasonEpisodes(
         @PathParameter id: Uuid,
-        @Header authorization: AuthorizationHeader? = null,
         @Body body: OffsetLimitBody = OffsetLimitBody(),
     ): List<Episode> {
-        auth.auth(authorization)
-            ?: throw UnauthorizedSignal()
-
-        val season = transaction(database) { Season.findById(id) }
+        val season = db { Season.findById(id) }
             ?: throw NotFoundSignal()
 
-        return transaction(database) {
+        return db {
             season.episodes
                 .offset(body.offset)
                 .limit(body.limit)
@@ -61,28 +38,19 @@ class SeasonRest {
     }
 
     @Post("/[id]/playback", "*/*", "text/plain")
-    context(
-        _: Logger,
-        database: Database,
-        auth: AuthContext,
-        context: PlaybackContext,
-    )
-    fun createSeasonPlayback(
-        @PathParameter id: Uuid,
-        @Header authorization: AuthorizationHeader? = null,
-    ): String {
-        val session = auth.auth(authorization)
-            ?: throw UnauthorizedSignal()
-
-        val userId = session.user?.id?.value
-
-        val season = transaction(database) { Season.findById(id) }
+    context(principal: Principal, context: PlaybackContext)
+    fun createSeasonPlayback(@PathParameter id: Uuid): String {
+        val season = db { Season.findById(id) }
             ?: throw NotFoundSignal()
 
-        val items = transaction(database) { season.episodes.map { it.media.id.value } }
+        val items = db {
+            season.episodes.map {
+                PlaybackItem(it.media.id.value, it.title)
+            }
+        }
 
         return context.createPlayback(
-            userId,
+            principal.id,
             season.title,
             items,
         )

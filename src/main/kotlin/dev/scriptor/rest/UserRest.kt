@@ -1,7 +1,6 @@
 package dev.scriptor.rest
 
-import dev.scriptor.context.AuthContext
-import dev.scriptor.model.AuthorizationHeader
+import dev.scriptor.db
 import dev.scriptor.model.CreateUserBody
 import dev.scriptor.model.OffsetLimitBody
 import dev.scriptor.model.UpdateUserBody
@@ -9,35 +8,18 @@ import dev.scriptor.model.user.User
 import dev.scriptor.model.user.UserRole
 import dev.scriptor.server.ForbiddenSignal
 import dev.scriptor.server.NotFoundSignal
-import dev.scriptor.server.UnauthorizedSignal
 import dev.scriptor.server.jvm.annotation.*
-import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import java.util.logging.Logger
+import dev.scriptor.server.security.Principal
 import kotlin.uuid.Uuid
 
-@Suppress("unused")
+@RequireAuth
 @Controller("/resource/user")
 class UserRest {
 
+    @RequireRole(UserRole.ADMIN)
     @Post("/", "application/json", "application/json")
-    context(
-        _: Logger,
-        database: Database,
-        auth: AuthContext,
-    )
-    fun createUser(
-        @Header authorization: AuthorizationHeader? = null,
-        @Body body: CreateUserBody,
-    ): User {
-        val session = auth.auth(authorization)
-            ?: throw UnauthorizedSignal()
-
-        if (session.role != UserRole.ADMIN) {
-            throw ForbiddenSignal()
-        }
-
-        return transaction(database) {
+    fun createUser(@Body body: CreateUserBody): User {
+        return db {
             User.new {
                 this.name = body.username
                 this.hash = body.password // TODO: generate password hash
@@ -47,47 +29,29 @@ class UserRest {
     }
 
     @Get("/[id]", "application/json")
-    context(
-        _: Logger,
-        database: Database,
-        auth: AuthContext,
-    )
-    fun getUser(
-        @PathParameter id: Uuid,
-        @Header authorization: AuthorizationHeader? = null,
-    ): User {
-        val session = auth.auth(authorization)
-            ?: throw UnauthorizedSignal()
-
-        if (session.role != UserRole.ADMIN && session.id != id) {
+    context(principal: Principal)
+    fun getUser(@PathParameter id: Uuid): User {
+        if (UserRole.ADMIN !in principal.roles && principal.id != id) {
             throw ForbiddenSignal()
         }
 
-        return transaction(database) { User.findById(id) }
+        return db { User.findById(id) }
             ?: throw NotFoundSignal()
     }
 
     @Put("/[id]", "application/json", "application/json")
-    context(
-        _: Logger,
-        database: Database,
-        auth: AuthContext,
-    )
+    context(principal: Principal)
     fun updateUser(
         @PathParameter id: Uuid,
-        @Header authorization: AuthorizationHeader? = null,
         @Body body: UpdateUserBody,
     ): User {
-        val session = auth.auth(authorization)
-            ?: throw UnauthorizedSignal()
-
-        if (session.role != UserRole.ADMIN && session.id != id) {
+        if (UserRole.ADMIN !in principal.roles && principal.id != id) {
             throw ForbiddenSignal()
         }
 
         // TODO: route for updating password
 
-        return transaction(database) {
+        return db {
             User.findByIdAndUpdate(id) {
                 it.name = body.username
                 it.role = body.role
@@ -96,23 +60,13 @@ class UserRest {
     }
 
     @Delete("/[id]", "application/json")
-    context(
-        _: Logger,
-        database: Database,
-        auth: AuthContext,
-    )
-    fun deleteUser(
-        @PathParameter id: Uuid,
-        @Header authorization: AuthorizationHeader? = null,
-    ): User {
-        val session = auth.auth(authorization)
-            ?: throw UnauthorizedSignal()
-
-        if (session.role != UserRole.ADMIN && session.id != id) {
+    context(principal: Principal)
+    fun deleteUser(@PathParameter id: Uuid): User {
+        if (UserRole.ADMIN !in principal.roles && principal.id != id) {
             throw ForbiddenSignal()
         }
 
-        return transaction(database) {
+        return db {
             User.findByIdAndUpdate(id) {
                 it.delete()
             }
@@ -120,20 +74,10 @@ class UserRest {
     }
 
     @Post("/list", "application/json", "application/json")
-    context(
-        _: Logger,
-        database: Database,
-        auth: AuthContext,
-    )
-    fun getUserList(
-        @Header authorization: AuthorizationHeader? = null,
-        @Body body: OffsetLimitBody = OffsetLimitBody(),
-    ): List<User> {
-        val session = auth.auth(authorization)
-            ?: throw UnauthorizedSignal()
-
-        return when (session.role) {
-            UserRole.ADMIN -> transaction(database) {
+    context(principal: Principal)
+    fun getUserList(@Body body: OffsetLimitBody = OffsetLimitBody()): List<User> {
+        return when {
+            UserRole.ADMIN in principal.roles -> db {
                 User
                     .all()
                     .offset(body.offset)
@@ -141,8 +85,8 @@ class UserRest {
                     .toList()
             }
 
-            UserRole.USER -> {
-                val self = transaction(database) { User.findById(session.id!!) }
+            else -> {
+                val self = db { User.findById(principal.id) }
                 listOfNotNull(self)
             }
         }

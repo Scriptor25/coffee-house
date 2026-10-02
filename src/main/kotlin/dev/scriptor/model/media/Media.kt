@@ -83,16 +83,16 @@ class Media(id: EntityID<Uuid>) : UuidEntity(id) {
     var duration by MediaTable.duration
 
     @JsonProperty
-    val video by VideoTrack referrersOn VideoTrackTable.media
+    val video by VideoTrack referrersOn VideoTrackTable.media orderBy VideoTrackTable.index
 
     @JsonProperty
-    val audio by AudioTrack referrersOn AudioTrackTable.media
+    val audio by AudioTrack referrersOn AudioTrackTable.media orderBy AudioTrackTable.index
 
     @JsonProperty
-    val subtitles by SubtitleTrack referrersOn SubtitleTrackTable.media
+    val subtitles by SubtitleTrack referrersOn SubtitleTrackTable.media orderBy SubtitleTrackTable.index
 
     @JsonProperty
-    val chapters by Chapter referrersOn ChapterTable.media
+    val chapters by Chapter referrersOn ChapterTable.media orderBy ChapterTable.index
 
     override fun toString(): String {
         return "Media(id=$id, path=$path, size=$size, title=$title, createdAt=$createdAt, modifiedAt=$modifiedAt, duration=$duration)"
