@@ -20,7 +20,7 @@ class TranscodingCache(
     private val base: Path,
     private val requirements: TranscodingRequirements,
     private val allowed: Set<String> = setOf("2160p", "1440p", "1080p", "720p", "480p", "360p", "144p"),
-) : AutoCloseable {
+) {
     private val definedVariants: List<Variant> = listOf(
         ScaleVariant("2160p", 3840, 2160, 16_000_000L, Profile.HIGH),
         ScaleVariant("1440p", 2560, 1440, 8_000_000L, Profile.HIGH),
@@ -31,6 +31,7 @@ class TranscodingCache(
         ScaleVariant("144p", 256, 144, 300_000L, Profile.POTATO),
     )
 
+    private val group = ThreadGroup("transcoding")
     private val jobs: MutableMap<Uuid, TranscodingJob> = ConcurrentHashMap()
 
     fun variants(item: VideoTrack): List<Variant> {
@@ -74,11 +75,6 @@ class TranscodingCache(
         }
 
         return result
-    }
-
-    override fun close() {
-        for (job in jobs.values)
-            job.close()
     }
 
     private fun createBackend(device: Device?, input: Codec, output: Codec): VideoBackend {
@@ -212,6 +208,7 @@ class TranscodingCache(
             }
 
             TranscodingJob(
+                group,
                 ffmpeg,
                 item,
                 video,

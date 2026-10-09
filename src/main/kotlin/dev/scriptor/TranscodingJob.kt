@@ -5,10 +5,10 @@ import dev.scriptor.model.media.Media
 import dev.scriptor.model.media.VideoTrack
 import java.nio.file.Path
 import java.util.logging.Logger
-import kotlin.io.path.createDirectories
-import kotlin.io.path.notExists
+import kotlin.io.path.*
 
 data class TranscodingJob(
+    val group: ThreadGroup,
     val ffmpeg: String,
     val metadata: Media,
     val video: VideoTrack?,
@@ -17,10 +17,12 @@ data class TranscodingJob(
     val enable: Boolean,
     val device: String?,
     val pipeline: Pipeline,
-) : AutoCloseable {
+) {
     private enum class State {
         CREATED,
-        RUNNING,
+        WAITING,
+        PRE_PROCESSING,
+        PROCESSING,
         FINISHED,
         FAILED,
     }
@@ -30,55 +32,76 @@ data class TranscodingJob(
     }
 
     private val id = next++
-    private val command = buildCommand()
+    private val lock = Object()
 
     @Volatile
     private var state: State = State.CREATED
 
     @Volatile
-    private lateinit var process: Process
+    private lateinit var work: Path
 
     context(_: Logger)
     fun master(): Path =
-        waitFor(cache.resolve("master.m3u8"))
+        waitFor(cache / "master.m3u8")
 
     context(_: Logger)
     fun index(name: String): Path =
-        waitFor(cache.resolve(name).resolve("index.m3u8"))
+        waitFor(cache / name / "index.m3u8")
 
     context(_: Logger)
     fun segment(name: String, segment: String): Path =
-        waitFor(cache.resolve(name).resolve("$segment.mp4"))
+        waitFor(cache / name / "$segment.mp4")
 
-    override fun close() {
-        process.close()
+    context(_: Logger)
+    private fun run() {
+        cache.createDirectories()
+
+        state = State.PRE_PROCESSING
+        if (!preProcess()) {
+            state = State.FAILED
+            return
+        }
+
+        state = State.PROCESSING
+        if (!process()) {
+            state = State.FAILED
+            return
+        }
+
+        state = State.FINISHED
     }
 
     @Synchronized
-    context(parent: Logger)
+    context(_: Logger)
     private fun start() {
-        if (state == State.RUNNING || state == State.FINISHED) return
+        if (state != State.CREATED)
+            return
 
-        state = State.RUNNING
+        state = State.WAITING
 
-        cache.createDirectories()
+        Thread(group) {
+            db { run() }
 
-        process = start(command, "ffmpeg-$id")
+            synchronized(lock) {
+                lock.notify()
+            }
+        }.start()
     }
 
     context(_: Logger)
     private fun waitFor(path: Path): Path {
         while (path.notExists()) {
-            if (state == State.RUNNING && !process.isAlive) {
-                state =
-                    if (process.exitValue() == 0)
-                        State.FINISHED
-                    else State.FAILED
-            }
-
             when (state) {
                 State.CREATED -> start()
-                State.RUNNING -> Thread.sleep(10)
+
+                State.WAITING,
+                State.PRE_PROCESSING,
+                State.PROCESSING -> {
+                    synchronized(lock) {
+                        lock.wait()
+                    }
+                }
+
                 State.FINISHED -> break
                 State.FAILED -> error("transcoding job $id failed")
             }
@@ -91,7 +114,37 @@ data class TranscodingJob(
         return path
     }
 
-    private fun buildCommand(): List<String> {
+    context(log: Logger)
+    private fun preProcess(): Boolean {
+        work = createTempDirectory()
+
+        if (metadata.subtitles.empty())
+            return true
+
+        val command = listOf(
+            "seconv",
+            metadata.path.absolutePathString(),
+            "subrip",
+            "--ocr-engine:tesseract",
+            "--output-folder:${work.absolutePathString()}",
+            "--overwrite"
+        )
+
+        val code = start(command, "preprocess-$id").waitFor()
+        if (code != 0) {
+            return false
+        }
+
+        val paths = work
+            .listDirectoryEntries()
+            .filter { path -> path.isRegularFile() && path.name.endsWith(".srt", ignoreCase = true) }
+            .sorted()
+
+        return true
+    }
+
+    context(log: Logger)
+    private fun process(): Boolean {
         val outputs = outputs(metadata) {
             if (video != null) {
                 video(video) {
@@ -137,18 +190,18 @@ data class TranscodingJob(
                 }
             }
 
-            metadata.subtitles.filter {
-                // TODO: HLS does not support bitmap subtitles?
-                // TODO: use ocr filter for preprocessing bitmap subtitles
+            metadata.subtitles.forEach {
                 when (it.codec.id.value) {
                     CodecId("subrip"),
                     CodecId("ass"),
                     CodecId("ssa"),
-                    CodecId("webvtt") -> true
+                    CodecId("webvtt") -> Unit
 
-                    else -> false
+                    else -> {
+                        // TODO: require bitmap-to-text first
+                    }
                 }
-            }.forEach {
+
                 subtitle(it) {
                     if (enable) {
                         transcode()
@@ -159,7 +212,7 @@ data class TranscodingJob(
             }
         }
 
-        return CommandBuilder(
+        val command = CommandBuilder(
             ffmpeg,
             enable,
             device,
@@ -168,5 +221,13 @@ data class TranscodingJob(
             outputs,
             pipeline,
         ).build()
+
+        val code = start(command, "process-$id").waitFor()
+        if (code != 0) {
+            log.warning("process $id failed with exit code $code")
+            return false
+        }
+
+        return true
     }
 }
