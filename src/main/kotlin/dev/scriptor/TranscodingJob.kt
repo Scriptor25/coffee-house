@@ -17,7 +17,7 @@ data class TranscodingJob(
     val enable: Boolean,
     val device: String?,
     val pipeline: Pipeline,
-) {
+) : AutoCloseable {
     private enum class State {
         CREATED,
         RUNNING,
@@ -49,6 +49,10 @@ data class TranscodingJob(
     context(_: Logger)
     fun segment(name: String, segment: String): Path =
         waitFor(cache.resolve(name).resolve("$segment.mp4"))
+
+    override fun close() {
+        process.close()
+    }
 
     @Synchronized
     context(parent: Logger)
