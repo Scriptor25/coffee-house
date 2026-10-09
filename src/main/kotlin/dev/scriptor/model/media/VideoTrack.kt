@@ -12,9 +12,9 @@ import org.jetbrains.exposed.v1.dao.UuidEntityClass
 import kotlin.uuid.Uuid
 
 object VideoTrackTable : UuidTable("video_track") {
-    val media = reference("media_id", MediaTable, ReferenceOption.CASCADE)
+    val media = reference("media_id", MediaTable, onDelete = ReferenceOption.CASCADE)
     val index = integer("index")
-    val codec = reference("codec", CodecTable, ReferenceOption.CASCADE)
+    val codec = reference("codec_id", CodecTable, onDelete = ReferenceOption.CASCADE)
     val width = integer("width")
     val height = integer("height")
     val bitRate = long("bit_rate")

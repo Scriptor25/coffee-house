@@ -12,7 +12,7 @@ import kotlin.uuid.Uuid
 
 object SeasonTable : UuidTable("season") {
     val path = path("path").uniqueIndex()
-    val show = reference("show_id", ShowTable, ReferenceOption.CASCADE)
+    val show = reference("show_id", ShowTable, onDelete = ReferenceOption.CASCADE)
     val index = integer("index")
     val title = text("title")
     val description = text("description").nullable()

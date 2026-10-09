@@ -14,8 +14,8 @@ import kotlin.uuid.Uuid
 
 object EpisodeTable : UuidTable("episode") {
     val path = path("path").uniqueIndex()
-    val season = reference("season_id", SeasonTable, ReferenceOption.CASCADE)
-    val media = reference("media_id", MediaTable, ReferenceOption.CASCADE)
+    val season = reference("season_id", SeasonTable, onDelete = ReferenceOption.CASCADE)
+    val media = reference("media_id", MediaTable, onDelete = ReferenceOption.CASCADE)
     val index = integer("index")
     val title = text("title")
     val description = text("description").nullable()

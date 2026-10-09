@@ -3,18 +3,26 @@ package dev.scriptor
 import dev.scriptor.backend.VideoBackend
 import dev.scriptor.decoder.video.VideoDecoder
 import dev.scriptor.encoder.video.VideoEncoder
+import dev.scriptor.model.Transcoding
+import dev.scriptor.model.TranscodingState
+import dev.scriptor.model.TranscodingTable
 import dev.scriptor.model.ffmpeg.Capabilities
 import dev.scriptor.model.ffmpeg.Codec
 import dev.scriptor.model.ffmpeg.Device
 import dev.scriptor.model.ffmpeg.DeviceBackend
 import dev.scriptor.model.media.Media
 import dev.scriptor.model.media.VideoTrack
+import org.jetbrains.exposed.v1.core.eq
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 import java.util.logging.Logger
+import kotlin.io.path.ExperimentalPathApi
+import kotlin.io.path.deleteRecursively
+import kotlin.io.path.div
+import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
-class TranscodingCache(
+class TranscodingManager(
     private val log: Logger,
     private val ffmpeg: String,
     private val base: Path,
@@ -32,9 +40,9 @@ class TranscodingCache(
     )
 
     private val group = ThreadGroup("transcoding")
-    private val jobs: MutableMap<Uuid, TranscodingJob> = ConcurrentHashMap()
+    private val tasks: MutableMap<Uuid, TranscodingTask> = ConcurrentHashMap()
 
-    fun variants(item: VideoTrack): List<Variant> {
+    private fun variants(item: VideoTrack): List<Variant> {
         val sourceWidth = item.width - (item.width % 2)
         val sourceHeight = item.height - (item.height % 2)
 
@@ -145,42 +153,43 @@ class TranscodingCache(
         }
     }
 
-    fun job(item: Media): TranscodingJob = jobs.computeIfAbsent(item.id.value) {
-        db {
-            val video = item.video.firstOrNull { it.index == 0 }
+    private fun createNewTranscodingTask(media: Media, path: Path): NewTranscodingTask {
+        lateinit var variants: List<Variant>
+        lateinit var pipeline: Pipeline
 
-            val variants: List<Variant>
-            val pipeline: Pipeline
+        val video = db { media.video.firstOrNull { it.index == 0 } }
 
-            when (video) {
-                null -> {
-                    variants = emptyList()
-                    pipeline = Pipeline(object : VideoBackend {
-                        override val device = null
-                        override val decoder = VideoDecoder.Null
-                        override val encoder = VideoEncoder.Null
+        when (video) {
+            null -> {
+                variants = emptyList()
+                pipeline = Pipeline(object : VideoBackend {
+                    override val device = null
+                    override val decoder = VideoDecoder.Null
+                    override val encoder = VideoEncoder.Null
 
-                        override fun upload(): List<String> = emptyList()
-                        override fun download(): List<String> = emptyList()
-                        override fun scale(width: Int, height: Int): List<String> = listOf("scale=w=$width:h=$height")
-                    })
-                }
+                    override fun upload(): List<String> = emptyList()
+                    override fun download(): List<String> = emptyList()
+                    override fun scale(width: Int, height: Int): List<String> =
+                        listOf("scale=w=$width:h=$height")
+                })
+            }
 
-                else -> {
-                    variants = variants(video)
+            else -> db {
+                variants = variants(video)
 
-                    val input = video.codec
-                    val output = Codec[requirements.video]
+                val input = video.codec
+                val output = Codec[requirements.video]
 
-                    val decodeDevices = Capabilities.getDevicesForDecoding(input)
-                    val encodeDevices = Capabilities.getDevicesForEncoding(output)
+                val decodeDevices = Capabilities.getDevicesForDecoding(input)
+                val encodeDevices = Capabilities.getDevicesForEncoding(output)
 
-                    val transcodeDevice = decodeDevices
-                        .filter(encodeDevices::contains)
-                        .toSortedSet(Capabilities::compare)
-                        .firstOrNull()
+                val transcodeDevice = decodeDevices
+                    .filter(encodeDevices::contains)
+                    .toSortedSet(Capabilities::compare)
+                    .firstOrNull()
 
-                    pipeline = if (transcodeDevice == null) {
+                pipeline =
+                    if (transcodeDevice == null) {
                         val decodeDevice = decodeDevices
                             .toSortedSet(Capabilities::compare)
                             .firstOrNull()
@@ -204,20 +213,85 @@ class TranscodingCache(
 
                         Pipeline(backend)
                     }
+            }
+        }
+
+        return NewTranscodingTask(
+            media,
+            path,
+            group,
+            video,
+            variants,
+            ffmpeg,
+            requirements.enable,
+            requirements.device,
+            pipeline,
+        )
+    }
+
+    fun task(media: Media): TranscodingTask {
+        val key = media.id.value
+        val now = Clock.System.now()
+
+        val entry = db {
+            Transcoding
+                .find(TranscodingTable.media eq media.id)
+                .firstOrNull()
+                ?: Transcoding.new {
+                    this.media = media
+                    this.path = base / key.toString()
+                    this.state = TranscodingState.CREATED
+                    this.access = now
+                }
+        }
+
+        return when (val task = tasks[key]) {
+            null -> tasks.computeIfAbsent(key) {
+                when (entry.state) {
+                    TranscodingState.FINISHED -> CachedTranscodingTask(media, entry.path)
+                    TranscodingState.CREATED -> createNewTranscodingTask(media, entry.path)
+                    else -> {
+                        db {
+                            entry.state = TranscodingState.CREATED
+                            entry.access = now
+                        }
+
+                        createNewTranscodingTask(media, entry.path)
+                    }
                 }
             }
 
-            TranscodingJob(
-                group,
-                ffmpeg,
-                item,
-                video,
-                base.resolve(item.id.toString()),
-                variants,
-                requirements.enable,
-                requirements.device,
-                pipeline,
-            )
+            else -> {
+                when (task) {
+                    is NewTranscodingTask -> db {
+                        entry.state = task.state
+                        entry.access = now
+                    }
+
+                    is CachedTranscodingTask -> db {
+                        entry.access = now
+                    }
+                }
+
+                task
+            }
+        }
+    }
+
+    @OptIn(ExperimentalPathApi::class)
+    fun cleanup() {
+        val now = Clock.System.now()
+
+        val entries = db {
+            Transcoding
+                .all()
+                .filter { it.media == null || (now - it.access).inWholeHours > 12 }
+                .toList()
+        }
+
+        for (entry in entries) {
+            entry.path.deleteRecursively()
+            db { entry.delete() }
         }
     }
 }

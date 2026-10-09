@@ -8,8 +8,8 @@ import org.jetbrains.exposed.v1.dao.UuidEntityClass
 import kotlin.uuid.Uuid
 
 object DeviceToDeviceTable : UuidTable("device_to_device") {
-    val src = reference("src", DeviceTable, ReferenceOption.CASCADE)
-    val dst = reference("dst", DeviceTable, ReferenceOption.CASCADE)
+    val src = reference("src_id", DeviceTable, onDelete = ReferenceOption.CASCADE)
+    val dst = reference("dst_id", DeviceTable, onDelete = ReferenceOption.CASCADE)
 
     val derivable = bool("derivable")
     val direct = bool("direct")

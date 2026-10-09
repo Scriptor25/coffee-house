@@ -4,8 +4,6 @@ import dev.scriptor.model.ffmpeg.Codec
 import dev.scriptor.model.ffmpeg.CodecId
 import dev.scriptor.model.media.*
 import dev.scriptor.server.Provider
-import org.jetbrains.exposed.v1.core.and
-import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.select
 import java.nio.file.Files
 import java.nio.file.Path
@@ -172,20 +170,14 @@ fun getFileMetadata(
     val title = node.format.tags.title ?: path.nameWithoutExtension
 
     val media = db {
-        val it = Media
-            .find(MediaTable.path eq path)
-            .firstOrNull()
-            ?: Media.new {
-                this.path = path
-            }
-
-        it.size = size
-        it.title = title
-        it.createdAt = createdAt
-        it.modifiedAt = modifiedAt
-        it.duration = duration
-
-        it
+        Media.new {
+            this.path = path
+            this.size = size
+            this.title = title
+            this.createdAt = createdAt
+            this.modifiedAt = modifiedAt
+            this.duration = duration
+        }
     }
 
     for (stream in node.streams) {
@@ -212,29 +204,22 @@ fun getFileMetadata(
                 val default = stream.disposition.default?.toInt() == 1
 
                 db {
-                    val it = VideoTrack
-                        .find(
-                            (VideoTrackTable.media eq media.id)
-                                    and (VideoTrackTable.index eq index)
-                        )
-                        .firstOrNull()
-                        ?: VideoTrack.new {
-                            this.media = media
-                            this.index = index
-                        }
-
-                    it.codec = Codec[CodecId(codec)]
-                    it.width = width!!
-                    it.height = height!!
-                    it.bitRate = if (bitRate == 0L)
-                        size * 8L * 1000L / (duration * 1000.0).toLong()
-                    else bitRate
-                    it.frameRate = frameRate
-                    it.profile = profile
-                    it.level = level
-                    it.language = language
-                    it.title = title
-                    it.default = default
+                    VideoTrack.new {
+                        this.media = media
+                        this.index = index
+                        this.codec = Codec[CodecId(codec)]
+                        this.width = width!!
+                        this.height = height!!
+                        this.bitRate = if (bitRate == 0L)
+                            size * 8L * 1000L / (duration * 1000.0).toLong()
+                        else bitRate
+                        this.frameRate = frameRate
+                        this.profile = profile
+                        this.level = level
+                        this.language = language
+                        this.title = title
+                        this.default = default
+                    }
                 }
             }
 
@@ -252,25 +237,18 @@ fun getFileMetadata(
                 val forced = stream.disposition.forced?.toInt() == 1
 
                 db {
-                    val it = AudioTrack
-                        .find(
-                            (AudioTrackTable.media eq media.id)
-                                    and (AudioTrackTable.index eq index)
-                        )
-                        .firstOrNull()
-                        ?: AudioTrack.new {
-                            this.media = media
-                            this.index = index
-                        }
-
-                    it.codec = Codec[CodecId(codec)]
-                    it.bitRate = bitRate
-                    it.sampleRate = sampleRate!!
-                    it.channels = channels!!
-                    it.language = language
-                    it.title = title
-                    it.default = default
-                    it.forced = forced
+                    AudioTrack.new {
+                        this.media = media
+                        this.index = index
+                        this.codec = Codec[CodecId(codec)]
+                        this.bitRate = bitRate
+                        this.sampleRate = sampleRate!!
+                        this.channels = channels!!
+                        this.language = language
+                        this.title = title
+                        this.default = default
+                        this.forced = forced
+                    }
                 }
             }
 
@@ -284,22 +262,15 @@ fun getFileMetadata(
                 val forced = stream.disposition.forced?.toInt() == 1
 
                 db {
-                    val it = SubtitleTrack
-                        .find(
-                            (SubtitleTrackTable.media eq media.id)
-                                    and (SubtitleTrackTable.index eq index)
-                        )
-                        .firstOrNull()
-                        ?: SubtitleTrack.new {
-                            this.media = media
-                            this.index = index
-                        }
-
-                    it.codec = Codec[CodecId(codec)]
-                    it.language = language
-                    it.title = title
-                    it.default = default
-                    it.forced = forced
+                    SubtitleTrack.new {
+                        this.media = media
+                        this.index = index
+                        this.codec = Codec[CodecId(codec)]
+                        this.language = language
+                        this.title = title
+                        this.default = default
+                        this.forced = forced
+                    }
                 }
             }
 
@@ -325,21 +296,14 @@ fun getFileMetadata(
         val title = chapter.tags.title
 
         db {
-            val it = Chapter
-                .find(
-                    (ChapterTable.media eq media.id)
-                            and (ChapterTable.index eq index)
-                )
-                .firstOrNull()
-                ?: Chapter.new {
-                    this.media = media
-                    this.index = index
-                }
-
-            it.start = start
-            it.end = end
-            it.language = language
-            it.title = title
+            Chapter.new {
+                this.media = media
+                this.index = index
+                this.start = start
+                this.end = end
+                this.language = language
+                this.title = title
+            }
         }
     }
 }

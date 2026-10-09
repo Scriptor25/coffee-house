@@ -64,7 +64,7 @@ class PlaybackContext {
         return map.remove(token)
     }
 
-    fun deleteExpiredPlaybacks() {
+    fun cleanup() {
         val instant = Clock.System.now()
 
         val expired = mutableListOf<String>()

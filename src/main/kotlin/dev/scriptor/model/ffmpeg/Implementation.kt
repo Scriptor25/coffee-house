@@ -14,7 +14,7 @@ object ImplementationTable : IdTable<ImplementationId>("implementation") {
     override val id = implementationId("id").entityId()
     override val primaryKey = PrimaryKey(id)
 
-    val codec = reference("codec_id", CodecTable, ReferenceOption.CASCADE).nullable()
+    val codec = reference("codec_id", CodecTable, onDelete = ReferenceOption.CASCADE).nullable()
     val direction = enumeration<ImplementationDirection>("direction")
 
     val frameLevelMultithreading = bool("frame_level_multithreading")
@@ -79,15 +79,15 @@ class Implementation(id: EntityID<ImplementationId>) : Entity<ImplementationId>(
 }
 
 object ImplementationDeviceTable : Table("implementation_device") {
-    val implementation = reference("implementation", ImplementationTable, ReferenceOption.CASCADE)
-    val device = reference("device", DeviceTable, ReferenceOption.CASCADE)
+    val implementation = reference("implementation_id", ImplementationTable, onDelete = ReferenceOption.CASCADE)
+    val device = reference("device_id", DeviceTable, onDelete = ReferenceOption.CASCADE)
 
     override val primaryKey = PrimaryKey(implementation, device)
 }
 
 object ImplementationFormatTable : Table("implementation_format") {
-    val implementation = reference("implementation", ImplementationTable, ReferenceOption.CASCADE)
-    val format = reference("format", FormatTable, ReferenceOption.CASCADE)
+    val implementation = reference("implementation_id", ImplementationTable, onDelete = ReferenceOption.CASCADE)
+    val format = reference("format_id", FormatTable, onDelete = ReferenceOption.CASCADE)
 
     override val primaryKey = PrimaryKey(implementation, format)
 }

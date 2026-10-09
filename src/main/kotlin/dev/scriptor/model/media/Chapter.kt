@@ -10,7 +10,7 @@ import org.jetbrains.exposed.v1.dao.UuidEntityClass
 import kotlin.uuid.Uuid
 
 object ChapterTable : UuidTable("chapter") {
-    val media = reference("media_id", MediaTable.id, ReferenceOption.CASCADE)
+    val media = reference("media_id", MediaTable, onDelete = ReferenceOption.CASCADE)
     val index = integer("index")
     val start = double("start")
     val end = double("end")

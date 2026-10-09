@@ -13,7 +13,7 @@ import org.jetbrains.exposed.v1.dao.UuidEntityClass
 import kotlin.uuid.Uuid
 
 object OtherTable : UuidTable("other") {
-    val media = reference("media_id", MediaTable, ReferenceOption.CASCADE)
+    val media = reference("media_id", MediaTable, onDelete = ReferenceOption.CASCADE)
     val path = path("path")
     val title = text("title")
 }

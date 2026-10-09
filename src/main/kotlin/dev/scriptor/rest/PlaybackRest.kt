@@ -1,7 +1,7 @@
 package dev.scriptor.rest
 
 import dev.scriptor.JsonArrayNode
-import dev.scriptor.TranscodingCache
+import dev.scriptor.TranscodingManager
 import dev.scriptor.context.PlaybackContext
 import dev.scriptor.db
 import dev.scriptor.jsonOf
@@ -128,7 +128,7 @@ class PlaybackRest {
     context(
         _: Logger,
         _: PlaybackContext,
-        transcoding: TranscodingCache,
+        transcoding: TranscodingManager,
     )
     fun getMaster(
         @PathParameter token: String,
@@ -136,8 +136,9 @@ class PlaybackRest {
     ): String {
         val item = item(token, index)
 
-        val job = transcoding.job(item)
-        val path = job.master()
+        val task = transcoding.task(item)
+        val path = task.master()
+            ?: throw NotFoundSignal()
 
         val manifest = path.useLines {
             (it + """#EXT-X-SESSION-DATA:DATA-ID="com.apple.hls.chapters",URI="chapters.json"""")
@@ -151,7 +152,7 @@ class PlaybackRest {
     context(
         _: Logger,
         _: PlaybackContext,
-        transcoding: TranscodingCache,
+        transcoding: TranscodingManager,
     )
     fun getIndex(
         @PathParameter token: String,
@@ -160,8 +161,9 @@ class PlaybackRest {
     ): String {
         val item = item(token, index)
 
-        val job = transcoding.job(item)
-        val path = job.index(name)
+        val task = transcoding.task(item)
+        val path = task.index(name)
+            ?: throw NotFoundSignal()
 
         return path.readText()
     }
@@ -170,7 +172,7 @@ class PlaybackRest {
     context(
         _: Logger,
         _: PlaybackContext,
-        transcoding: TranscodingCache,
+        transcoding: TranscodingManager,
     )
     fun getSegment(
         @PathParameter token: String,
@@ -181,8 +183,9 @@ class PlaybackRest {
     ): Result {
         val item = item(token, index)
 
-        val job = transcoding.job(item)
-        val path = job.segment(name, segment)
+        val task = transcoding.task(item)
+        val path = task.segment(name, segment)
+            ?: throw NotFoundSignal()
 
         return stream(range, path)
     }

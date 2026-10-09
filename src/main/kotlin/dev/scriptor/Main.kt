@@ -3,6 +3,7 @@ package dev.scriptor
 import dev.scriptor.context.PlaybackContext
 import dev.scriptor.model.AuthorizationHeader
 import dev.scriptor.model.CookieHeader
+import dev.scriptor.model.TranscodingTable
 import dev.scriptor.model.ffmpeg.*
 import dev.scriptor.model.media.*
 import dev.scriptor.model.movie.MovieMediaTable
@@ -23,11 +24,13 @@ import org.jetbrains.exposed.v1.core.notInList
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import java.sql.DriverManager
+import java.time.Duration.ofHours
 import java.time.Duration.ofMinutes
 import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.io.path.Path
 import kotlin.io.path.createParentDirectories
+import kotlin.io.path.div
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.toKotlinDuration
@@ -159,7 +162,7 @@ fun main() {
 
     provider.setT(log)
 
-    val databasePath = cache.resolve("index.db")
+    val databasePath = cache / "index.db"
     databasePath.createParentDirectories()
 
     val database = Database.connect({
@@ -207,12 +210,14 @@ fun main() {
             EpisodeGroupTable,
 
             OtherTable,
+
+            TranscodingTable,
         )
     }
 
     Probe(log, ffmpeg, transcodingDevice)()
 
-    val transcoding = TranscodingCache(
+    val transcoding = TranscodingManager(
         log,
         ffmpeg,
         cache,
@@ -272,13 +277,23 @@ fun main() {
         scan(server, "dev.scriptor")
 
         server.register(
-            "delete-expired-playbacks",
+            "cleanup-playbacks",
             Duration.ZERO,
             ofMinutes(60L).toKotlinDuration(),
         ) {
             val context: PlaybackContext = provider.getT()
                 ?: error("missing playback context")
-            context.deleteExpiredPlaybacks()
+            context.cleanup()
+        }
+
+        server.register(
+            "cleanup-transcoding",
+            Duration.ZERO,
+            ofHours(24L).toKotlinDuration()
+        ) {
+            val context: TranscodingManager = provider.getT()
+                ?: error("missing transcoding manager")
+            context.cleanup()
         }
 
         server.start()

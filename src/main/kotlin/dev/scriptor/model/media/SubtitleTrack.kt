@@ -12,9 +12,9 @@ import org.jetbrains.exposed.v1.dao.UuidEntityClass
 import kotlin.uuid.Uuid
 
 object SubtitleTrackTable : UuidTable("subtitle_track") {
-    val media = reference("media_id", MediaTable, ReferenceOption.CASCADE)
+    val media = reference("media_id", MediaTable, onDelete = ReferenceOption.CASCADE)
     val index = integer("index")
-    val codec = reference("codec", CodecTable, ReferenceOption.CASCADE)
+    val codec = reference("codec_id", CodecTable, onDelete = ReferenceOption.CASCADE)
     val language = text("language").nullable()
     val title = text("title").nullable()
     val default = bool("default")

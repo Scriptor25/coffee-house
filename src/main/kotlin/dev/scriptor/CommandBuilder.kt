@@ -4,6 +4,7 @@ import dev.scriptor.encoder.audio.AudioEncoder
 import dev.scriptor.encoder.subtitle.SubtitleEncoder
 import java.nio.file.Path
 import kotlin.io.path.absolutePathString
+import kotlin.io.path.div
 
 class CommandBuilder(
     val ffmpeg: String,
@@ -14,7 +15,6 @@ class CommandBuilder(
     val outputs: List<Output>,
     val pipeline: Pipeline,
 ) {
-
     fun build(): List<String> = buildList {
         this += listOf(
             ffmpeg,
@@ -169,8 +169,8 @@ class CommandBuilder(
             "-hls_list_size", "0",
             "-hls_flags", "independent_segments+temp_file",
             "-hls_segment_type", "fmp4",
-            "-hls_segment_filename", cache.resolve("%v/segment%d.mp4").absolutePathString(),
-            cache.resolve("%v/index.m3u8").absolutePathString(),
+            "-hls_segment_filename", (cache / "%v" / "segment%d.mp4").absolutePathString(),
+            (cache / "%v" / "index.m3u8").absolutePathString(),
         )
     }
 }
