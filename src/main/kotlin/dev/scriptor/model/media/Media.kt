@@ -64,34 +64,34 @@ class Media(id: EntityID<Uuid>) : UuidEntity(id) {
     val jsonId
         get() = id.value
 
-    @JsonProperty
+    @all:JsonProperty
     var path by MediaTable.path
 
-    @JsonProperty
+    @all:JsonProperty
     var size by MediaTable.size
 
-    @JsonProperty
+    @all:JsonProperty
     var title by MediaTable.title
 
-    @JsonProperty
+    @all:JsonProperty
     var createdAt by MediaTable.createdAt
 
-    @JsonProperty
+    @all:JsonProperty
     var modifiedAt by MediaTable.modifiedAt
 
-    @JsonProperty
+    @all:JsonProperty
     var duration by MediaTable.duration
 
-    @JsonProperty
+    @all:JsonProperty
     val video by VideoTrack referrersOn VideoTrackTable.media orderBy VideoTrackTable.index
 
-    @JsonProperty
+    @all:JsonProperty
     val audio by AudioTrack referrersOn AudioTrackTable.media orderBy AudioTrackTable.index
 
-    @JsonProperty
+    @all:JsonProperty
     val subtitles by SubtitleTrack referrersOn SubtitleTrackTable.media orderBy SubtitleTrackTable.index
 
-    @JsonProperty
+    @all:JsonProperty
     val chapters by Chapter referrersOn ChapterTable.media orderBy ChapterTable.index
 
     override fun toString(): String {

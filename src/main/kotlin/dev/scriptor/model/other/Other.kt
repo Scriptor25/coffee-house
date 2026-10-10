@@ -30,7 +30,7 @@ class Other(id: EntityID<Uuid>) : UuidEntity(id) {
 
     var path by OtherTable.path
 
-    @JsonProperty
+    @all:JsonProperty
     var title by OtherTable.title
 
     @all:JsonProperty("item")

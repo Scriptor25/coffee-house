@@ -10,20 +10,9 @@ import org.jetbrains.exposed.v1.core.Table
 import kotlin.reflect.*
 import kotlin.reflect.full.*
 
-enum class JsonNodeType {
-    NULL,
-    BOOLEAN,
-    NUMBER,
-    STRING,
-    OBJECT,
-    ARRAY,
-}
-
 sealed interface JsonNode {
 
-    val type: JsonNodeType
-
-    operator fun not(): Boolean = type == JsonNodeType.NULL
+    operator fun not(): Boolean = this is JsonNullNode
 
     fun toMutable(): MutableJsonNode
 
@@ -36,9 +25,6 @@ sealed interface MutableJsonNode : JsonNode {
 }
 
 sealed interface JsonObjectNode : JsonNode {
-
-    override val type: JsonNodeType
-        get() = JsonNodeType.OBJECT
 
     val nodes: Map<String, JsonNode>
 
@@ -83,19 +69,18 @@ sealed interface MutableJsonObjectNode : MutableJsonNode, JsonObjectNode {
 private class JsonObjectNodeImpl(
     override val nodes: Map<String, JsonNode> = mapOf(),
 ) : JsonObjectNode {
+
     override fun toString(): String = toJson()
 }
 
 private class MutableJsonObjectNodeImpl(
     override val nodes: MutableMap<String, MutableJsonNode> = mutableMapOf(),
 ) : MutableJsonObjectNode {
+
     override fun toString(): String = toJson()
 }
 
 sealed interface JsonArrayNode : JsonNode, Iterable<JsonNode> {
-
-    override val type: JsonNodeType
-        get() = JsonNodeType.ARRAY
 
     val nodes: List<JsonNode>
 
@@ -145,12 +130,14 @@ sealed interface MutableJsonArrayNode : MutableJsonNode, JsonArrayNode {
 private class JsonArrayNodeImpl(
     override val nodes: List<JsonNode> = listOf(),
 ) : JsonArrayNode {
+
     override fun toString(): String = toJson()
 }
 
 private class MutableJsonArrayNodeImpl(
     override val nodes: MutableList<MutableJsonNode> = mutableListOf(),
 ) : MutableJsonArrayNode {
+
     override fun toString(): String = toJson()
 }
 
@@ -190,13 +177,11 @@ sealed interface JsonValueNode<out T> : JsonNode, MutableJsonNode {
 
 sealed interface JsonNullNode : JsonValueNode<Nothing?> {
 
-    override val type
-        get() = JsonNodeType.NULL
-
     override fun toJson(): String = "null"
 }
 
 private class JsonNullNodeImpl : JsonNullNode {
+
     override val value: Nothing? = null
 
     override fun toString(): String = toJson()
@@ -204,22 +189,17 @@ private class JsonNullNodeImpl : JsonNullNode {
 
 sealed interface JsonBooleanNode : JsonValueNode<Boolean> {
 
-    override val type
-        get() = JsonNodeType.BOOLEAN
-
     override fun toJson(): String = value.toString()
 }
 
 private class JsonBooleanNodeImpl(
     override val value: Boolean,
 ) : JsonBooleanNode {
+
     override fun toString(): String = toJson()
 }
 
 sealed interface JsonNumberNode : JsonValueNode<Number> {
-
-    override val type
-        get() = JsonNodeType.NUMBER
 
     override fun toJson(): String = value.toString()
 }
@@ -227,13 +207,11 @@ sealed interface JsonNumberNode : JsonValueNode<Number> {
 private class JsonNumberNodeImpl(
     override val value: Number,
 ) : JsonNumberNode {
+
     override fun toString(): String = toJson()
 }
 
 sealed interface JsonStringNode : JsonValueNode<String> {
-
-    override val type
-        get() = JsonNodeType.STRING
 
     override fun toJson(): String = escape(value)
 }
@@ -241,6 +219,7 @@ sealed interface JsonStringNode : JsonValueNode<String> {
 private class JsonStringNodeImpl(
     override val value: String,
 ) : JsonStringNode {
+
     override fun toString(): String = toJson()
 }
 
@@ -256,16 +235,32 @@ fun jsonOf(vararg entries: Pair<String, JsonNode>): JsonObjectNode {
     return JsonObjectNodeImpl(mapOf(*entries))
 }
 
+fun jsonOf(entries: Map<String, JsonNode>): JsonObjectNode {
+    return JsonObjectNodeImpl(entries)
+}
+
 fun mutableJsonOf(vararg entries: Pair<String, JsonNode>): MutableJsonObjectNode {
-    return MutableJsonObjectNodeImpl(mutableMapOf(*entries.map { it.first to it.second.toMutable() }.toTypedArray()))
+    return MutableJsonObjectNodeImpl(entries.associate { it.first to it.second.toMutable() }.toMutableMap())
+}
+
+fun mutableJsonOf(entries: Map<String, JsonNode>): MutableJsonObjectNode {
+    return MutableJsonObjectNodeImpl(entries.mapValues { it.value.toMutable() }.toMutableMap())
 }
 
 fun jsonOf(vararg entries: JsonNode): JsonArrayNode {
     return JsonArrayNodeImpl(listOf(*entries))
 }
 
+fun jsonOf(value: Iterable<JsonNode>): JsonArrayNode {
+    return JsonArrayNodeImpl(value.toList())
+}
+
 fun mutableJsonOf(vararg entries: JsonNode): MutableJsonArrayNode {
-    return MutableJsonArrayNodeImpl(mutableListOf(*entries.map { it.toMutable() }.toTypedArray()))
+    return MutableJsonArrayNodeImpl(entries.map { it.toMutable() }.toMutableList())
+}
+
+fun mutableJsonOf(value: Iterable<JsonNode>): MutableJsonArrayNode {
+    return MutableJsonArrayNodeImpl(value.map { it.toMutable() }.toMutableList())
 }
 
 fun jsonNull(): JsonNullNode {
@@ -276,43 +271,21 @@ fun jsonOf(value: Boolean): JsonBooleanNode {
     return JsonBooleanNodeImpl(value)
 }
 
-fun jsonOf(value: Boolean?): JsonValueNode<Boolean?> {
-    return if (value == null) JsonNullNodeImpl() else JsonBooleanNodeImpl(value)
-}
-
 fun jsonOf(value: Number): JsonNumberNode {
     return JsonNumberNodeImpl(value)
-}
-
-fun jsonOf(value: Number?): JsonValueNode<Number?> {
-    return if (value == null) JsonNullNodeImpl() else JsonNumberNodeImpl(value)
 }
 
 fun jsonOf(value: String): JsonStringNode {
     return JsonStringNodeImpl(value)
 }
 
-fun jsonOf(value: String?): JsonValueNode<String?> {
-    return if (value == null) JsonNullNodeImpl() else JsonStringNodeImpl(value)
-}
-
-fun jsonOf(value: Any?): JsonValueNode<Any?> {
-    return when (value) {
-        null -> JsonNullNodeImpl()
-        is Boolean -> JsonBooleanNodeImpl(value)
-        is Number -> JsonNumberNodeImpl(value)
-        is String -> JsonStringNodeImpl(value)
-        else -> error("unexpected value type '${value::class}'")
-    }
-}
-
-fun jsonObject(block: MutableJsonObjectNode.() -> Unit): MutableJsonObjectNode {
+fun jsonObject(block: MutableJsonObjectNode.() -> Unit): JsonObjectNode {
     val node = MutableJsonObjectNodeImpl()
     node.apply(block)
     return node
 }
 
-fun jsonArray(block: MutableJsonArrayNode.() -> Unit): MutableJsonArrayNode {
+fun jsonArray(block: MutableJsonArrayNode.() -> Unit): JsonArrayNode {
     val node = MutableJsonArrayNodeImpl()
     node.apply(block)
     return node
@@ -626,7 +599,7 @@ context(provider: Provider?)
 private fun valueFromJson(name: String, node: JsonNode, type: KType): Any? {
     if (node is JsonNullNode) {
         if (!type.isMarkedNullable) {
-            error("type $type is not nullable, but node '$name' is ${node.type}")
+            error("type $type is not nullable, but node '$name' is ${node::class}")
         }
         return null
     }
@@ -634,7 +607,7 @@ private fun valueFromJson(name: String, node: JsonNode, type: KType): Any? {
     return when (val klass = type.classifier) {
         Boolean::class -> when (node) {
             is JsonBooleanNode -> node.value
-            else -> error("node '$name' (${node.type}) was expected to be ${JsonNodeType.BOOLEAN}")
+            else -> error("node '$name' (${node::class}) was expected to be ${JsonBooleanNode::class}")
         }
 
         Number::class,
@@ -655,12 +628,12 @@ private fun valueFromJson(name: String, node: JsonNode, type: KType): Any? {
                 else -> error("unreachable")
             }
 
-            else -> error("node '$name' (${node.type}) was expected to be ${JsonNodeType.NUMBER}")
+            else -> error("node '$name' (${node::class}) was expected to be ${JsonNumberNode::class}")
         }
 
         String::class -> when (node) {
             is JsonStringNode -> node.value
-            else -> error("node '$name' (${node.type}) was expected to be ${JsonNodeType.STRING}")
+            else -> error("node '$name' (${node::class}) was expected to be ${JsonStringNode::class}")
         }
 
         List::class,
@@ -681,7 +654,7 @@ private fun valueFromJson(name: String, node: JsonNode, type: KType): Any? {
                 }
             }
 
-            else -> error("node '$name' (${node.type}) was expected to be ${JsonNodeType.ARRAY}")
+            else -> error("node '$name' (${node::class}) was expected to be ${JsonArrayNode::class}")
         }
 
         is KClass<*> if klass.hasAnnotation<JsonSerializable>() -> when (node) {
@@ -757,7 +730,7 @@ private fun valueFromJson(name: String, node: JsonNode, type: KType): Any? {
                 }
             }
 
-            else -> error("node '$name' (${node.type}) was expected to be ${JsonNodeType.OBJECT}")
+            else -> error("node '$name' (${node::class}) was expected to be ${JsonObjectNode::class}")
         }
 
         else if (provider != null) -> {
@@ -765,12 +738,12 @@ private fun valueFromJson(name: String, node: JsonNode, type: KType): Any? {
             val dst = getType(type)
 
             val convert = provider[src to dst]
-                ?: error("conversion from node '$name' (${node.type}) to type '$type' is not implemented")
+                ?: error("conversion from node '$name' (${node::class}) to type '$type' is not implemented")
 
             convert(node)
         }
 
-        else -> error("conversion from node '$name' (${node.type}) to type '$type' is not implemented")
+        else -> error("conversion from node '$name' (${node::class}) to type '$type' is not implemented")
     }
 }
 

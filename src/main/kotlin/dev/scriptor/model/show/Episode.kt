@@ -34,7 +34,7 @@ class Episode(id: EntityID<Uuid>) : UuidEntity(id) {
     val jsonId
         get() = id.value
 
-    @JsonProperty
+    @all:JsonProperty
     var path by EpisodeTable.path
 
     var season by Season referencedOn EpisodeTable.season
@@ -45,16 +45,16 @@ class Episode(id: EntityID<Uuid>) : UuidEntity(id) {
     val jsonItem
         get() = media.id.value
 
-    @JsonProperty
+    @all:JsonProperty
     var index by EpisodeTable.index
 
-    @JsonProperty
+    @all:JsonProperty
     var title by EpisodeTable.title
 
-    @JsonProperty
+    @all:JsonProperty
     var description by EpisodeTable.description
 
-    @JsonProperty
+    @all:JsonProperty
     var still by EpisodeTable.still
 
     val groups by Group via EpisodeGroupTable

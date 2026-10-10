@@ -32,19 +32,19 @@ class Chapter(id: EntityID<Uuid>) : UuidEntity(id) {
 
     var media by Media referencedOn ChapterTable.media
 
-    @JsonProperty
+    @all:JsonProperty
     var index by ChapterTable.index
 
-    @JsonProperty
+    @all:JsonProperty
     var start by ChapterTable.start
 
-    @JsonProperty
+    @all:JsonProperty
     var end by ChapterTable.end
 
-    @JsonProperty
+    @all:JsonProperty
     var language by ChapterTable.language
 
-    @JsonProperty
+    @all:JsonProperty
     var title by ChapterTable.title
 
     override fun toString(): String {

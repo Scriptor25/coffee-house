@@ -41,7 +41,7 @@ data class JwtHeader(
         }
     }
 
-    fun toJson() = jsonObject {
+    fun toJson(): JsonNode = jsonObject {
         this["typ"] = jsonOf(typ)
         this["alg"] = jsonOf(alg)
     }
@@ -99,7 +99,7 @@ data class JwtPayload(
         }
     }
 
-    fun toJson(): JsonObjectNode = jsonObject {
+    fun toJson(): JsonNode = jsonObject {
         if (iss != null) this["iss"] = jsonOf(iss)
         if (sub != null) this["sub"] = jsonOf(sub)
         if (aud != null) this["aud"] = jsonOf(aud)

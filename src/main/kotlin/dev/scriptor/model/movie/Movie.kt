@@ -42,22 +42,22 @@ class Movie(id: EntityID<Uuid>) : UuidEntity(id) {
     val jsonId
         get() = id.value
 
-    @JsonProperty
+    @all:JsonProperty
     var path by MovieTable.path
 
-    @JsonProperty
+    @all:JsonProperty
     var tmdbId by MovieTable.tmdbId
 
-    @JsonProperty
+    @all:JsonProperty
     var title by MovieTable.title
 
-    @JsonProperty
+    @all:JsonProperty
     var description by MovieTable.description
 
-    @JsonProperty
+    @all:JsonProperty
     var poster by MovieTable.poster
 
-    @JsonProperty
+    @all:JsonProperty
     var backdrop by MovieTable.backdrop
 
     val items by Media via MovieMediaTable

@@ -131,7 +131,7 @@ class CommandBuilder(
                 is VideoOutput -> listOfNotNull(
                     "v:${video++}",
                     if (hasAudio) "agroup:audio" else null,
-                    if (hasSubtitles) "sgroup:subs" else null,
+                    if (hasSubtitles) "sgroup:subtitles" else null,
                     "name:${it.name}",
                 )
 
@@ -145,7 +145,7 @@ class CommandBuilder(
 
                 is SubtitleOutput -> listOfNotNull(
                     "s:${subtitle++}",
-                    "sgroup:subs",
+                    "sgroup:subtitles",
                     if (it.language != null) "language:${it.language}" else null,
                     "name:${it.name}",
                     "default:${if (it.default) "yes" else "no"}",

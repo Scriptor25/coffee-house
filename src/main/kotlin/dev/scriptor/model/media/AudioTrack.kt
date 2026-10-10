@@ -38,31 +38,31 @@ class AudioTrack(id: EntityID<Uuid>) : UuidEntity(id) {
 
     var media by Media referencedOn AudioTrackTable.media
 
-    @JsonProperty
+    @all:JsonProperty
     var index by AudioTrackTable.index
 
-    @JsonProperty
+    @all:JsonProperty
     var codec by Codec referencedOn AudioTrackTable.codec
 
-    @JsonProperty
+    @all:JsonProperty
     var bitRate by AudioTrackTable.bitRate
 
-    @JsonProperty
+    @all:JsonProperty
     var sampleRate by AudioTrackTable.sampleRate
 
-    @JsonProperty
+    @all:JsonProperty
     var channels by AudioTrackTable.channels
 
-    @JsonProperty
+    @all:JsonProperty
     var language by AudioTrackTable.language
 
-    @JsonProperty
+    @all:JsonProperty
     var title by AudioTrackTable.title
 
-    @JsonProperty
+    @all:JsonProperty
     var default by AudioTrackTable.default
 
-    @JsonProperty
+    @all:JsonProperty
     var forced by AudioTrackTable.forced
 
     override fun toString(): String {

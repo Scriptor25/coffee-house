@@ -35,22 +35,22 @@ class SubtitleTrack(id: EntityID<Uuid>) : UuidEntity(id) {
 
     var media by Media referencedOn SubtitleTrackTable.media
 
-    @JsonProperty
+    @all:JsonProperty
     var index by SubtitleTrackTable.index
 
-    @JsonProperty
+    @all:JsonProperty
     var codec by Codec referencedOn SubtitleTrackTable.codec
 
-    @JsonProperty
+    @all:JsonProperty
     var language by SubtitleTrackTable.language
 
-    @JsonProperty
+    @all:JsonProperty
     var title by SubtitleTrackTable.title
 
-    @JsonProperty
+    @all:JsonProperty
     var default by SubtitleTrackTable.default
 
-    @JsonProperty
+    @all:JsonProperty
     var forced by SubtitleTrackTable.forced
 
     override fun toString(): String {

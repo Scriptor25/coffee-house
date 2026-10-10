@@ -34,22 +34,22 @@ class Show(id: EntityID<Uuid>) : UuidEntity(id) {
     val jsonId
         get() = id.value
 
-    @JsonProperty
+    @all:JsonProperty
     var path by ShowTable.path
 
-    @JsonProperty
+    @all:JsonProperty
     var tmdbId by ShowTable.tmdbId
 
-    @JsonProperty
+    @all:JsonProperty
     var title by ShowTable.title
 
-    @JsonProperty
+    @all:JsonProperty
     var description by ShowTable.description
 
-    @JsonProperty
+    @all:JsonProperty
     var poster by ShowTable.poster
 
-    @JsonProperty
+    @all:JsonProperty
     var backdrop by ShowTable.backdrop
 
     val seasons by Season referrersOn SeasonTable.show orderBy SeasonTable.index

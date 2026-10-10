@@ -31,21 +31,21 @@ class Season(id: EntityID<Uuid>) : UuidEntity(id) {
     val jsonId
         get() = id.value
 
-    @JsonProperty
+    @all:JsonProperty
     var path by SeasonTable.path
 
     var show by Show referencedOn SeasonTable.show
 
-    @JsonProperty
+    @all:JsonProperty
     var index by SeasonTable.index
 
-    @JsonProperty
+    @all:JsonProperty
     var title by SeasonTable.title
 
-    @JsonProperty
+    @all:JsonProperty
     var description by SeasonTable.description
 
-    @JsonProperty
+    @all:JsonProperty
     var poster by SeasonTable.poster
 
     val episodes by Episode referrersOn EpisodeTable.season orderBy EpisodeTable.index

@@ -40,37 +40,37 @@ class VideoTrack(id: EntityID<Uuid>) : UuidEntity(id) {
 
     var media by Media referencedOn VideoTrackTable.media
 
-    @JsonProperty
+    @all:JsonProperty
     var index by VideoTrackTable.index
 
-    @JsonProperty
+    @all:JsonProperty
     var codec by Codec referencedOn VideoTrackTable.codec
 
-    @JsonProperty
+    @all:JsonProperty
     var width by VideoTrackTable.width
 
-    @JsonProperty
+    @all:JsonProperty
     var height by VideoTrackTable.height
 
-    @JsonProperty
+    @all:JsonProperty
     var bitRate by VideoTrackTable.bitRate
 
-    @JsonProperty
+    @all:JsonProperty
     var frameRate by VideoTrackTable.frameRate
 
-    @JsonProperty
+    @all:JsonProperty
     var profile by VideoTrackTable.profile
 
-    @JsonProperty
+    @all:JsonProperty
     var level by VideoTrackTable.level
 
-    @JsonProperty
+    @all:JsonProperty
     var language by VideoTrackTable.language
 
-    @JsonProperty
+    @all:JsonProperty
     var title by VideoTrackTable.title
 
-    @JsonProperty
+    @all:JsonProperty
     var default by VideoTrackTable.default
 
     override fun toString(): String {

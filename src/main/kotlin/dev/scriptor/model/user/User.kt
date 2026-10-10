@@ -22,12 +22,12 @@ class User(id: EntityID<Uuid>) : UuidEntity(id) {
     val jsonId
         get() = id.value
 
-    @JsonProperty
+    @all:JsonProperty
     var name by UserTable.name
 
     var hash by UserTable.hash
 
-    @JsonProperty
+    @all:JsonProperty
     var role by UserTable.role
 
     override fun toString(): String {
