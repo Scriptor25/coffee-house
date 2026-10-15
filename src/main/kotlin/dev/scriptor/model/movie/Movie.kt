@@ -38,31 +38,31 @@ object MovieTable : UuidTable("movie") {
 class Movie(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<Movie>(MovieTable)
 
-    @all:JsonProperty("id")
+    @JsonProperty("id")
     val jsonId
         get() = id.value
 
-    @all:JsonProperty
+    @JsonProperty
     var path by MovieTable.path
 
-    @all:JsonProperty
+    @JsonProperty
     var tmdbId by MovieTable.tmdbId
 
-    @all:JsonProperty
+    @JsonProperty
     var title by MovieTable.title
 
-    @all:JsonProperty
+    @JsonProperty
     var description by MovieTable.description
 
-    @all:JsonProperty
+    @JsonProperty
     var poster by MovieTable.poster
 
-    @all:JsonProperty
+    @JsonProperty
     var backdrop by MovieTable.backdrop
 
     val items by Media via MovieMediaTable
 
-    @all:JsonProperty("items")
+    @JsonProperty("items")
     val jsonItems
         get() = items.map { it.id.value }
 

@@ -34,43 +34,43 @@ object VideoTrackTable : UuidTable("video_track") {
 class VideoTrack(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<VideoTrack>(VideoTrackTable)
 
-    @all:JsonProperty("id")
+    @JsonProperty("id")
     val jsonId
         get() = id.value
 
     var media by Media referencedOn VideoTrackTable.media
 
-    @all:JsonProperty
+    @JsonProperty
     var index by VideoTrackTable.index
 
-    @all:JsonProperty
+    @JsonProperty
     var codec by Codec referencedOn VideoTrackTable.codec
 
-    @all:JsonProperty
+    @JsonProperty
     var width by VideoTrackTable.width
 
-    @all:JsonProperty
+    @JsonProperty
     var height by VideoTrackTable.height
 
-    @all:JsonProperty
+    @JsonProperty
     var bitRate by VideoTrackTable.bitRate
 
-    @all:JsonProperty
+    @JsonProperty
     var frameRate by VideoTrackTable.frameRate
 
-    @all:JsonProperty
+    @JsonProperty
     var profile by VideoTrackTable.profile
 
-    @all:JsonProperty
+    @JsonProperty
     var level by VideoTrackTable.level
 
-    @all:JsonProperty
+    @JsonProperty
     var language by VideoTrackTable.language
 
-    @all:JsonProperty
+    @JsonProperty
     var title by VideoTrackTable.title
 
-    @all:JsonProperty
+    @JsonProperty
     var default by VideoTrackTable.default
 
     override fun toString(): String {

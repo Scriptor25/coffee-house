@@ -18,16 +18,16 @@ object UserTable : UuidTable("user") {
 class User(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<User>(UserTable)
 
-    @all:JsonProperty("id")
+    @JsonProperty("id")
     val jsonId
         get() = id.value
 
-    @all:JsonProperty
+    @JsonProperty
     var name by UserTable.name
 
     var hash by UserTable.hash
 
-    @all:JsonProperty
+    @JsonProperty
     var role by UserTable.role
 
     override fun toString(): String {

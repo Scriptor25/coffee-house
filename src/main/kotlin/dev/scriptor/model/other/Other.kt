@@ -22,7 +22,7 @@ object OtherTable : UuidTable("other") {
 class Other(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<Other>(OtherTable)
 
-    @all:JsonProperty("id")
+    @JsonProperty("id")
     val jsonId
         get() = id.value
 
@@ -30,10 +30,10 @@ class Other(id: EntityID<Uuid>) : UuidEntity(id) {
 
     var path by OtherTable.path
 
-    @all:JsonProperty
+    @JsonProperty
     var title by OtherTable.title
 
-    @all:JsonProperty("item")
+    @JsonProperty("item")
     val jsonItem
         get() = media.id.value
 

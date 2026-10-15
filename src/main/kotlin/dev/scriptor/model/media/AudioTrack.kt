@@ -32,37 +32,37 @@ object AudioTrackTable : UuidTable("audio_track") {
 class AudioTrack(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<AudioTrack>(AudioTrackTable)
 
-    @all:JsonProperty("id")
+    @JsonProperty("id")
     val jsonId
         get() = id.value
 
     var media by Media referencedOn AudioTrackTable.media
 
-    @all:JsonProperty
+    @JsonProperty
     var index by AudioTrackTable.index
 
-    @all:JsonProperty
+    @JsonProperty
     var codec by Codec referencedOn AudioTrackTable.codec
 
-    @all:JsonProperty
+    @JsonProperty
     var bitRate by AudioTrackTable.bitRate
 
-    @all:JsonProperty
+    @JsonProperty
     var sampleRate by AudioTrackTable.sampleRate
 
-    @all:JsonProperty
+    @JsonProperty
     var channels by AudioTrackTable.channels
 
-    @all:JsonProperty
+    @JsonProperty
     var language by AudioTrackTable.language
 
-    @all:JsonProperty
+    @JsonProperty
     var title by AudioTrackTable.title
 
-    @all:JsonProperty
+    @JsonProperty
     var default by AudioTrackTable.default
 
-    @all:JsonProperty
+    @JsonProperty
     var forced by AudioTrackTable.forced
 
     override fun toString(): String {

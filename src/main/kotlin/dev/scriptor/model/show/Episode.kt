@@ -30,31 +30,31 @@ object EpisodeTable : UuidTable("episode") {
 class Episode(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<Episode>(EpisodeTable)
 
-    @all:JsonProperty("id")
+    @JsonProperty("id")
     val jsonId
         get() = id.value
 
-    @all:JsonProperty
+    @JsonProperty
     var path by EpisodeTable.path
 
     var season by Season referencedOn EpisodeTable.season
 
     var media by Media referencedOn EpisodeTable.media
 
-    @all:JsonProperty("item")
+    @JsonProperty("item")
     val jsonItem
         get() = media.id.value
 
-    @all:JsonProperty
+    @JsonProperty
     var index by EpisodeTable.index
 
-    @all:JsonProperty
+    @JsonProperty
     var title by EpisodeTable.title
 
-    @all:JsonProperty
+    @JsonProperty
     var description by EpisodeTable.description
 
-    @all:JsonProperty
+    @JsonProperty
     var still by EpisodeTable.still
 
     val groups by Group via EpisodeGroupTable

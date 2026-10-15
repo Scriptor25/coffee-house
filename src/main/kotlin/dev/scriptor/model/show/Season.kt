@@ -27,30 +27,30 @@ object SeasonTable : UuidTable("season") {
 class Season(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<Season>(SeasonTable)
 
-    @all:JsonProperty("id")
+    @JsonProperty("id")
     val jsonId
         get() = id.value
 
-    @all:JsonProperty
+    @JsonProperty
     var path by SeasonTable.path
 
     var show by Show referencedOn SeasonTable.show
 
-    @all:JsonProperty
+    @JsonProperty
     var index by SeasonTable.index
 
-    @all:JsonProperty
+    @JsonProperty
     var title by SeasonTable.title
 
-    @all:JsonProperty
+    @JsonProperty
     var description by SeasonTable.description
 
-    @all:JsonProperty
+    @JsonProperty
     var poster by SeasonTable.poster
 
     val episodes by Episode referrersOn EpisodeTable.season orderBy EpisodeTable.index
 
-    @all:JsonProperty("episodes")
+    @JsonProperty("episodes")
     val jsonEpisodes
         get() = episodes.map { it.id.value }
 

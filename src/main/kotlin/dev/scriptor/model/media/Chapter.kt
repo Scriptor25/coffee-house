@@ -26,25 +26,25 @@ object ChapterTable : UuidTable("chapter") {
 class Chapter(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<Chapter>(ChapterTable)
 
-    @all:JsonProperty("id")
+    @JsonProperty("id")
     val jsonId
         get() = id.value
 
     var media by Media referencedOn ChapterTable.media
 
-    @all:JsonProperty
+    @JsonProperty
     var index by ChapterTable.index
 
-    @all:JsonProperty
+    @JsonProperty
     var start by ChapterTable.start
 
-    @all:JsonProperty
+    @JsonProperty
     var end by ChapterTable.end
 
-    @all:JsonProperty
+    @JsonProperty
     var language by ChapterTable.language
 
-    @all:JsonProperty
+    @JsonProperty
     var title by ChapterTable.title
 
     override fun toString(): String {

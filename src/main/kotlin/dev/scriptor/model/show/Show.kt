@@ -30,31 +30,31 @@ object ShowTable : UuidTable("show") {
 class Show(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<Show>(ShowTable)
 
-    @all:JsonProperty("id")
+    @JsonProperty("id")
     val jsonId
         get() = id.value
 
-    @all:JsonProperty
+    @JsonProperty
     var path by ShowTable.path
 
-    @all:JsonProperty
+    @JsonProperty
     var tmdbId by ShowTable.tmdbId
 
-    @all:JsonProperty
+    @JsonProperty
     var title by ShowTable.title
 
-    @all:JsonProperty
+    @JsonProperty
     var description by ShowTable.description
 
-    @all:JsonProperty
+    @JsonProperty
     var poster by ShowTable.poster
 
-    @all:JsonProperty
+    @JsonProperty
     var backdrop by ShowTable.backdrop
 
     val seasons by Season referrersOn SeasonTable.show orderBy SeasonTable.index
 
-    @all:JsonProperty("seasons")
+    @JsonProperty("seasons")
     val jsonSeasons
         get() = seasons.map { it.id.value }
 

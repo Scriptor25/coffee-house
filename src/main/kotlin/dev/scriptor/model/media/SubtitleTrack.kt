@@ -29,28 +29,28 @@ object SubtitleTrackTable : UuidTable("subtitle_track") {
 class SubtitleTrack(id: EntityID<Uuid>) : UuidEntity(id) {
     companion object : UuidEntityClass<SubtitleTrack>(SubtitleTrackTable)
 
-    @all:JsonProperty("id")
+    @JsonProperty("id")
     val jsonId
         get() = id.value
 
     var media by Media referencedOn SubtitleTrackTable.media
 
-    @all:JsonProperty
+    @JsonProperty
     var index by SubtitleTrackTable.index
 
-    @all:JsonProperty
+    @JsonProperty
     var codec by Codec referencedOn SubtitleTrackTable.codec
 
-    @all:JsonProperty
+    @JsonProperty
     var language by SubtitleTrackTable.language
 
-    @all:JsonProperty
+    @JsonProperty
     var title by SubtitleTrackTable.title
 
-    @all:JsonProperty
+    @JsonProperty
     var default by SubtitleTrackTable.default
 
-    @all:JsonProperty
+    @JsonProperty
     var forced by SubtitleTrackTable.forced
 
     override fun toString(): String {
