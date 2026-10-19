@@ -15,6 +15,7 @@ ENV LC_ALL=C.UTF-8
 
 WORKDIR /app
 
+# for kompose: COPY build/coffee-house/bundle.jar app.jar
 COPY target/coffee-house-1.0.0.jar app.jar
 
 EXPOSE 8080
