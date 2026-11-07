@@ -1,6 +1,7 @@
 package dev.scriptor
 
 import dev.scriptor.reflect.getClass
+import dev.scriptor.reflect.getClassId
 import dev.scriptor.reflect.getType
 import dev.scriptor.server.Provider
 import dev.scriptor.server.converter.Converter
@@ -596,7 +597,7 @@ fun parseJson(text: String): JsonNode {
 }
 
 context(provider: Provider?)
-private fun valueFromJson(name: String, node: JsonNode, type: KType): Any? {
+private fun valueFromJson(name: String, node: JsonNode, cls: KClass<*>?, type: KType): Any? {
     if (node is JsonNullNode) {
         if (!type.isMarkedNullable) {
             error("type $type is not nullable, but node '$name' is ${node::class}")
@@ -643,6 +644,7 @@ private fun valueFromJson(name: String, node: JsonNode, type: KType): Any? {
                     valueFromJson(
                         "$name[$index]",
                         subnode,
+                        null,
                         type.arguments[0].type!!,
                     )
                 }
@@ -675,6 +677,7 @@ private fun valueFromJson(name: String, node: JsonNode, type: KType): Any? {
                                     valueFromJson(
                                         "$name.${propertyName}",
                                         subnode,
+                                        klass,
                                         property.returnType,
                                     )
                                 }
@@ -712,6 +715,7 @@ private fun valueFromJson(name: String, node: JsonNode, type: KType): Any? {
                                     valueFromJson(
                                         "$name.${parameterName}",
                                         subnode,
+                                        klass,
                                         parameter.type,
                                     )
                                 }
@@ -735,7 +739,10 @@ private fun valueFromJson(name: String, node: JsonNode, type: KType): Any? {
 
         else if (provider != null) -> {
             val src = getType<JsonNode>()
-            val dst = getType(type)
+            val dst = when (cls) {
+                null -> getType(type)
+                else -> getType(getClassId(cls), type)
+            }
 
             val convert = provider[src to dst]
                 ?: error("conversion from node '$name' (${node::class}) to type '$type' is not implemented")
@@ -749,7 +756,7 @@ private fun valueFromJson(name: String, node: JsonNode, type: KType): Any? {
 
 context(_: Provider?)
 fun JsonNode.valueFromJson(type: KType): Any? {
-    return valueFromJson("<root>", this, type)
+    return valueFromJson("<root>", this, null, type)
 }
 
 context(_: Provider?)

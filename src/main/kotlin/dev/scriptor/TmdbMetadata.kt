@@ -55,6 +55,7 @@ fun getMovieMetadata(
     context: TmdbContext,
     configuration: TmdbContext.Configuration,
     node: MovieNode,
+    locale: String?,
 ): Movie {
     val movie = when (val entity = db {
         Movie
@@ -65,14 +66,23 @@ fun getMovieMetadata(
             val match = TMDB_ID_REGEX.matchEntire(node.path.name)
             val movieId = match?.let { it.groupValues[1].toInt() }
 
+            val translations = when (movieId) {
+                null -> null
+                else -> context.getMovieTranslations(movieId)?.translations
+            } ?: emptyList()
+
+            val translation = translations.find {
+                it.iso6391 == locale || it.iso31661 == locale || "${it.iso6391}-${it.iso31661}" == locale
+            } ?: translations.firstOrNull()
+
+            val language = when (translation) {
+                null -> null
+                else -> "${translation.iso6391}-${translation.iso31661}"
+            }
+
             val details = when (movieId) {
                 null -> null
-                else -> {
-                    val details = context.getMovieDetails(movieId)
-                    if (details != null && !details.originalLanguage.startsWith("en"))
-                        context.getMovieDetails(movieId, language = details.originalLanguage)
-                    else details
-                }
+                else -> context.getMovieDetails(movieId, language)
             }
 
             db {
@@ -140,7 +150,7 @@ fun getEpisodeMetadata(
     season: Season,
     index: Int,
     path: Path,
-    language: String?,
+    locale: String?,
 ): Episode {
     val episode = when (val entity = db {
         Episode
@@ -148,11 +158,26 @@ fun getEpisodeMetadata(
             .firstOrNull()
     }) {
         null -> {
+            val showId = show.tmdbId
+
             val match = EPISODE_NUMBER_REGEX.matchEntire(path.name)
             val seasonNumber = match?.let { it.groupValues[1].toInt() }
             val episodeNumber = match?.let { it.groupValues[2].toInt() }
 
-            val showId = show.tmdbId
+            val translations = when {
+                showId == null || seasonNumber == null || episodeNumber == null -> null
+                else -> context.getEpisodeTranslations(showId, seasonNumber, episodeNumber)?.translations
+            } ?: emptyList()
+
+            val translation = translations.find {
+                it.iso6391 == locale || it.iso31661 == locale || "${it.iso6391}-${it.iso31661}" == locale
+            } ?: translations.firstOrNull()
+
+            val language = when (translation) {
+                null -> null
+                else -> "${translation.iso6391}-${translation.iso31661}"
+            }
+
             val details = when {
                 showId == null || seasonNumber == null || episodeNumber == null -> null
                 else -> context.getEpisodeDetails(showId, seasonNumber, episodeNumber, language)
@@ -199,7 +224,7 @@ fun getSeasonMetadata(
     show: Show,
     index: Int,
     node: SeasonNode,
-    language: String?,
+    locale: String?,
 ): Season {
     val season = when (val entity = db {
         Season
@@ -207,13 +232,28 @@ fun getSeasonMetadata(
             .firstOrNull()
     }) {
         null -> {
+            val showId = show.tmdbId
+
             val match = SEASON_NUMBER_REGEX.matchEntire(node.path.name)
             val seasonNumber = match?.let { it.groupValues[1].toInt() }
 
-            val showId = show.tmdbId
+            val translations = when {
+                showId == null || seasonNumber == null -> null
+                else -> context.getSeasonTranslations(showId, seasonNumber)?.translations
+            } ?: emptyList()
+
+            val translation = translations.find {
+                it.iso6391 == locale || it.iso31661 == locale || "${it.iso6391}-${it.iso31661}" == locale
+            } ?: translations.firstOrNull()
+
+            val language = when (translation) {
+                null -> null
+                else -> "${translation.iso6391}-${translation.iso31661}"
+            }
+
             val details = when {
                 showId == null || seasonNumber == null -> null
-                else -> context.getSeasonDetails(showId, seasonNumber)
+                else -> context.getSeasonDetails(showId, seasonNumber, language)
             }
 
             db {
@@ -254,7 +294,7 @@ fun getSeasonMetadata(
             season,
             index,
             path,
-            language,
+            locale,
         )
     }
 
@@ -266,6 +306,7 @@ fun getShowMetadata(
     context: TmdbContext,
     configuration: TmdbContext.Configuration,
     node: ShowNode,
+    locale: String?,
 ): Show {
     var language: String? = null
 
@@ -277,18 +318,25 @@ fun getShowMetadata(
         null -> {
             val match = TMDB_ID_REGEX.matchEntire(node.path.name)
             val showId = match?.let { it.groupValues[1].toInt() }
-            val details = when (showId) {
-                null -> null
-                else -> {
-                    val details = context.getShowDetails(showId)
 
-                    if (details != null && !details.originalLanguage.startsWith("en"))
-                        context.getShowDetails(showId, details.originalLanguage)
-                    else details
-                }
+            val translations = when (showId) {
+                null -> null
+                else -> context.getShowTranslations(showId)?.translations
+            } ?: emptyList()
+
+            val translation = translations.find {
+                it.iso6391 == locale || it.iso31661 == locale || "${it.iso6391}-${it.iso31661}" == locale
+            } ?: translations.firstOrNull()
+
+            language = when (translation) {
+                null -> null
+                else -> "${translation.iso6391}-${translation.iso31661}"
             }
 
-            language = details?.originalLanguage
+            val details = when (showId) {
+                null -> null
+                else -> context.getShowDetails(showId, language)
+            }
 
             db {
                 Show.new {
@@ -433,6 +481,8 @@ fun getOtherMetadata(path: Path): Other {
 
 context(provider: Provider)
 fun getTmdbMetadata(nodes: Nodes) {
+    val language: String? = provider.getT("language")
+
     val context = TmdbContext()
     val configuration = context.getConfiguration()
         ?: error("failed to get tmdb configuration")
@@ -448,6 +498,7 @@ fun getTmdbMetadata(nodes: Nodes) {
             context,
             configuration,
             node,
+            language,
         )
     }
 
@@ -456,6 +507,7 @@ fun getTmdbMetadata(nodes: Nodes) {
             context,
             configuration,
             node,
+            language,
         )
     }
 

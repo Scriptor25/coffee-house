@@ -137,6 +137,8 @@ fun main() {
 
     val tmdbToken = env["TMDB_TOKEN"]
 
+    val locale = env["LOCALE"]
+
     provider["host"] = host
     provider["port"] = port
 
@@ -157,6 +159,8 @@ fun main() {
     provider["ffprobe"] = ffprobe
 
     provider["tmdb-token"] = tmdbToken
+
+    provider["locale"] = locale
 
     val log = getLogger("coffee-house")
     log.level = Level.ALL
