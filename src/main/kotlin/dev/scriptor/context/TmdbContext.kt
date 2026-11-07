@@ -457,7 +457,7 @@ class TmdbContext {
         @all:JsonProperty
         val revenue: Int,
         @all:JsonProperty
-        val runtime: Int,
+        val runtime: Int = 0,
         @all:JsonProperty
         val softcore: Boolean,
         @all:JsonProperty("spoken_languages")
@@ -569,7 +569,7 @@ class TmdbContext {
         @all:JsonProperty
         val overview: String,
         @all:JsonProperty
-        val runtime: Int,
+        val runtime: Int = 0,
         @all:JsonProperty
         val tagline: String,
         @all:JsonProperty
@@ -607,7 +607,7 @@ class TmdbContext {
         @all:JsonProperty("production_code")
         val productionCode: String,
         @all:JsonProperty
-        val runtime: Int,
+        val runtime: Int = 0,
         @all:JsonProperty("show_id")
         val showId: Int,
         @all:JsonProperty("still_path")
@@ -883,7 +883,7 @@ class TmdbContext {
         @all:JsonProperty("production_code")
         val productionCode: String,
         @all:JsonProperty
-        val runtime: Int,
+        val runtime: Int = 0,
         @all:JsonProperty("season_number")
         val seasonNumber: Int,
         @all:JsonProperty("show_id")
@@ -965,7 +965,7 @@ class TmdbContext {
         @all:JsonProperty("production_code")
         val productionCode: String,
         @all:JsonProperty
-        val runtime: Int,
+        val runtime: Int = 0,
         @all:JsonProperty("season_number")
         val seasonNumber: Int,
         @all:JsonProperty("still_path")
@@ -1033,7 +1033,7 @@ class TmdbContext {
         @all:JsonProperty("production_code")
         val productionCode: String,
         @all:JsonProperty
-        val runtime: Int,
+        val runtime: Int = 0,
         @all:JsonProperty("season_number")
         val seasonNumber: Int,
         @all:JsonProperty("show_id")

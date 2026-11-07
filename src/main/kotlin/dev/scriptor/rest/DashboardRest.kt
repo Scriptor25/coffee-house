@@ -921,34 +921,36 @@ class DashboardRest {
                     main({ htmlClass = "content" }) {
                         h1 { +show.title }
 
-                        p {
-                            label({ htmlClass = "view" }) {
-                                span { +"Select Episode Order" }
-                                select({
-                                    booleanData("gamepad", true)
-                                    name = "view"
-                                }) {
-                                    option({
-                                        value = ""
-                                        selected = viewGroup == null
+                        if (groups.isNotEmpty()) {
+                            p {
+                                label({ htmlClass = "view" }) {
+                                    span { +"Select Episode Order" }
+                                    select({
+                                        booleanData("gamepad", true)
+                                        name = "view"
                                     }) {
-                                        +"Default"
-                                    }
-
-                                    for (group in groups) {
                                         option({
-                                            value = group.id.toString()
-                                            selected = group.id == viewGroup?.id
+                                            value = ""
+                                            selected = viewGroup == null
                                         }) {
-                                            +group.title
+                                            +"Default"
                                         }
-                                    }
 
-                                    on("change") { (event) ->
-                                        val id = event["target"]["value"]
-                                        val url = jsFormat("?view=", "", values = listOf(id))
+                                        for (group in groups) {
+                                            option({
+                                                value = group.id.toString()
+                                                selected = group.id == viewGroup?.id
+                                            }) {
+                                                +group.title
+                                            }
+                                        }
 
-                                        emit(window.navigation.navigate(url))
+                                        on("change") { (event) ->
+                                            val id = event["target"]["value"]
+                                            val url = jsFormat("?view=", "", values = listOf(id))
+
+                                            emit(window.navigation.navigate(url))
+                                        }
                                     }
                                 }
                             }
@@ -1315,7 +1317,7 @@ class DashboardRest {
                                 noFallback = true
                             }
 
-                            div {
+                            div({ htmlClass = "description" }) {
                                 h1 { +episode.title }
 
                                 when (val description = episode.description) {
@@ -1360,11 +1362,17 @@ class DashboardRest {
                     marginBottom = "var(--space-l)"
 
                     define(".still") {
+                        flex = "0 0 auto"
+
                         width = "30vw"
                         height = "auto"
                         maxHeight = "400px"
 
                         objectFit = "contain"
+                    }
+
+                    define(".description") {
+                        flex = "1 1 auto"
                     }
                 }
 

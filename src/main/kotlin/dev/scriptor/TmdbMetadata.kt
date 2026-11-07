@@ -65,32 +65,42 @@ fun getMovieMetadata(
             val match = TMDB_ID_REGEX.matchEntire(node.path.name)
             val movieId = match?.let { it.groupValues[1].toInt() }
 
-            val details = if (movieId != null)
-                context.getMovieDetails(movieId)
-            else null
+            val details = when (movieId) {
+                null -> null
+                else -> {
+                    val details = context.getMovieDetails(movieId)
+                    if (details != null && !details.originalLanguage.startsWith("en"))
+                        context.getMovieDetails(movieId, language = details.originalLanguage)
+                    else details
+                }
+            }
 
             db {
                 Movie.new {
                     this.path = node.path
 
-                    if (details != null) {
-                        this.tmdbId = details.id
-                        this.title = details.title
-                        this.description = details.overview
-                        this.poster = when (val path = details.posterPath) {
-                            null -> listOf()
-                            else -> buildTmdbImages(configuration, TmdbImageType.POSTER, path)
+                    when (details) {
+                        null -> {
+                            this.tmdbId = null
+                            this.title = node.path.name
+                            this.description = null
+                            this.poster = emptyList()
+                            this.backdrop = emptyList()
                         }
-                        this.backdrop = when (val path = details.backdropPath) {
-                            null -> listOf()
-                            else -> buildTmdbImages(configuration, TmdbImageType.BACKDROP, path)
+
+                        else -> {
+                            this.tmdbId = details.id
+                            this.title = details.title
+                            this.description = details.overview
+                            this.poster = when (val path = details.posterPath) {
+                                null -> listOf()
+                                else -> buildTmdbImages(configuration, TmdbImageType.POSTER, path)
+                            }
+                            this.backdrop = when (val path = details.backdropPath) {
+                                null -> listOf()
+                                else -> buildTmdbImages(configuration, TmdbImageType.BACKDROP, path)
+                            }
                         }
-                    } else {
-                        this.tmdbId = null
-                        this.title = node.path.name
-                        this.description = null
-                        this.poster = emptyList()
-                        this.backdrop = emptyList()
                     }
                 }
             }
@@ -130,6 +140,7 @@ fun getEpisodeMetadata(
     season: Season,
     index: Int,
     path: Path,
+    language: String?,
 ): Episode {
     val episode = when (val entity = db {
         Episode
@@ -141,9 +152,11 @@ fun getEpisodeMetadata(
             val seasonNumber = match?.let { it.groupValues[1].toInt() }
             val episodeNumber = match?.let { it.groupValues[2].toInt() }
 
-            val details = if (seasonNumber != null && episodeNumber != null) {
-                context.getEpisodeDetails(show.tmdbId ?: 0, seasonNumber, episodeNumber)
-            } else null
+            val showId = show.tmdbId
+            val details = when {
+                showId == null || seasonNumber == null || episodeNumber == null -> null
+                else -> context.getEpisodeDetails(showId, seasonNumber, episodeNumber, language)
+            }
 
             db {
                 Episode.new {
@@ -151,19 +164,23 @@ fun getEpisodeMetadata(
                     this.season = season
                     this.media = Media.find(MediaTable.path eq path).first()
 
-                    if (details != null) {
-                        this.index = details.episodeNumber
-                        this.title = details.name
-                        this.description = details.overview
-                        this.still = when (val path = details.stillPath) {
-                            null -> listOf()
-                            else -> buildTmdbImages(configuration, TmdbImageType.STILL, path)
+                    when (details) {
+                        null -> {
+                            this.index = episodeNumber ?: index
+                            this.title = media.title
+                            this.description = null
+                            this.still = emptyList()
                         }
-                    } else {
-                        this.index = episodeNumber ?: index
-                        this.title = media.title
-                        this.description = null
-                        this.still = emptyList()
+
+                        else -> {
+                            this.index = details.episodeNumber
+                            this.title = details.name
+                            this.description = details.overview
+                            this.still = when (val path = details.stillPath) {
+                                null -> listOf()
+                                else -> buildTmdbImages(configuration, TmdbImageType.STILL, path)
+                            }
+                        }
                     }
                 }
             }
@@ -182,6 +199,7 @@ fun getSeasonMetadata(
     show: Show,
     index: Int,
     node: SeasonNode,
+    language: String?,
 ): Season {
     val season = when (val entity = db {
         Season
@@ -192,28 +210,34 @@ fun getSeasonMetadata(
             val match = SEASON_NUMBER_REGEX.matchEntire(node.path.name)
             val seasonNumber = match?.let { it.groupValues[1].toInt() }
 
-            val details = if (seasonNumber != null) {
-                context.getSeasonDetails(show.tmdbId ?: 0, seasonNumber)
-            } else null
+            val showId = show.tmdbId
+            val details = when {
+                showId == null || seasonNumber == null -> null
+                else -> context.getSeasonDetails(showId, seasonNumber)
+            }
 
             db {
                 Season.new {
                     this.path = node.path
                     this.show = show
 
-                    if (details != null) {
-                        this.index = details.seasonNumber
-                        this.title = details.name
-                        this.description = details.overview
-                        this.poster = when (val path = details.posterPath) {
-                            null -> listOf()
-                            else -> buildTmdbImages(configuration, TmdbImageType.POSTER, path)
+                    when (details) {
+                        null -> {
+                            this.index = seasonNumber ?: index
+                            this.title = node.path.name
+                            this.description = null
+                            this.poster = emptyList()
                         }
-                    } else {
-                        this.index = seasonNumber ?: index
-                        this.title = node.path.name
-                        this.description = null
-                        this.poster = emptyList()
+
+                        else -> {
+                            this.index = details.seasonNumber
+                            this.title = details.name
+                            this.description = details.overview
+                            this.poster = when (val path = details.posterPath) {
+                                null -> listOf()
+                                else -> buildTmdbImages(configuration, TmdbImageType.POSTER, path)
+                            }
+                        }
                     }
                 }
             }
@@ -230,6 +254,7 @@ fun getSeasonMetadata(
             season,
             index,
             path,
+            language,
         )
     }
 
@@ -242,6 +267,8 @@ fun getShowMetadata(
     configuration: TmdbContext.Configuration,
     node: ShowNode,
 ): Show {
+    var language: String? = null
+
     val show = when (val entity = db {
         Show
             .find(ShowTable.path eq node.path)
@@ -252,31 +279,43 @@ fun getShowMetadata(
             val showId = match?.let { it.groupValues[1].toInt() }
             val details = when (showId) {
                 null -> null
-                else -> context.getShowDetails(showId)
+                else -> {
+                    val details = context.getShowDetails(showId)
+
+                    if (details != null && !details.originalLanguage.startsWith("en"))
+                        context.getShowDetails(showId, details.originalLanguage)
+                    else details
+                }
             }
+
+            language = details?.originalLanguage
 
             db {
                 Show.new {
                     this.path = node.path
 
-                    if (details != null) {
-                        this.tmdbId = details.id
-                        this.title = details.name
-                        this.description = details.overview
-                        this.poster = when (val path = details.posterPath) {
-                            null -> listOf()
-                            else -> buildTmdbImages(configuration, TmdbImageType.POSTER, path)
+                    when (details) {
+                        null -> {
+                            this.tmdbId = null
+                            this.title = node.path.name
+                            this.description = null
+                            this.poster = emptyList()
+                            this.backdrop = emptyList()
                         }
-                        this.backdrop = when (val path = details.backdropPath) {
-                            null -> listOf()
-                            else -> buildTmdbImages(configuration, TmdbImageType.BACKDROP, path)
+
+                        else -> {
+                            this.tmdbId = details.id
+                            this.title = details.name
+                            this.description = details.overview
+                            this.poster = when (val path = details.posterPath) {
+                                null -> listOf()
+                                else -> buildTmdbImages(configuration, TmdbImageType.POSTER, path)
+                            }
+                            this.backdrop = when (val path = details.backdropPath) {
+                                null -> listOf()
+                                else -> buildTmdbImages(configuration, TmdbImageType.BACKDROP, path)
+                            }
                         }
-                    } else {
-                        this.tmdbId = null
-                        this.title = node.path.name
-                        this.description = null
-                        this.poster = emptyList()
-                        this.backdrop = emptyList()
                     }
                 }
             }
@@ -292,6 +331,7 @@ fun getShowMetadata(
             show,
             index,
             node,
+            language,
         )
     }
 
