@@ -1082,11 +1082,14 @@ class TmdbContext {
 
     private val cache = mutableMapOf<String, Any?>()
 
-    context(provider: Provider, log: Logger)
+    context(provider: Provider)
     private inline fun <reified T> getData(
         resource: String,
         params: Map<String, Any?> = mapOf(),
     ): T? {
+        val log: Logger = provider.getT()
+            ?: error("missing log")
+
         val params = params.toSortedMap()
 
         val query = buildString {
@@ -1152,7 +1155,7 @@ class TmdbContext {
         return value
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     private inline fun <reified T> getMovieData(
         resource: String?,
         movieId: Int,
@@ -1164,7 +1167,7 @@ class TmdbContext {
         return getData(resource, params)
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     private inline fun <reified T> getShowData(
         resource: String?,
         showId: Int,
@@ -1176,7 +1179,7 @@ class TmdbContext {
         return getData(resource, params)
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     private inline fun <reified T> getSeasonData(
         resource: String?,
         showId: Int,
@@ -1189,7 +1192,7 @@ class TmdbContext {
         return getData(resource, params)
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     private inline fun <reified T> getEpisodeData(
         resource: String?,
         showId: Int,
@@ -1203,12 +1206,12 @@ class TmdbContext {
         return getData(resource, params)
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getConfiguration(): Configuration? {
         return getData("configuration")
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getMovieDetails(
         movieId: Int,
         language: String? = null,
@@ -1222,12 +1225,12 @@ class TmdbContext {
         )
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getMovieAlternativeTitles(movieId: Int): MovieAlternativeTitles? {
         return getMovieData("alternative_titles", movieId)
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getMovieCredits(
         movieId: Int,
         language: String? = null,
@@ -1241,12 +1244,12 @@ class TmdbContext {
         )
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getMovieExternalIds(movieId: Int): MovieExternalIds? {
         return getMovieData("external_ids", movieId)
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getMovieImages(
         movieId: Int,
         language: String? = null,
@@ -1260,12 +1263,12 @@ class TmdbContext {
         )
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getMovieKeywords(movieId: Int): MovieKeywords? {
         return getMovieData("keywords", movieId)
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getMovieRecommendations(
         movieId: Int,
         language: String? = null,
@@ -1281,7 +1284,7 @@ class TmdbContext {
         )
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getMovieSimilar(
         movieId: Int,
         language: String? = null,
@@ -1297,12 +1300,12 @@ class TmdbContext {
         )
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getMovieTranslations(movieId: Int): MovieTranslations? {
         return getMovieData("translations", movieId)
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getMovieVideos(
         movieId: Int,
         language: String? = null,
@@ -1316,7 +1319,7 @@ class TmdbContext {
         )
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getShowDetails(
         showId: Int,
         language: String? = null,
@@ -1330,7 +1333,7 @@ class TmdbContext {
         )
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getShowAggregateCredits(
         showId: Int,
         language: String? = null,
@@ -1344,27 +1347,27 @@ class TmdbContext {
         )
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getShowAlternativeTitles(showId: Int): ShowAlternativeTitles? {
         return getShowData("alternative_titles", showId)
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getShowContentRatings(showId: Int): ShowContentRatings? {
         return getShowData("content_ratings", showId)
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getShowEpisodeGroups(showId: Int): ShowEpisodeGroups? {
         return getShowData("episode_groups", showId)
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getShowExternalIds(showId: Int): ShowExternalIds? {
         return getShowData("external_ids", showId)
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getShowImages(
         showId: Int,
         language: String? = null,
@@ -1378,12 +1381,12 @@ class TmdbContext {
         )
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getShowKeywords(showId: Int): ShowKeywords? {
         return getShowData("keywords", showId)
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getShowRecommendations(
         showId: Int,
         language: String? = null,
@@ -1399,7 +1402,7 @@ class TmdbContext {
         )
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getShowSimilar(
         showId: Int,
         language: String? = null,
@@ -1415,12 +1418,12 @@ class TmdbContext {
         )
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getShowTranslations(showId: Int): ShowTranslations? {
         return getShowData("translations", showId)
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getShowVideos(
         showId: Int,
         language: String? = null,
@@ -1434,7 +1437,7 @@ class TmdbContext {
         )
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getSeasonDetails(
         showId: Int,
         seasonNumber: Int,
@@ -1450,7 +1453,7 @@ class TmdbContext {
         )
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getSeasonAggregateCredits(
         showId: Int,
         seasonNumber: Int,
@@ -1466,7 +1469,7 @@ class TmdbContext {
         )
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getSeasonExternalIds(
         showId: Int,
         seasonNumber: Int,
@@ -1478,7 +1481,7 @@ class TmdbContext {
         )
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getSeasonImages(
         showId: Int,
         seasonNumber: Int,
@@ -1494,7 +1497,7 @@ class TmdbContext {
         )
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getSeasonTranslations(
         showId: Int,
         seasonNumber: Int,
@@ -1506,7 +1509,7 @@ class TmdbContext {
         )
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getSeasonVideos(
         showId: Int,
         seasonNumber: Int,
@@ -1522,7 +1525,7 @@ class TmdbContext {
         )
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getEpisodeDetails(
         showId: Int,
         seasonNumber: Int,
@@ -1540,7 +1543,7 @@ class TmdbContext {
         )
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getEpisodeCredits(
         showId: Int,
         seasonNumber: Int,
@@ -1558,7 +1561,7 @@ class TmdbContext {
         )
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getEpisodeExternalIds(
         showId: Int,
         seasonNumber: Int,
@@ -1572,7 +1575,7 @@ class TmdbContext {
         )
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getEpisodeImages(
         showId: Int,
         seasonNumber: Int,
@@ -1590,7 +1593,7 @@ class TmdbContext {
         )
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getEpisodeTranslations(
         showId: Int,
         seasonNumber: Int,
@@ -1604,7 +1607,7 @@ class TmdbContext {
         )
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getEpisodeVideos(
         showId: Int,
         seasonNumber: Int,
@@ -1622,7 +1625,7 @@ class TmdbContext {
         )
     }
 
-    context(_: Provider, _: Logger)
+    context(_: Provider)
     fun getEpisodeGroupDetails(groupId: String): EpisodeGroupDetails? {
         return getData("tv/episode_group/$groupId")
     }

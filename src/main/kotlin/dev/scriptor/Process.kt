@@ -10,17 +10,17 @@ fun Process.attach(log: Logger, level: Level = Level.INFO) {
 }
 
 context(parent: Logger)
-fun start(vararg command: String, name: String = command[0]): Process {
-    return start(command.asList(), name)
+fun start(vararg command: String, name: String = command[0], block: ProcessBuilder.() -> Unit = {}): Process {
+    return start(command.asList(), name, block)
 }
 
 context(parent: Logger)
-fun start(command: List<String>, name: String = command[0]): Process {
+fun start(command: List<String>, name: String = command[0], block: ProcessBuilder.() -> Unit = {}): Process {
     val log = getLogger(name, parent)
 
     log.fine(command.joinToString("' '", "'", "'"))
 
-    val process = ProcessBuilder(command).start()
+    val process = ProcessBuilder(command).apply(block).start()
 
     process.attach(log, Level.FINEST)
 

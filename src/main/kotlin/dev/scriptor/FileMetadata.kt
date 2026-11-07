@@ -120,29 +120,30 @@ private fun parseFrameRate(value: String?): Double {
     return if (den == 0.0) 0.0 else num / den
 }
 
-context(
-    _: Provider,
-    log: Logger,
-)
-fun getFileMetadata(
-    ffprobe: String,
-    path: Path,
-) {
+context(provider: Provider)
+fun getFileMetadata(path: Path) {
+    val ffprobe: String = provider.getT("ffprobe")
+        ?: error("missing ffprobe")
+    val log: Logger = provider.getT()
+        ?: error("missing log")
+
     val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
 
     val createdAt = attributes.creationTime().toInstant().toKotlinInstant()
     val modifiedAt = attributes.lastModifiedTime().toInstant().toKotlinInstant()
 
-    val process = start(
-        ffprobe,
-        "-hide_banner",
-        "-loglevel", "error",
-        "-print_format", "json",
-        "-show_format",
-        "-show_streams",
-        "-show_chapters",
-        path.absolutePathString(),
-    )
+    val process = context(log) {
+        start(
+            ffprobe,
+            "-hide_banner",
+            "-loglevel", "error",
+            "-print_format", "json",
+            "-show_format",
+            "-show_streams",
+            "-show_chapters",
+            path.absolutePathString(),
+        )
+    }
 
     val json = process.inputStream.reader().readText()
 
@@ -308,14 +309,11 @@ fun getFileMetadata(
     }
 }
 
-context(
-    _: Provider,
-    log: Logger,
-)
-fun getFileMetadata(
-    ffprobe: String,
-    paths: List<Path>,
-) {
+context(provider: Provider)
+fun getFileMetadata(paths: List<Path>) {
+    val log: Logger = provider.getT()
+        ?: error("missing log")
+
     val existing = db {
         MediaTable
             .select(MediaTable.path)
@@ -338,10 +336,7 @@ fun getFileMetadata(
         tasks.add {
             log.info("${index + 1} / ${revalidate.size}")
 
-            getFileMetadata(
-                ffprobe,
-                path,
-            )
+            getFileMetadata(path)
         }
     }
 

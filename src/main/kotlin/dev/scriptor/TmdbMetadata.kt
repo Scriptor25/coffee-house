@@ -14,7 +14,6 @@ import dev.scriptor.server.Provider
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.batchInsert
 import java.nio.file.Path
-import java.util.logging.Logger
 import kotlin.io.path.name
 
 enum class TmdbImageType {
@@ -51,10 +50,7 @@ val TMDB_ID_REGEX = """^[^\[]*\[tmdbid-(\d+)].*$""".toRegex()
 val SEASON_NUMBER_REGEX = """^.*(\d{1,2}).*$""".toRegex()
 val EPISODE_NUMBER_REGEX = """^.*[Ss](\d{1,2})[Ee](\d{1,2}).*$""".toRegex()
 
-context(
-    _: Logger,
-    _: Provider,
-)
+context(_: Provider)
 fun getMovieMetadata(
     context: TmdbContext,
     configuration: TmdbContext.Configuration,
@@ -126,10 +122,7 @@ fun getMovieMetadata(
     return movie
 }
 
-context(
-    _: Logger,
-    _: Provider,
-)
+context(_: Provider)
 fun getEpisodeMetadata(
     context: TmdbContext,
     configuration: TmdbContext.Configuration,
@@ -182,10 +175,7 @@ fun getEpisodeMetadata(
     return episode
 }
 
-context(
-    _: Logger,
-    _: Provider,
-)
+context(_: Provider)
 fun getSeasonMetadata(
     context: TmdbContext,
     configuration: TmdbContext.Configuration,
@@ -246,10 +236,7 @@ fun getSeasonMetadata(
     return season
 }
 
-context(
-    _: Logger,
-    _: Provider,
-)
+context(_: Provider)
 fun getShowMetadata(
     context: TmdbContext,
     configuration: TmdbContext.Configuration,
@@ -404,10 +391,7 @@ fun getOtherMetadata(path: Path): Other {
     }
 }
 
-context(
-    _: Provider,
-    _: Logger,
-)
+context(provider: Provider)
 fun getTmdbMetadata(nodes: Nodes) {
     val context = TmdbContext()
     val configuration = context.getConfiguration()

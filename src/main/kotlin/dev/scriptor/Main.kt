@@ -23,6 +23,7 @@ import dev.scriptor.server.server
 import org.jetbrains.exposed.v1.core.notInList
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import java.nio.file.Path
 import java.sql.DriverManager
 import java.time.Duration.ofHours
 import java.time.Duration.ofMinutes
@@ -231,24 +232,6 @@ fun main() {
     )
     provider.setT(transcoding)
 
-    log.info("walk file tree")
-
-    val nodes = walkFileTree(log, data)
-    val paths = nodes.paths
-
-    log.info("found ${paths.size} files (${nodes.movies.size} movies, ${nodes.shows.size} shows, ${nodes.others.size} others)")
-
-    db {
-        Media
-            .find { MediaTable.path notInList paths }
-            .forEach { it.delete() }
-    }
-
-    context(provider, log) {
-        getFileMetadata(ffprobe, paths)
-        getTmdbMetadata(nodes)
-    }
-
     val server = server(log, provider) {
         when {
             host == null && port != null -> bind(port)
@@ -277,6 +260,16 @@ fun main() {
         scan(server, "dev.scriptor")
 
         server.register(
+            "scan-filesystem",
+            Duration.ZERO,
+            ofHours(24L).toKotlinDuration(),
+        ) {
+            context(provider) {
+                scanFilesystem(data)
+            }
+        }
+
+        server.register(
             "cleanup-playbacks",
             Duration.ZERO,
             ofMinutes(60L).toKotlinDuration(),
@@ -297,5 +290,29 @@ fun main() {
         }
 
         server.start()
+    }
+}
+
+context(provider: Provider)
+fun scanFilesystem(root: Path) {
+    val log: Logger = provider.getT()
+        ?: error("missing log")
+
+    log.info("walk file tree")
+
+    val nodes = walkFileTree(log, root)
+    val paths = nodes.paths
+
+    log.info("found ${paths.size} files (${nodes.movies.size} movies, ${nodes.shows.size} shows, ${nodes.others.size} others)")
+
+    db {
+        Media
+            .find { MediaTable.path notInList paths }
+            .forEach { it.delete() }
+    }
+
+    context(provider) {
+        getFileMetadata(paths)
+        getTmdbMetadata(nodes)
     }
 }
