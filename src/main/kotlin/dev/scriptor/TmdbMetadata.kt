@@ -308,8 +308,6 @@ fun getShowMetadata(
     node: ShowNode,
     locale: String?,
 ): Show {
-    var language: String? = null
-
     val show = when (val entity = db {
         Show
             .find(ShowTable.path eq node.path)
@@ -328,7 +326,7 @@ fun getShowMetadata(
                 it.iso6391 == locale || it.iso31661 == locale || "${it.iso6391}-${it.iso31661}" == locale
             } ?: translations.firstOrNull()
 
-            language = when (translation) {
+            val language = when (translation) {
                 null -> null
                 else -> "${translation.iso6391}-${translation.iso31661}"
             }
@@ -379,7 +377,7 @@ fun getShowMetadata(
             show,
             index,
             node,
-            language,
+            locale,
         )
     }
 
@@ -481,7 +479,7 @@ fun getOtherMetadata(path: Path): Other {
 
 context(provider: Provider)
 fun getTmdbMetadata(nodes: Nodes) {
-    val language: String? = provider.getT("language")
+    val locale: String? = provider.getT("locale")
 
     val context = TmdbContext()
     val configuration = context.getConfiguration()
@@ -498,7 +496,7 @@ fun getTmdbMetadata(nodes: Nodes) {
             context,
             configuration,
             node,
-            language,
+            locale,
         )
     }
 
@@ -507,7 +505,7 @@ fun getTmdbMetadata(nodes: Nodes) {
             context,
             configuration,
             node,
-            language,
+            locale,
         )
     }
 
