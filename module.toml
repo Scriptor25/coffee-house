@@ -1,4 +1,6 @@
 type = "application"
+
+[artifact]
 name = "coffee-house"
 
 [dependencies]
